@@ -11,11 +11,18 @@ from pathlib import Path
 
 try:
     from flirimageextractor import FlirImageExtractor
-except ImportError:
+except ImportError as e:
     print("ERROR: flirimageextractor not installed")
-    print("Install with: pip install flirimageextractor")
-    print("Also install: sudo apt install exiftool (Linux) or download from https://exiftool.org")
+    print("Details:", e)
     exit(1)
+
+# try:
+#     from flirimageextractor import FlirImageExtractor
+# except ImportError:
+#     print("ERROR: flirimageextractor not installed")
+#     print("Install with: pip install flirimageextractor")
+#     print("Also install: sudo apt install exiftool (Linux) or download from https://exiftool.org")
+#     exit(1)
 
 
 class SimpleFLIRProcessor:
@@ -299,6 +306,6 @@ if __name__ == "__main__":
     print("\nOr import this module and use SimpleFLIRProcessor class directly.")
 
     # Uncomment to run an example:
-    # example_single_image()
+    example_single_image()
     # example_batch_processing()
     # example_error_handling()
