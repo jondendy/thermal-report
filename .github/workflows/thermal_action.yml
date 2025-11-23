@@ -1,5 +1,10 @@
         # FIXED: Updated filename to match yours (build-site.py)
         run: python3 build-site.py
+      # === INSERT THIS NEW STEP HERE ===
+      - name: Verify Output Files Exist
+        # This will list files and show their sizes, crashing if index.html is missing
+        run: ls -al index.html *.jpg *.csv
+      # =================================
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
