@@ -1,39 +1,3 @@
-name: Process Thermal Images
-
-on:
-  push:
-    branches: ["main"]
-  workflow_dispatch:
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
-
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Perl (for ExifTool)
-        run: sudo apt-get update && sudo apt-get install -y libimage-exiftool-perl
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - name: Install Dependencies
-        run: |
-          pip install numpy pillow matplotlib flirimageextractor
-          
-      - name: Run Processing & Build Site
         # FIXED: Updated filename to match yours (build-site.py)
         run: python3 build-site.py
 
