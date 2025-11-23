@@ -3,7 +3,7 @@ name: Process Thermal Images
 on:
   push:
     branches: ["main"]
-  workflow_dispatch: # Allows you to click a button to run it manually
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -29,12 +29,22 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Run Processing & Build Site
+      - name: Install Dependencies
         run: |
-          # If you have extra python libraries, install them here:
-          # pip install pillow 
+          pip install numpy pillow matplotlib flirimageextractor
           
-          python3 build_site.py
+      - name: Run Processing & Build Site
+        # FIXED: Updated filename to match yours (build-site.py)
+        run: python3 build-site.py
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4          python3 build_site.py
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
