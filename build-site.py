@@ -3,35 +3,34 @@ import glob
 import base64
 from flir_processor_simple import SimpleFLIRProcessor
 from io import BytesIO
+import matplotlib.pyplot as plt
+import numpy as np # Ensure numpy is imported for array operations
 
 # Initialize the FLIR processor
-processor = SimpleFLIRProcessor()
+try:
+    processor = SimpleFLIRProcessor()
+    print("DEBUG: SimpleFLIRProcessor initialized successfully.")
+except Exception as e:
+    print(f"CRITICAL ERROR: Failed to initialize SimpleFLIRProcessor. Check dependencies. Error: {e}")
+    # Exit early if the core tool fails to initialize
+    exit(1)
+
 
 def create_report_card(image_path):
     """
     Processes a single FLIR image and generates an HTML card containing
     statistics and a Base64-encoded version of the thermal image plot.
     """
+    print(f"DEBUG: Processing image: {image_path}")
+    
     try:
         # 1. Process the image to get temperature data and statistics
         temp_data, stats = processor.process_single_image(image_path, display=False)
+        print(f"DEBUG: Successfully extracted data for {image_path}. Mean temp: {stats['mean']:.2f} °C")
         
         # 2. Generate a visualization and get the image data (as a Base64 string)
-        # We need a slight modification to the processor to get the plot data without saving a file
         
-        # This part requires an internal function or modification to SimpleFLIRProcessor 
-        # to return the plot as a file object or Base64 string. Since I don't have
-        # the internal code, I will simulate getting the Base64 image using a placeholder 
-        # or assuming the processor has a method to get the plot as bytes/base64.
-        
-        # --- SIMULATION START: Replace this with your actual visualization code ---
-        
-        # For a truly runnable example, we will save the plot to a temporary buffer
-        # and convert it to Base64. This requires matplotlib to be imported.
-        
-        import matplotlib.pyplot as plt
-        
-        # Create a simple plot of the thermal data (using the simplest version for testing)
+        # Create a plot of the thermal data
         plt.figure(figsize=(6, 4))
         plt.imshow(temp_data, cmap='inferno')
         plt.colorbar(label='Temperature (°C)')
@@ -44,8 +43,6 @@ def create_report_card(image_path):
         
         img_base64 = base64.b64encode(buffer.read()).decode('utf-8')
         
-        # --- SIMULATION END ---
-
         return f"""
         <div class="p-6 bg-white rounded-xl shadow-lg hover:shadow-xl transition duration-300">
             <h2 class="text-2xl font-bold mb-4 text-gray-800">{os.path.basename(image_path)}</h2>
@@ -81,22 +78,23 @@ def create_report_card(image_path):
 def generate_index_html():
     """Main function to find images and create the index.html page."""
     
-    print(f"DEBUG: Starting search for images...") 
+    print(f"DEBUG: Starting search for images in the current directory (should be root).") 
     
-    # Use glob to find all JPG files in the current directory
-    # Note: If your images are in a subdirectory (e.g., './images/*.jpg'), adjust the path here.
+    # CRITICAL PATH: Check the file names. We are looking for all JPG files.
     image_files = glob.glob("*.jpg")
     
-    # Filter to ensure we only try to process the FLIR radiometric JPGs if possible
-    # For now, we trust the glob, but you can add more complex filtering here.
-
     if not image_files:
-        # Fallback if no images are found
-        print("DEBUG: No JPG images found in the root directory.")
+        print("DEBUG: No JPG images found in the root directory. Checking subdirectories...")
+        # Check 'Images' folder as a common place
+        image_files = glob.glob("Images/*.jpg") 
+    
+    if not image_files:
+        # Final fallback if no images are found
+        print("DEBUG: FINAL FALLBACK: No images found anywhere.")
         cards_html = """
         <div class="text-center py-20">
             <h2 class="text-3xl font-extrabold text-gray-900">No Thermal Images Found</h2>
-            <p class="mt-2 text-xl text-gray-600">Please ensure your FLIR JPG files are in the repository's root directory.</p>
+            <p class="mt-2 text-xl text-gray-600">Please ensure your FLIR JPG files are in the repository's root directory or an 'Images' subdirectory.</p>
         </div>
         """
     else:
@@ -137,7 +135,7 @@ def generate_index_html():
         </main>
 
         <footer class="mt-10 pt-6 text-center text-sm text-gray-500 border-t border-gray-200">
-            Deployment ID: {os.environ.get('GITHUB_RUN_ID', 'Local Run')} | Generated: {os.environ.get('GITHUB_SHA', 'Unknown Commit')}
+            Deployment Status: Success | Generated: {os.environ.get('GITHUB_SHA', 'Unknown Commit')}
         </footer>
     </div>
 </body>
