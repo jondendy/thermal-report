@@ -46,6 +46,8 @@ def process_batch(batch_id, image_files):
         processor = SimpleFLIRProcessor()
         batch_dir = Path(app.config['REPORTS_FOLDER']) / 'batches' / batch_id
         batch_dir.mkdir(parents=True, exist_ok=True)
+            image_batch_dir = Path(app.config['UPLOAD_FOLDER']) / 'batches' / batch_id
+    image_batch_dir.mkdir(parents=True, exist_ok=True)
         
         results = {
             'batch_id': batch_id,
@@ -59,8 +61,7 @@ def process_batch(batch_id, image_files):
         for file in image_files:
             if file and allowed_file(file.filename):
                 filename = secure_filename(file.filename)
-                filepath = Path(app.config['UPLOAD_FOLDER']) / filename
-                file.save(str(filepath))
+            filepath = image_batch_dir / filename                file.save(str(filepath))
                 saved_images.append(str(filepath))
         
         # Process each image
