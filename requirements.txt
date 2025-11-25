@@ -10,3 +10,6 @@ flirimageextractor>=1.0.0
 
 # For visualization (optional but recommended)
 matplotlib>=3.3.0
+
+# For web interface
+flask>=2.0.0
