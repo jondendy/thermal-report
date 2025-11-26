@@ -14,6 +14,7 @@ from pathlib import Path
 from werkzeug.utils import secure_filename
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file
 from flir_processor_simple import SimpleFLIRProcessor
+from thermal_analyzer import ThermalAnalyzer
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024  # 200MB max upload
@@ -44,6 +45,7 @@ def process_batch(batch_id, image_files):
     """Process a batch of images and generate reports"""
     try:
         processor = SimpleFLIRProcessor()
+                analyzer = ThermalAnalyzer(sensitivity='medium')  # Initialize thermal analyzer
         batch_dir = Path(app.config['REPORTS_FOLDER']) / 'batches' / batch_id
         batch_dir.mkdir(parents=True, exist_ok=True)
             image_batch_dir = Path(app.config['UPLOAD_FOLDER']) / 'batches' / batch_id
@@ -69,6 +71,30 @@ def process_batch(batch_id, image_files):
         for image_path in saved_images:
             try:
                 temp_data, stats = processor.process_single_image(image_path, display=False)
+
+                    # Detect hot spots using dual method (relative + absolute)
+                hot_spots = analyzer.detect_hot_spots_dual_method(temp_data)
+                
+                # Generate HTML report with thermal analysis
+                html_report = analyzer.generate_report(
+                    Path(image_path).name,
+                    hot_spots,
+                    stats
+                )
+                
+                # Save HTML report to batch directory
+                report_filename = Path(image_path).stem + '_thermal_report.html'
+                report_path = batch_dir / report_filename
+                with open(report_path, 'w') as f:
+                    f.write(html_report)
+                
+                # Create labeled image with hot spot annotations
+                labeled_filename = Path(image_path).stem + '_labeled.jpg'
+                labeled_path = batch_dir / labeled_filename
+                try:
+                    analyzer.label_hot_spots(image_path, hot_spots, str(labeled_path))
+                except Exception as label_error:
+                    print(f"Warning: Could not create labeled image: {label_error}")
                 
                 image_result = {
                     'filename': Path(image_path).name,
@@ -78,8 +104,12 @@ def process_batch(batch_id, image_files):
                         'mean': float(stats['mean']),
                         'median': float(stats['median']),
                         'std': float(stats['std'])
+                                        'shape': temp_data.shape,
+                'hot_spots': [spot.to_dict() for spot in hot_spots],
+                'hot_spot_count': len(hot_spots),
+                'thermal_report': report_filename,
+                'labeled_image': labeled_filename
                     },
-                    'shape': temp_data.shape
                 }
                 results['images'].append(image_result)
                 all_temps.append(stats)
