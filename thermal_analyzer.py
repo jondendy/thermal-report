@@ -130,7 +130,7 @@ This analyzer adds intelligence to SimpleFLIRProcessor:
     
     def _detect_relative(self, temp_data: np.ndarray) -> List[HotSpot]:
         """Local relative detection - finds local maxima"""
-                """Local relative detection - finds local maxima (hot spots warmer than neighbors)"""
+                ocal relative detection - finds local maxima (hot spots warmer than neighbors)"""
         from scipy.ndimage import maximum_filter
         
         # Use maximum filter to find local peaks
