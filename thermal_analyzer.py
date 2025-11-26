@@ -45,10 +45,10 @@ class ThermalAnalyzer:
     """
     Advanced thermal analysis with hot spot detection and reporting
     
-    This analyzer adds intelligence to SimpleFLIRProcessor:
-    - Detects thermal anomalies (hot spots)
-    - Labels and annotates images
-    - Generates narrative reports for building surveys
+This analyzer adds intelligence to SimpleFLIRProcessor:
+    tects thermal anomalies (hot spots)
+- Labels and annotates images
+- Generates narrative reports for building surveys
     """
     
     def __init__(self, base_temp_threshold=None, sensitivity='medium'):
