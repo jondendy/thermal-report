@@ -3,7 +3,6 @@
 Thermal Analyzer - Hot Spot Detection and Report Generation
 Builds on SimpleFLIRProcessor to add intelligence layer for building surveys
 """
-
 import numpy as np
 from pathlib import Path
 from datetime import datetime
@@ -28,7 +27,7 @@ class HotSpot:
         self.severity = severity  # 'low', 'medium', 'high', 'critical'
         self.description = ""
         self.likely_cause = ""
-        
+    
     def to_dict(self) -> Dict:
         """Convert to dictionary for JSON serialization"""
         return {
@@ -46,7 +45,7 @@ class ThermalAnalyzer:
     Advanced thermal analysis with hot spot detection and reporting
     
     This analyzer adds intelligence to SimpleFLIRProcessor:
-    detects thermal anomalies (hot spots)
+    - Detects thermal anomalies (hot spots)
     - Labels and annotates images
     - Generates narrative reports for building surveys
     """
@@ -64,11 +63,11 @@ class ThermalAnalyzer:
         
         # Sensitivity multipliers for statistical detection
         self.sensitivity_map = {
-            'low': 3.0,      # 3 std devs above mean
-            'medium': 2.0,   # 2 std devs above mean
-            'high': 1.5      # 1.5 std devs above mean
+            'low': 3.0,    # 3 std devs above mean
+            'medium': 2.0,  # 2 std devs above mean
+            'high': 1.5     # 1.5 std devs above mean
         }
-        
+    
     def detect_hot_spots(self, temp_data: np.ndarray, 
                         method='statistical',
                         threshold=None) -> List[HotSpot]:
@@ -79,7 +78,7 @@ class ThermalAnalyzer:
             temp_data: 2D numpy array of temperature values
             method: 'statistical' (auto), 'absolute' (fixed temp), 'relative' (local)
             threshold: Optional override threshold
-            
+        
         Returns:
             List of detected HotSpot objects
         """
@@ -156,6 +155,7 @@ class ThermalAnalyzer:
         print(f"Relative detection: found {np.sum(is_local_max)} local maxima")
         
         return self._extract_hot_spots(temp_data, is_local_max, 'relative')
+    
     def _extract_hot_spots(self, temp_data: np.ndarray, 
                           hot_mask: np.ndarray,
                           method_type: str) -> List[HotSpot]:
@@ -213,9 +213,9 @@ class ThermalAnalyzer:
             return 'medium'
         else:
             return 'low'
-
-            def label_hot_spots(self, image_path: str, hot_spots: List[HotSpot], 
-                        output_path: str = None) -> Image:
+    
+    def label_hot_spots(self, image_path: str, hot_spots: List[HotSpot], 
+                       output_path: str = None) -> Image:
         """
         Create annotated thermal image with hot spot markers and labels
         
@@ -223,7 +223,7 @@ class ThermalAnalyzer:
             image_path: Path to original thermal image
             hot_spots: List of detected HotSpot objects
             output_path: Optional path to save labeled image
-            
+        
         Returns:
             PIL Image with annotations
         """
@@ -298,14 +298,14 @@ class ThermalAnalyzer:
         return img
     
     def assess_hot_spot_cause(self, hot_spot: HotSpot, 
-                              image_context: Dict = None) -> str:
+                             image_context: Dict = None) -> str:
         """
         Interpret what the hot spot likely indicates for building surveys
         
         Args:
             hot_spot: HotSpot object to assess
             image_context: Optional context (location in building, etc.)
-            
+        
         Returns:
             String describing likely cause
         """
@@ -356,7 +356,7 @@ class ThermalAnalyzer:
             hot_spots: List of detected hot spots
             stats: Dictionary with temperature statistics
             image_context: Optional context information
-            
+        
         Returns:
             HTML formatted report string
         """
@@ -380,135 +380,4 @@ class ThermalAnalyzer:
         # Count by severity
         severity_counts = {}
         for spot in hot_spots:
-            severity_counts[spot.severity] = severity_counts.get(spot.severity, 0) + 1
-        
-        html.append('<p><strong>Severity Breakdown:</strong></p>')
-        html.append('<ul>')
-        for severity in ['critical', 'high', 'medium', 'low']:
-            count = severity_counts.get(severity, 0)
-            if count > 0:
-                html.append(f'<li class="{severity}">{severity.capitalize()}: {count}</li>')
-        html.append('</ul>')
-        
-        # Temperature statistics
-        html.append(f'<p><strong>Temperature Range:</strong> {stats.get("min_temp", 0):.1f}°C to {stats.get("max_temp", 0):.1f}°C</p>')
-        html.append(f'<p><strong>Mean Temperature:</strong> {stats.get("mean_temp", 0):.1f}°C (±{stats.get("std_temp", 0):.1f}°C)</p>')
-        html.append('</div>')
-        
-        # Detailed Findings
-        if sorted_spots:
-            html.append('<div class="findings">')
-            html.append('<h3>Detailed Findings</h3>')
-            
-            for idx, spot in enumerate(sorted_spots, 1):
-                html.append(f'<div class="hot-spot {spot.severity}">')
-                html.append(f'<h4>Hot Spot #{idx} - {spot.severity.upper()} Priority</h4>')
-                html.append(f'<p><strong>Location:</strong> Row {spot.location[0]}, Column {spot.location[1]}</p>')
-                html.append(f'<p><strong>Temperature:</strong> {spot.temperature:.2f}°C</p>')
-                html.append(f'<p><strong>Affected Area:</strong> {spot.area_size} pixels</p>')
-                
-                # Add interpretation
-                cause_assessment = self.assess_hot_spot_cause(spot, image_context)
-                html.append(f'<p><strong>Assessment:</strong> {cause_assessment}</p>')
-                
-                # Recommendations based on severity
-                html.append('<p><strong>Recommendation:</strong> ')
-                if spot.severity == 'critical':
-                    html.append('Immediate investigation required. This anomaly indicates a serious thermal issue that should be addressed urgently.')
-                elif spot.severity == 'high':
-                    html.append('Priority investigation recommended. Schedule detailed inspection of this area.')
-                elif spot.severity == 'medium':
-                    html.append('Monitor this area. Consider investigation during routine maintenance.')
-                else:
-                    html.append('Document for reference. No immediate action required unless pattern persists.')
-                html.append('</p>')
-                
-                html.append('</div>')
-            
-            html.append('</div>')
-        
-        # Recommendations section
-        html.append('<div class="recommendations">')
-        html.append('<h3>General Recommendations</h3>')
-        html.append('<ul>')
-        
-        critical_count = severity_counts.get('critical', 0)
-        high_count = severity_counts.get('high', 0)
-        
-        if critical_count > 0:
-            html.append('<li><strong>URGENT:</strong> Address all critical hot spots immediately</li>')
-            html.append('<li>Consider professional building inspection for critical areas</li>')
-        
-        if high_count > 0:
-            html.append('<li>Schedule detailed inspection of high-priority hot spots within 2 weeks</li>')
-        
-        if len(hot_spots) > 5:
-            html.append('<li>Multiple hot spots detected - consider comprehensive building envelope audit</li>')
-        
-        html.append('<li>Document conditions during survey (weather, time of day, HVAC status)</li>')
-        html.append('<li>Consider follow-up thermal imaging after remediation</li>')
-        html.append('<li>Verify findings with blower door test or moisture meter as appropriate</li>')
-        html.append('</ul>')
-        html.append('</div>')
-        
-        html.append('</div>')
-        
-        return '\n'.join(html)
-    
-    def detect_hot_spots_dual_method(self, temp_data: np.ndarray,
-                                     relative_threshold: float = None,
-                                     absolute_threshold: float = None) -> List[HotSpot]:
-        """
-        Primary: Relative detection with Backup: Fixed temperature detection
-        User preference: "Relative temperature spots with a backup Fixed temperature overview"
-        
-        Args:
-            temp_data: 2D numpy array of temperature values
-            relative_threshold: Optional threshold for relative detection
-            absolute_threshold: Optional threshold for absolute detection
-            
-        Returns:
-            Combined list of hot spots from both methods
-        """
-        print("\n=== Dual Method Detection ===")
-        print("PRIMARY: Relative (statistical) detection")
-        print("BACKUP: Fixed temperature threshold detection")
-        
-        # Primary: Relative/Statistical detection
-        primary_spots = self.detect_hot_spots(temp_data, method='statistical', 
-                                              threshold=relative_threshold)
-        
-        # Backup: Absolute threshold detection
-        backup_spots = self.detect_hot_spots(temp_data, method='absolute',
-                                            threshold=absolute_threshold)
-        
-        # Merge results, removing duplicates
-        # Two hot spots are duplicates if they're within 5 pixels of each other
-        merged_spots = list(primary_spots)
-        
-        for backup_spot in backup_spots:
-            is_duplicate = False
-            for existing_spot in merged_spots:
-                distance = np.sqrt(
-                    (backup_spot.location[0] - existing_spot.location[0])**2 +
-                    (backup_spot.location[1] - existing_spot.location[1])**2
-                )
-                if distance < 5:
-                    is_duplicate = True
-                    break
-            
-            if not is_duplicate:
-                merged_spots.append(backup_spot)
-        
-        print(f"\nMerged Results: {len(merged_spots)} unique hot spots")
-        print(f"  - From primary (relative): {len(primary_spots)}")
-        print(f"  - From backup (absolute): {len(backup_spots)}")
-        print(f"  - Additional from backup: {len(merged_spots) - len(primary_spots)}")
-        
-        return merged_spots
-
-
-# Example usage
-if __name__ == "__main__":
-    print("Thermal Analyzer Module")
-    print("Import this module to use ThermalAnalyzer class")
+            severity_counts[spot.severity] = severity_
