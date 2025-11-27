@@ -64,7 +64,7 @@ def process_batch(batch_id, image_files):
             if file and allowed_file(file.filename):
                 filename = secure_filename(file.filename)
             filepath = image_batch_dir / filename
-                        file.save(str(filepath))
+                    file.save(str(filepath))
                 saved_images.append(str(filepath))
         
         # Process each image
