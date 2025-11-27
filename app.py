@@ -4,7 +4,6 @@ Thermal Report Web Application
 A Flask-based web tool for uploading FLIR thermal images in batches,
 processing them, and viewing reports through a web interface.
 """
-
 import os
 import json
 import shutil
@@ -63,8 +62,8 @@ def process_batch(batch_id, image_files):
         for file in image_files:
             if file and allowed_file(file.filename):
                 filename = secure_filename(file.filename)
-            filepath = image_batch_dir / filename
-                    file.save(str(filepath))
+                filepath = image_batch_dir / filename
+                file.save(str(filepath))
                 saved_images.append(str(filepath))
         
         # Process each image
@@ -72,8 +71,8 @@ def process_batch(batch_id, image_files):
         for image_path in saved_images:
             try:
                 temp_data, stats = processor.process_single_image(image_path, display=False)
-
-                    # Detect hot spots using dual method (relative + absolute)
+                
+                # Detect hot spots using dual method (relative + absolute)
                 hot_spots = analyzer.detect_hot_spots_dual_method(temp_data)
                 
                 # Generate HTML report with thermal analysis
@@ -105,12 +104,12 @@ def process_batch(batch_id, image_files):
                         'mean': float(stats['mean']),
                         'median': float(stats['median']),
                         'std': float(stats['std'])
-                                        'shape': temp_data.shape,
-                'hot_spots': [spot.to_dict() for spot in hot_spots],
-                'hot_spot_count': len(hot_spots),
-                'thermal_report': report_filename,
-                'labeled_image': labeled_filename
                     },
+                    'shape': temp_data.shape,
+                    'hot_spots': [spot.to_dict() for spot in hot_spots],
+                    'hot_spot_count': len(hot_spots),
+                    'thermal_report': report_filename,
+                    'labeled_image': labeled_filename
                 }
                 results['images'].append(image_result)
                 all_temps.append(stats)
