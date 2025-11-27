@@ -45,7 +45,7 @@ def process_batch(batch_id, image_files):
     """Process a batch of images and generate reports"""
     try:
         processor = SimpleFLIRProcessor()
-                analyzer = ThermalAnalyzer(sensitivity='medium')  # Initialize thermal analyzer
+            analyzer = ThermalAnalyzer(sensitivity='medium')  # Initialize thermal analyzer
         batch_dir = Path(app.config['REPORTS_FOLDER']) / 'batches' / batch_id
         batch_dir.mkdir(parents=True, exist_ok=True)
             image_batch_dir = Path(app.config['UPLOAD_FOLDER']) / 'batches' / batch_id
