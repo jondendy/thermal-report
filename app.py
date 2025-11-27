@@ -266,6 +266,16 @@ def delete_batch(batch_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/info')
+def info():
+    """Information and instructions page"""
+    return render_template('info.html')
+
+@app.route('/help')
+def help_page():
+    """Redirect /help to /info"""
+    return redirect(url_for('info'))
+
 if __name__ == '__main__':
     ensure_directories()
     app.run(debug=True, host='0.0.0.0', port=5000)
