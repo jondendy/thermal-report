@@ -276,6 +276,146 @@ def help_page():
     """Redirect /help to /info"""
     return redirect(url_for('info'))
 
+
+# === HEAT LOSS REPORTING ROUTES ===
+
+@app.route('/label_hotspots/<batch_id>')
+def label_hotspots(batch_id):
+    """
+    Display hot spot labeling interface for operator to categorize and number hot spots.
+    Step 1 of heat loss reporting workflow.
+    """
+    try:
+        batch_path = Path(app.config['REPORTS_FOLDER']) / batch_id
+        if not batch_path.exists():
+            return "Batch not found", 404
+        
+        # Load thermal analysis results (from thermal_analyzer.py)
+        # This should have been saved during batch processing
+        analysis_file = batch_path / 'thermal_analysis.json'
+        if not analysis_file.exists():
+            return "Thermal analysis not found. Please process batch first.", 404
+        
+        with open(analysis_file, 'r') as f:
+            analysis_data = json.load(f)
+        
+        # Check if labels already exist
+        labels_file = batch_path / 'hotspot_labels.json'
+        existing_labels = {}
+        if labels_file.exists():
+            with open(labels_file, 'r') as f:
+                existing_labels = json.load(f)
+        
+        return render_template('label_hotspots.html',
+                             batch_id=batch_id,
+                             analysis_data=analysis_data,
+                             existing_labels=existing_labels,
+                             spot_types=['Window', 'Door', 'Wall', 'Eaves', 'Vent', 'Roof', 'Chimney', 'Porch'])
+    
+    except Exception as e:
+        return f"Error loading labeling interface: {str(e)}", 500
+
+
+@app.route('/save_labels/<batch_id>', methods=['POST'])
+def save_labels(batch_id):
+    """
+    Save hot spot labels submitted by operator.
+    Receives JSON data with spot labels and numbers.
+    """
+    try:
+        batch_path = Path(app.config['REPORTS_FOLDER']) / batch_id
+        if not batch_path.exists():
+            return jsonify({'error': 'Batch not found'}), 404
+        
+        # Get label data from request
+        label_data = request.get_json()
+        
+        # Structure the data
+        labels_structure = {
+            'batch_id': batch_id,
+            'labeled_spots': label_data.get('labeled_spots', []),
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+        
+        # Generate cross-references (spots with same number)
+        cross_refs = {}
+        for spot in labels_structure['labeled_spots']:
+            spot_num = spot.get('spot_number')
+            if spot_num:
+                if spot_num not in cross_refs:
+                    cross_refs[spot_num] = []
+                cross_refs[spot_num].append(spot.get('spot_id'))
+        
+        labels_structure['cross_references'] = cross_refs
+        
+        # Save to file
+        labels_file = batch_path / 'hotspot_labels.json'
+        with open(labels_file, 'w') as f:
+            json.dump(labels_structure, f, indent=2)
+        
+        return jsonify({'success': True, 'message': 'Labels saved successfully'})
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/generate_heat_loss_report/<batch_id>', methods=['POST'])
+def generate_heat_loss_report(batch_id):
+    """
+    Generate professional heat loss report from labeled hot spots.
+    Step 2 of heat loss reporting workflow.
+    """
+    try:
+        from heat_loss_reporter import HeatLossReporter
+        
+        # Get optional parameters from form
+        property_address = request.form.get('property_address', '')
+        inspector_name = request.form.get('inspector_name', '')
+        
+        # Initialize reporter
+        reporter = HeatLossReporter()
+        
+        # Generate report
+        report_data_file = reporter.generate_html_report(
+            batch_id=batch_id,
+            property_address=property_address,
+            inspector_name=inspector_name,
+            reports_dir=app.config['REPORTS_FOLDER']
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': 'Heat loss report generated successfully',
+            'report_url': f'/view_heat_loss_report/{batch_id}'
+        })
+    
+    except FileNotFoundError as e:
+        return jsonify({'error': f'Required data not found: {str(e)}'}), 404
+    except Exception as e:
+        return jsonify({'error': f'Report generation failed: {str(e)}'}), 500
+
+
+@app.route('/view_heat_loss_report/<batch_id>')
+def view_heat_loss_report(batch_id):
+    """
+    Display the generated heat loss report.
+    """
+    try:
+        batch_path = Path(app.config['REPORTS_FOLDER']) / batch_id
+        report_data_file = batch_path / 'heat_loss_report_data.json'
+        
+        if not report_data_file.exists():
+            return "Report not found. Please generate report first.", 404
+        
+        with open(report_data_file, 'r') as f:
+            report_data = json.load(f)
+        
+        return render_template('heat_loss_report.html', report_data=report_data)
+    
+    except Exception as e:
+        return f"Error loading report: {str(e)}", 500
+
+
 if __name__ == '__main__':
     ensure_directories()
     app.run(debug=True, host='0.0.0.0', port=5000)
