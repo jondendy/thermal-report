@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Hot Spots - Batch {{ batch_id }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background-color: #f5f5f5; padding: 20px; }
+        .header { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { color: #333; margin-bottom: 10px; }
+        .stats { display: flex; gap: 30px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; }
+        .stat { display: flex; flex-direction: column; }
+        .stat-label { font-size: 12px; color: #666; text-transform: uppercase; }
+        .stat-value { font-size: 24px; font-weight: bold; color: #007bff; }
+        .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 20px; margin-bottom: 80px; }
+        .image-panel { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        .image-section { position: relative; background: #000; }
+        .image-section img { width: 100%; display: block; }
+        .image-title { padding: 15px; background: #f8f9fa; font-weight: bold; border-bottom: 1px solid #dee2e6; }
+        .spots-section { padding: 15px; max-height: 400px; overflow-y: auto; }
+        .spot-row { display: grid; grid-template-columns: 80px 1fr 100px; gap: 10px; padding: 10px; margin-bottom: 8px; background: #f8f9fa; border-radius: 4px; align-items: center; }
+        .spot-id { font-weight: bold; color: #495057; }
+        .spot-temp { font-size: 12px; color: #666; }
+        select, input[type="number"] { padding: 6px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; }
+        input[type="number"] { text-align: center; font-weight: bold; }
+        .severity-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
+        .severity-critical { background-color: #dc3545; color: white; }
+        .severity-high { background-color: #fd7e14; color: white; }
+        .severity-medium { background-color: #ffc107; color: black; }
+        .severity-low { background-color: #28a745; color: white; }
+        .action-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 15px 20px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; z-index: 1000; }
+        .btn { padding: 12px 24px; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-primary:hover { background-color: #0056b3; }
+        .btn-success { background-color: #28a745; color: white; }
+        .btn-success:hover { background-color: #218838; }
+        .btn-secondary { background-color: #6c757d; color: white; }
+        .btn-secondary:hover { background-color: #545b62; }
+        .status-message { padding: 8px 16px; border-radius: 4px; font-weight: bold; }
+        .status-success { background: #d4edda; color: #155724; }
+        .status-error { background: #f8d7da; color: #721c24; }
+        .no-spots { padding: 20px; text-align: center; color: #666; font-style: italic; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Edit Hot Spots - Heat Loss Assessment</h1>
+        <p><strong>Batch ID:</strong> {{ batch_id }}</p>
+        <div class="stats">
+            <div class="stat"><span class="stat-label">Total Images</span><span class="stat-value">{{ analysis_data.images|length if analysis_data and analysis_data.images else 0 }}</span></div>
+            <div class="stat"><span class="stat-label">Total Spots</span><span class="stat-value" id="totalSpots">0</span></div>
+            <div class="stat"><span class="stat-label">Labeled</span><span class="stat-value" id="labeledCount">0</span></div>
+        </div>
+    </div>
+    <div class="grid-container">
+        {% if analysis_data and analysis_data.images %}
+            {% for image_name, image_data in analysis_data.images.items() %}
+            <div class="image-panel">
+                <div class="image-title">{{ image_name }}</div>
+                <div class="image-section"><img src="/static/{{ batch_id }}/{{ image_name }}" alt="{{ image_name }}"></div>
+                <div class="spots-section">
+                    {% if image_data.hot_spots %}
+                        {% for hot_spot in image_data.hot_spots %}
+                        <div class="spot-row" data-image="{{ image_name }}" data-spot-index="{{ loop.index }}">
+                            <div>
+                                <div class="spot-id">Spot #{{ loop.index }}</div>
+                                <div class="spot-temp">{{ hot_spot.temperature }}°C</div>
+                                <span class="severity-badge severity-{{ hot_spot.severity }}">{{ hot_spot.severity }}</span>
+                            </div>
+                            <div><select class="spot-type" onchange="updateStats()"><option value="">-- Select Type --</option>{% for spot_type in spot_types %}<option value="{{ spot_type }}">{{ spot_type }}</option>{% endfor %}</select></div>
+                            <div><input type="number" class="spot-number" min="1" max="99" placeholder="#" onchange="updateStats()"></div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="no-spots">No hot spots detected</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+    <div class="action-bar">
+        <button class="btn btn-secondary" onclick="window.history.back()">← Back</button>
+        <div id="statusMessage"></div>
+        <div>
+            <button class="btn btn-primary" onclick="saveLabels()">💾 Save</button>
+            <button class="btn btn-success" onclick="generateReport()">📊 Report</button>
+        </div>
+    </div>
+    <script>
+        function updateStats() {
+            const allSpots = document.querySelectorAll('.spot-row');
+            const labeled = Array.from(allSpots).filter(row => row.querySelector('.spot-type').value && row.querySelector('.spot-number').value);
+            document.getElementById('totalSpots').textContent = allSpots.length;
+            document.getElementById('labeledCount').textContent = labeled.length;
+        }
+        function collectLabels() {
+            const labels = [];
+            document.querySelectorAll('.spot-row').forEach(row => {
+                const imageName = row.dataset.image;
+                const spotIndex = row.dataset.spotIndex;
+                const type = row.querySelector('.spot-type').value;
+                const spotNumber = row.querySelector('.spot-number').value;
+                if (type && spotNumber) {
+                    labels.push({ spot_id: `${imageName}_spot${spotIndex}`, image_name: imageName, type: type, spot_number: parseInt(spotNumber), temperature: 0, severity: 'medium', location: [0, 0] });
+                }
+            });
+            return labels;
+        }
+        function saveLabels() {
+            const labels = collectLabels();
+            if (!labels.length) { showStatus('Please label at least one hot spot', 'error'); return; }
+            showStatus('Saving...', '');
+            fetch('/save_labels/{{ batch_id }}', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ labeled_spots: labels }) })
+                .then(r => r.json())
+                .then(d => showStatus(d.success ? '✓ Saved!' : 'Error: ' + (d.error || 'Unknown'), d.success ? 'success' : 'error'))
+                .catch(e => showStatus('Error: ' + e, 'error'));
+        }
+        function generateReport() {
+            if (!collectLabels().length) { showStatus('Please label hot spots first', 'error'); return; }
+            saveLabels();
+            setTimeout(() => {
+                const addr = prompt('Property address (optional):');
+                const insp = prompt('Inspector name (optional):');
+                const fd = new FormData();
+                if (addr) fd.append('property_address', addr);
+                if (insp) fd.append('inspector_name', insp);
+                showStatus('Generating...', '');
+                fetch('/generate_heat_loss_report/{{ batch_id }}', { method: 'POST', body: fd })
+                    .then(r => r.json())
+                    .then(d => { showStatus(d.success ? '✓ Done!' : 'Error: ' + (d.error || 'Unknown'), d.success ? 'success' : 'error'); if (d.success) setTimeout(() => window.location.href = d.report_url, 1000); })
+                    .catch(e => showStatus('Error: ' + e, 'error'));
+            }, 500);
+        }
+        function showStatus(msg, type) {
+            const el = document.getElementById('statusMessage');
+            el.textContent = msg;
+            el.className = type ? `status-message status-${type}` : 'status-message';
+            if (type === 'success') setTimeout(() => { el.textContent = ''; el.className = ''; }, 3000);
+        }
+        document.addEventListener('DOMContentLoaded', updateStats);
+    </script>
+</body>
+</html>
