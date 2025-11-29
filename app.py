@@ -333,7 +333,8 @@ def save_labels(batch_id):
     Receives JSON data with spot labels and numbers.
     """
     try:
-        batch_path = Path(app.config['REPORTS_FOLDER']) / 'batches' / batch_id        if not batch_path.exists():
+        batch_path = Path(app.config['REPORTS_FOLDER']) / 'batches' / batch_id
+        if not batch_path.exists():
             return jsonify({'error': 'Batch not found'}), 404
         
         # Get label data from request
