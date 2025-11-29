@@ -128,6 +128,44 @@
         }
         .save-status.success { color: #28a745; }
         .save-status.error { color: #dc3545; }
+
+                /* Manual Hot Spot Addition */
+        .add-manual-btn {
+            background-color: #17a2b8;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 10px 0;
+        }
+        .add-manual-btn:hover {
+            background-color: #138496;
+        }
+        .add-manual-btn.active {
+            background-color: #28a745;
+            box-shadow: 0 0 10px rgba(40, 167, 69, 0.5);
+        }
+        .image-card img.clickable {
+            cursor: crosshair;
+            border: 2px solid #17a2b8;
+        }
+        .manual-spot-marker {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: #17a2b8;
+            border: 2px solid white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        .image-wrapper {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
     </style>
 </head>
 <body>
@@ -150,7 +188,12 @@
             {% for image_name, image_data in analysis_data.images.items() %}
             <div class="image-card">
                 <h3>{{ image_name }}</h3>
-                <img src="/static/{{ batch_id }}/{{ image_name }}" alt="{{ image_name }}" onerror="this.src='/static/placeholder.jpg'">
+                            <button class="add-manual-btn" onclick="toggleManualMode(this, '{{ image_name }}')">
+                ➕ Add Manual Hot Spot
+            </button>
+            <div class="image-wrapper" id="wrapper_{{ image_name }}">
+                <img src="/static/{{ batch_id }}/{{ image_name }}" alt="{{ image_name }}" id="img_{{ image_name }}" onclick="handleImageClick(event, '{{ image_name }}')" onerror="this.src='/static/placeholder.jpg'">
+                            </div>
                 
                 {% if image_data.hot_spots %}
                 <div class="hotspot-list">
@@ -210,6 +253,134 @@
     </div>
 
     <script>
+
+                // Manual Hot Spot Management
+        let manualSpots = {}; // Stores manual spots by image name
+        let manualModeActive = null; // Currently active image for manual mode
+        let manualCounter = {}; // Counter for M1, M2, M3... per image
+
+        function toggleManualMode(button, imageName) {
+            const img = document.getElementById(`img_${imageName}`);
+            
+            if (manualModeActive === imageName) {
+                // Turn off manual mode
+                manualModeActive = null;
+                button.classList.remove('active');
+                button.textContent = '➕ Add Manual Hot Spot';
+                img.classList.remove('clickable');
+            } else {
+                // Turn off other buttons first
+                document.querySelectorAll('.add-manual-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                    btn.textContent = '➕ Add Manual Hot Spot';
+                });
+                document.querySelectorAll('.image-card img').forEach(image => {
+                    image.classList.remove('clickable');
+                });
+                
+                // Turn on manual mode for this image
+                manualModeActive = imageName;
+                button.classList.add('active');
+                button.textContent = '✓ Click on Image to Add';
+                img.classList.add('clickable');
+            }
+        }
+
+        function handleImageClick(event, imageName) {
+            if (manualModeActive !== imageName) {
+                return; // Not in manual mode for this image
+            }
+            
+            // Get click coordinates relative to image
+            const img = event.target;
+            const rect = img.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            
+            // Initialize manual spots array for this image if needed
+            if (!manualSpots[imageName]) {
+                manualSpots[imageName] = [];
+                manualCounter[imageName] = 1;
+            }
+            
+            // Create manual spot marker ID
+            const manualId = `M${manualCounter[imageName]}`;
+            manualCounter[imageName]++;
+            
+            // Add visual marker
+            const wrapper = document.getElementById(`wrapper_${imageName}`);
+            const marker = document.createElement('div');
+            marker.className = 'manual-spot-marker';
+            marker.style.left = `${x}px`;
+            marker.style.top = `${y}px`;
+            marker.title = `${manualId} - Click to remove`;
+            marker.id = `marker_${imageName}_${manualId}`;
+            marker.onclick = () => removeManualSpot(imageName, manualId);
+            wrapper.appendChild(marker);
+            
+            // Store manual spot data
+            manualSpots[imageName].push({
+                id: manualId,
+                x: Math.round(x),
+                y: Math.round(y),
+                temperature: 0, // Will be filled by operator
+                severity: 'medium'
+            });
+            
+            // Add to hot spot list UI
+            addManualSpotToList(imageName, manualId);
+        }
+
+        function removeManualSpot(imageName, manualId) {
+            // Remove from data
+            manualSpots[imageName] = manualSpots[imageName].filter(spot => spot.id !== manualId);
+            
+            // Remove marker
+            const marker = document.getElementById(`marker_${imageName}_${manualId}`);
+            if (marker) marker.remove();
+            
+            // Remove from list UI
+            const listItem = document.getElementById(`manual_${imageName}_${manualId}`);
+            if (listItem) listItem.remove();
+        }
+
+        function addManualSpotToList(imageName, manualId) {
+            const hotspotList = document.querySelector(`#imageContainer .image-card h3:contains("${imageName}") ~ .hotspot-list`);
+            if (!hotspotList) return;
+            
+            const spotItem = document.createElement('div');
+            spotItem.className = 'hotspot-item';
+            spotItem.id = `manual_${imageName}_${manualId}`;
+            spotItem.innerHTML = `
+                <div class="hotspot-header">
+                    ${manualId} (Manual)
+                    <span class="severity-badge severity-medium">OPERATOR</span>
+                    <button onclick="removeManualSpot('${imageName}', '${manualId}')" style="float:right; padding:2px 8px;">✕ Remove</button>
+                </div>
+                <div class="hotspot-controls">
+                    <div>
+                        <label>Type:</label>
+                        <select name="type" data-spot-id="${imageName}_${manualId}">
+                            <option value="">-- Select Type --</option>
+                            <option value="Window">Window</option>
+                            <option value="Door">Door</option>
+                            <option value="Wall">Wall</option>
+                            <option value="Eaves">Eaves</option>
+                            <option value="Vent">Vent</option>
+                            <option value="Roof">Roof</option>
+                            <option value="Chimney">Chimney</option>
+                            <option value="Porch">Porch</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Spot Number:</label>
+                        <input type="number" name="spot_number" min="1" max="99" placeholder="#" data-spot-id="${imageName}_${manualId}">
+                    </div>
+                </div>
+            `;
+            hotspotList.appendChild(spotItem);
+        }
+
         function collectLabels() {
             const labels = [];
             const selects = document.querySelectorAll('select[name="type"]');
@@ -238,7 +409,32 @@
                 }
             });
             
-            return labels;
+
+                    // Also collect manual spots
+        for (const imageName in manualSpots) {
+            manualSpots[imageName].forEach(spot => {
+                const spotId = `${imageName}_${spot.id}`;
+                const select = document.querySelector(`select[data-spot-id="${spotId}"]`);
+                const numberInput = document.querySelector(`input[data-spot-id="${spotId}"]`);
+                
+                const type = select ? select.value : '';
+                const spotNumber = numberInput ? parseInt(numberInput.value) : null;
+                
+                if (type && spotNumber) {
+                    labels.push({
+                        spot_id: spotId,
+                        image_name: imageName,
+                        type: type,
+                        spot_number: spotNumber,
+                        temperature: spot.temperature || 0,
+                        severity: spot.severity || 'medium',
+                        location: [spot.y, spot.x], // Row, col format
+                        manual: true
+                    });
+                }
+            });
+        }
+return labels;
         }
         
         function saveLabels() {
