@@ -250,9 +250,17 @@ class ThermalAnalyzer:
             'critical': '#FF0000'  # Red
         }
         
+        # Calculate scaling between thermal array and visual image
+        # Assume typical FLIR scaling: 120x160 sensor -> 480x640 image
+        scale_y = img.height / 120  # 480 / 120 = 4.0
+        scale_x = img.width / 160   # 640 / 160 = 4.0
+
         # Label each hot spot
         for idx, spot in enumerate(hot_spots, 1):
             row, col = spot.location
+            # Scale coordinates to match image dimensions
+            col = int(col * scale_x)
+            row = int(row * scale_y)
             color = severity_colors.get(spot.severity, '#FF0000')
             
             # Draw crosshair marker
