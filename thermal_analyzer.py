@@ -83,8 +83,9 @@ class ThermalAnalyzer:
             List of detected HotSpot objects
         """
         
-        valid_data = temp_data[np.isfinite(temp_data)]
-        if len(valid_data) == 0:
+        # Filter out sky reflection artifacts (typically < -45°C) and keep only finite values
+        valid_mask = np.isfinite(temp_data) & (temp_data > -45.0)
+        valid_data = temp_data[valid_mask]        if len(valid_data) == 0:
             return []
         
         if method == 'statistical':
