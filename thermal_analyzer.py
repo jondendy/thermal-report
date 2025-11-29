@@ -85,8 +85,8 @@ class ThermalAnalyzer:
         
         # Filter out sky reflection artifacts (typically < -45°C) and keep only finite values
         valid_mask = np.isfinite(temp_data) & (temp_data > -45.0)
-        valid_data = temp_data[valid_mask]        if len(valid_data) == 0:
-            return []
+        valid_data = temp_data[valid_mask]
+        if len(valid_data) == 0:            return []
         
         if method == 'statistical':
             return self._detect_statistical(temp_data, threshold)
