@@ -296,7 +296,7 @@ def label_hotspots(batch_id):
     Step 1 of heat loss reporting workflow.
     """
     try:
-        batch_path = Path(app.config['REPORTS_FOLDER']) / 'batches' / batch_id        if not batch_path.exists():
+        batch_path = Path(app.config['REPORTS_FOLDER']) / 'batches' / batch_id         if not batch_path.exists():
             return "Batch not found", 404
         
         # Load thermal analysis results (from thermal_analyzer.py)
