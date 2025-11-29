@@ -289,6 +289,31 @@ def help_page():
 
 # === HEAT LOSS REPORTING ROUTES ===
 
+
+@app.route('/edit_spots/<batch_id>')
+def edit_spots(batch_id):
+    """
+    Grid-based hot spot editing interface - improved UX for labeling spots.
+    Shows all images with their spots in a responsive grid layout.
+    """
+    batch_path = Path(app.config['REPORTS_FOLDER']) / 'batches' / batch_id
+    if not batch_path.exists():
+        return "Batch not found", 404
+    
+    # Load thermal analysis data
+    analysis_file = batch_path / 'thermal_analysis.json'
+    analysis_data = None
+    if analysis_file.exists():
+        with open(analysis_file, 'r') as f:
+            analysis_data = json.load(f)
+    
+    # Define spot types for dropdowns
+    spot_types = ['Window', 'Door', 'Wall', 'Eaves', 'Vent', 'Roof', 'Chimney', 'Porch']
+    
+    return render_template('edit_spots.html',
+                          batch_id=batch_id,
+                          analysis_data=analysis_data,
+                          spot_types=spot_types)
 @app.route('/label_hotspots/<batch_id>')
 def label_hotspots(batch_id):
     """
