@@ -58,7 +58,7 @@
             {% for image_data in analysis_data.images %}
             <div class="image-panel">
                 <div class="image-title">{{ image_data.image_name }}</div>
-                <div class="image-section"><img src="/static/{{ batch_id }}/{{ image_data.image_name }}" alt="{{ image_data.image_name }}"></div>
+                <div class="image-section"><img src="/download/{{ batch_id }}/{{ image_data.labeled_image }}" alt="{{ image_data.image_name }}"></div>
                 <div class="spots-section">
                     {% if image_data.hot_spots %}
                         {% for hot_spot in image_data.hot_spots %}
