@@ -1,0 +1,144 @@
+{
+  "batch_id": "batch_20251129_180908_d42d52fb",
+  "labeled_spots": [
+    {
+      "spot_id": "_spot1",
+      "image_name": "",
+      "type": "Window",
+      "spot_number": 8,
+      "temperature": 0,
+      "severity": "medium",
+      "location": [
+        0,
+        0
+      ]
+    },
+    {
+      "spot_id": "_spot2",
+      "image_name": "",
+      "type": "Window",
+      "spot_number": 8,
+      "temperature": 0,
+      "severity": "medium",
+      "location": [
+        0,
+        0
+      ]
+    },
+    {
+      "spot_id": "_spot3",
+      "image_name": "",
+      "type": "Window",
+      "spot_number": 8,
+      "temperature": 0,
+      "severity": "medium",
+      "location": [
+        0,
+        0
+      ]
+    },
+    {
+      "spot_id": "_spot4",
+      "image_name": "",
+      "type": "Door",
+      "spot_number": 2,
+      "temperature": 0,
+      "severity": "medium",
+      "location": [
+        0,
+        0
+      ]
+    },
+    {
+      "spot_id": "_spot1",
+      "image_name": "",
+      "type": "Door",
+      "spot_number": 1,
+      "temperature": 0,
+      "severity": "medium",
+      "location": [
+        0,
+        0
+      ]
+    },
+    {
+      "spot_id": "_spot2",
+      "image_name": "",
+      "type": "Window",
+      "spot_number": 1,
+      "temperature": 0,
+      "severity": "medium",
+      "location": [
+        0,
+        0
+      ]
+    },
+    {
+      "spot_id": "_spot1",
+      "image_name": "",
+      "type": "Door",
+      "spot_number": 1,
+      "temperature": 0,
+      "severity": "medium",
+      "location": [
+        0,
+        0
+      ]
+    },
+    {
+      "spot_id": "_spot2",
+      "image_name": "",
+      "type": "Window",
+      "spot_number": 1,
+      "temperature": 0,
+      "severity": "medium",
+      "location": [
+        0,
+        0
+      ]
+    },
+    {
+      "spot_id": "_spot3",
+      "image_name": "",
+      "type": "Door",
+      "spot_number": 1,
+      "temperature": 0,
+      "severity": "medium",
+      "location": [
+        0,
+        0
+      ]
+    },
+    {
+      "spot_id": "_spot1",
+      "image_name": "",
+      "type": "Window",
+      "spot_number": 2,
+      "temperature": 0,
+      "severity": "medium",
+      "location": [
+        0,
+        0
+      ]
+    }
+  ],
+  "timestamp": "2025-11-29 18:13:03",
+  "cross_references": {
+    "8": [
+      "_spot1",
+      "_spot2",
+      "_spot3"
+    ],
+    "2": [
+      "_spot4",
+      "_spot1"
+    ],
+    "1": [
+      "_spot1",
+      "_spot2",
+      "_spot1",
+      "_spot2",
+      "_spot3"
+    ]
+  }
+}

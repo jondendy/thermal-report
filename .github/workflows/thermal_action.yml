@@ -1,0 +1,56 @@
+name: Process Thermal Images
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Perl (for ExifTool)
+        # This is a prerequisite for flirimageextractor
+        run: sudo apt-get update && sudo apt-get install -y libimage-exiftool-perl
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        # Installs all necessary Python libraries
+        run: pip install numpy pillow matplotlib flirimageextractor
+
+      - name: Run Processing & Build Site
+        # Runs the script that creates index.html
+        run: python3 build-site.py
+
+      - name: Verify Output Files Exist (CRITICAL CHECK)
+        # Checks if index.html was created. Will error if not found.
+        run: |
+          echo "Listing root directory files for confirmation:"
+          ls -al
+          echo "Checking for index.html existence:"
+          test -f index.html
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
