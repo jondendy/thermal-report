@@ -134,8 +134,7 @@ class HeatLossReporter:
         Returns:
             Dictionary with batch data
         """
-        batch_path = Path(reports_dir) / batch_id
-        
+        batch_path = Path(reports_dir) / 'batches' / batch_id        
         # Load hot spot labels
         labels_file = batch_path / 'hotspot_labels.json'
         if not labels_file.exists():
@@ -341,8 +340,7 @@ class HeatLossReporter:
         }
         
         # Save report data
-        batch_path = Path(reports_dir) / batch_id
-        report_data_file = batch_path / 'heat_loss_report_data.json'
+        batch_path = Path(reports_dir) / 'batches' / batch_id        report_data_file = batch_path / 'heat_loss_report_data.json'
         with open(report_data_file, 'w') as f:
             json.dump(report_data, f, indent=2)
         
