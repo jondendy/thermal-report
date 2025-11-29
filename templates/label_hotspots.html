@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Label Hot Spots - Batch {{ batch_id }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .instructions {
+            background-color: #e7f3ff;
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .image-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .image-card {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            flex: 1 1 calc(50% - 20px);
+            min-width: 400px;
+        }
+        .image-card img {
+            width: 100%;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .hotspot-list {
+            margin-top: 15px;
+        }
+        .hotspot-item {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .hotspot-header {
+            font-weight: bold;
+            color: #495057;
+            margin-bottom: 8px;
+        }
+        .hotspot-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr 150px;
+            gap: 10px;
+            align-items: center;
+        }
+        label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 3px;
+        }
+        select, input[type="number"] {
+            width: 100%;
+            padding: 6px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        input[type="number"] {
+            text-align: center;
+            font-weight: bold;
+        }
+        .severity-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .severity-critical { background-color: #dc3545; color: white; }
+        .severity-high { background-color: #fd7e14; color: white; }
+        .severity-medium { background-color: #ffc107; color: black; }
+        .severity-low { background-color: #28a745; color: white; }
+        .button-container {
+            position: sticky;
+            bottom: 0;
+            background: white;
+            padding: 20px;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+            margin-top: 30px;
+        }
+        .btn {
+            padding: 12px 30px;
+            font-size: 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 0 10px;
+        }
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #0056b3;
+        }
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background-color: #545b62;
+        }
+        .save-status {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        .save-status.success { color: #28a745; }
+        .save-status.error { color: #dc3545; }
+
+                /* Manual Hot Spot Addition */
+        .add-manual-btn {
+            background-color: #17a2b8;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 10px 0;
+        }
+        .add-manual-btn:hover {
+            background-color: #138496;
+        }
+        .add-manual-btn.active {
+            background-color: #28a745;
+            box-shadow: 0 0 10px rgba(40, 167, 69, 0.5);
+        }
+        .image-card img.clickable {
+            cursor: crosshair;
+            border: 2px solid #17a2b8;
+        }
+        .manual-spot-marker {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: #17a2b8;
+            border: 2px solid white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        .image-wrapper {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <h1>Label Hot Spots - Heat Loss Assessment</h1>
+    
+    <div class="instructions">
+        <h3>Instructions:</h3>
+        <ol>
+            <li>Review each detected hot spot in the images below</li>
+            <li>Select the appropriate <strong>type</strong> from the dropdown (Window, Door, Wall, Eaves, Vent, Roof, Chimney, Porch)</li>
+            <li>Assign a <strong>number</strong> to each hot spot (1-99)</li>
+            <li><strong>Important:</strong> If the same hot spot appears in multiple images, assign it the <em>same number</em> across all images</li>
+            <li>Click "Save Labels" to save your work, then "Generate Report" to create the heat loss report</li>
+        </ol>
+        <p><strong>Batch ID:</strong> {{ batch_id }}</p>
+    </div>
+
+    <div class="image-container" id="imageContainer">
+        {% if analysis_data and analysis_data.images %}
+            {% for image_name, image_data in analysis_data.images.items() %}
+            <div class="image-card">
+                <h3>{{ image_name }}</h3>
+                            <button class="add-manual-btn" onclick="toggleManualMode(this, '{{ image_name }}')">
+                ➕ Add Manual Hot Spot
+            </button>
+            <div class="image-wrapper" id="wrapper_{{ image_name }}">
+                <img src="/static/{{ batch_id }}/{{ image_name }}" alt="{{ image_name }}" id="img_{{ image_name }}" onclick="handleImageClick(event, '{{ image_name }}')" onerror="this.src='/static/placeholder.jpg'">
+                            </div>
+                
+                {% if image_data.hot_spots %}
+                <div class="hotspot-list">
+                    <h4>Detected Hot Spots: {{ image_data.hot_spots|length }}</h4>
+                    {% for hot_spot in image_data.hot_spots %}
+                    <div class="hotspot-item">
+                        <div class="hotspot-header">
+                            Hot Spot #{{ loop.index }}
+                            <span class="severity-badge severity-{{ hot_spot.severity }}">{{ hot_spot.severity }}</span>
+                            - {{ hot_spot.temperature }}°C
+                        </div>
+                        <div class="hotspot-controls">
+                            <div>
+                                <label for="type_{{ image_name }}_{{ loop.index }}">Type:</label>
+                                <select id="type_{{ image_name }}_{{ loop.index }}" 
+                                        name="type" 
+                                        data-spot-id="{{ image_name }}_spot{{ loop.index }}">
+                                    <option value="">-- Select Type --</option>
+                                    {% for spot_type in spot_types %}
+                                    <option value="{{ spot_type }}">{{ spot_type }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div>
+                                <label for="number_{{ image_name }}_{{ loop.index }}">Spot Number:</label>
+                                <input type="number" 
+                                       id="number_{{ image_name }}_{{ loop.index }}" 
+                                       name="spot_number" 
+                                       min="1" 
+                                       max="99" 
+                                       placeholder="#"
+                                       data-spot-id="{{ image_name }}_spot{{ loop.index }}">
+                            </div>
+                            <div style="padding-top: 18px; font-size: 12px; color: #666;">
+                                Location: {{ hot_spot.location[0] }}, {{ hot_spot.location[1] }}<br>
+                                Area: {{ hot_spot.area_size }} px
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p>No hot spots detected in this image.</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        {% else %}
+            <p>No analysis data available.</p>
+        {% endif %}
+    </div>
+
+    <div class="button-container">
+        <button class="btn btn-secondary" onclick="window.history.back()">Back to Index</button>
+        <button class="btn btn-primary" onclick="saveLabels()">Save Labels</button>
+        <button class="btn btn-primary" onclick="generateReport()">Generate Report</button>
+        <div class="save-status" id="saveStatus"></div>
+    </div>
+
+    <script>
+
+                // Manual Hot Spot Management
+        let manualSpots = {}; // Stores manual spots by image name
+        let manualModeActive = null; // Currently active image for manual mode
+        let manualCounter = {}; // Counter for M1, M2, M3... per image
+
+        function toggleManualMode(button, imageName) {
+            const img = document.getElementById(`img_${imageName}`);
+            
+            if (manualModeActive === imageName) {
+                // Turn off manual mode
+                manualModeActive = null;
+                button.classList.remove('active');
+                button.textContent = '➕ Add Manual Hot Spot';
+                img.classList.remove('clickable');
+            } else {
+                // Turn off other buttons first
+                document.querySelectorAll('.add-manual-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                    btn.textContent = '➕ Add Manual Hot Spot';
+                });
+                document.querySelectorAll('.image-card img').forEach(image => {
+                    image.classList.remove('clickable');
+                });
+                
+                // Turn on manual mode for this image
+                manualModeActive = imageName;
+                button.classList.add('active');
+                button.textContent = '✓ Click on Image to Add';
+                img.classList.add('clickable');
+            }
+        }
+
+        function handleImageClick(event, imageName) {
+            if (manualModeActive !== imageName) {
+                return; // Not in manual mode for this image
+            }
+            
+            // Get click coordinates relative to image
+            const img = event.target;
+            const rect = img.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            
+            // Initialize manual spots array for this image if needed
+            if (!manualSpots[imageName]) {
+                manualSpots[imageName] = [];
+                manualCounter[imageName] = 1;
+            }
+            
+            // Create manual spot marker ID
+            const manualId = `M${manualCounter[imageName]}`;
+            manualCounter[imageName]++;
+            
+            // Add visual marker
+            const wrapper = document.getElementById(`wrapper_${imageName}`);
+            const marker = document.createElement('div');
+            marker.className = 'manual-spot-marker';
+            marker.style.left = `${x}px`;
+            marker.style.top = `${y}px`;
+            marker.title = `${manualId} - Click to remove`;
+            marker.id = `marker_${imageName}_${manualId}`;
+            marker.onclick = () => removeManualSpot(imageName, manualId);
+            wrapper.appendChild(marker);
+            
+            // Store manual spot data
+            manualSpots[imageName].push({
+                id: manualId,
+                x: Math.round(x),
+                y: Math.round(y),
+                temperature: 0, // Will be filled by operator
+                severity: 'medium'
+            });
+            
+            // Add to hot spot list UI
+            addManualSpotToList(imageName, manualId);
+        }
+
+        function removeManualSpot(imageName, manualId) {
+            // Remove from data
+            manualSpots[imageName] = manualSpots[imageName].filter(spot => spot.id !== manualId);
+            
+            // Remove marker
+            const marker = document.getElementById(`marker_${imageName}_${manualId}`);
+            if (marker) marker.remove();
+            
+            // Remove from list UI
+            const listItem = document.getElementById(`manual_${imageName}_${manualId}`);
+            if (listItem) listItem.remove();
+        }
+
+        function addManualSpotToList(imageName, manualId) {
+            const hotspotList = document.querySelector(`#imageContainer .image-card h3:contains("${imageName}") ~ .hotspot-list`);
+            if (!hotspotList) return;
+            
+            const spotItem = document.createElement('div');
+            spotItem.className = 'hotspot-item';
+            spotItem.id = `manual_${imageName}_${manualId}`;
+            spotItem.innerHTML = `
+                <div class="hotspot-header">
+                    ${manualId} (Manual)
+                    <span class="severity-badge severity-medium">OPERATOR</span>
+                    <button onclick="removeManualSpot('${imageName}', '${manualId}')" style="float:right; padding:2px 8px;">✕ Remove</button>
+                </div>
+                <div class="hotspot-controls">
+                    <div>
+                        <label>Type:</label>
+                        <select name="type" data-spot-id="${imageName}_${manualId}">
+                            <option value="">-- Select Type --</option>
+                            <option value="Window">Window</option>
+                            <option value="Door">Door</option>
+                            <option value="Wall">Wall</option>
+                            <option value="Eaves">Eaves</option>
+                            <option value="Vent">Vent</option>
+                            <option value="Roof">Roof</option>
+                            <option value="Chimney">Chimney</option>
+                            <option value="Porch">Porch</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Spot Number:</label>
+                        <input type="number" name="spot_number" min="1" max="99" placeholder="#" data-spot-id="${imageName}_${manualId}">
+                    </div>
+                </div>
+            `;
+            hotspotList.appendChild(spotItem);
+        }
+
+        function collectLabels() {
+            const labels = [];
+            const selects = document.querySelectorAll('select[name="type"]');
+            
+            selects.forEach(select => {
+                const spotId = select.dataset.spotId;
+                const type = select.value;
+                const numberInput = document.querySelector(`input[data-spot-id="${spotId}"]`);
+                const spotNumber = numberInput ? parseInt(numberInput.value) : null;
+                
+                if (type && spotNumber) {
+                    // Extract image name and spot details
+                    const parts = spotId.split('_spot');
+                    const imageName = parts[0];
+                    const spotIndex = parts[1];
+                    
+                    labels.push({
+                        spot_id: spotId,
+                        image_name: imageName,
+                        type: type,
+                        spot_number: spotNumber,
+                        temperature: 0,  // Will be filled from analysis data
+                        severity: 'medium',  // Will be filled from analysis data
+                        location: [0, 0]  // Will be filled from analysis data
+                    });
+                }
+            });
+            
+
+                    // Also collect manual spots
+        for (const imageName in manualSpots) {
+            manualSpots[imageName].forEach(spot => {
+                const spotId = `${imageName}_${spot.id}`;
+                const select = document.querySelector(`select[data-spot-id="${spotId}"]`);
+                const numberInput = document.querySelector(`input[data-spot-id="${spotId}"]`);
+                
+                const type = select ? select.value : '';
+                const spotNumber = numberInput ? parseInt(numberInput.value) : null;
+                
+                if (type && spotNumber) {
+                    labels.push({
+                        spot_id: spotId,
+                        image_name: imageName,
+                        type: type,
+                        spot_number: spotNumber,
+                        temperature: spot.temperature || 0,
+                        severity: spot.severity || 'medium',
+                        location: [spot.y, spot.x], // Row, col format
+                        manual: true
+                    });
+                }
+            });
+        }
+return labels;
+        }
+        
+        function saveLabels() {
+            const labels = collectLabels();
+            const status = document.getElementById('saveStatus');
+            
+            if (labels.length === 0) {
+                status.textContent = 'Please label at least one hot spot';
+                status.className = 'save-status error';
+                return;
+            }
+            
+            status.textContent = 'Saving...';
+            status.className = 'save-status';
+            
+            fetch('/save_labels/{{ batch_id }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    labeled_spots: labels
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    status.textContent = 'Labels saved successfully!';
+                    status.className = 'save-status success';
+                } else {
+                    status.textContent = 'Error: ' + (data.error || 'Unknown error');
+                    status.className = 'save-status error';
+                }
+            })
+            .catch(error => {
+                status.textContent = 'Error saving labels: ' + error;
+                status.className = 'save-status error';
+            });
+        }
+        
+        function generateReport() {
+            const labels = collectLabels();
+            const status = document.getElementById('saveStatus');
+            
+            if (labels.length === 0) {
+                status.textContent = 'Please label hot spots before generating report';
+                status.className = 'save-status error';
+                return;
+            }
+            
+            // First save labels, then generate report
+            saveLabels();
+            
+            setTimeout(() => {
+                const propertyAddress = prompt('Enter property address (optional):');
+                const inspectorName = prompt('Enter inspector name (optional):');
+                
+                status.textContent = 'Generating report...';
+                status.className = 'save-status';
+                
+                const formData = new FormData();
+                if (propertyAddress) formData.append('property_address', propertyAddress);
+                if (inspectorName) formData.append('inspector_name', inspectorName);
+                
+                fetch('/generate_heat_loss_report/{{ batch_id }}', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        status.textContent = 'Report generated successfully!';
+                        status.className = 'save-status success';
+                        setTimeout(() => {
+                            window.location.href = data.report_url;
+                        }, 1000);
+                    } else {
+                        status.textContent = 'Error: ' + (data.error || 'Unknown error');
+                        status.className = 'save-status error';
+                    }
+                })
+                .catch(error => {
+                    status.textContent = 'Error generating report: ' + error;
+                    status.className = 'save-status error';
+                });
+            }, 500);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+# Thermal Report - Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# Core dependencies
+numpy>=1.19.0
+pillow>=8.0.0
+
+# For FLIR image extraction
+flirimageextractor>=1.0.0
+
+# For visualization (optional but recommended)
+matplotlib>=3.3.0
+
+# For web interface
+flask>=2.0.0

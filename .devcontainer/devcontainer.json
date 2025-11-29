@@ -1,0 +1,15 @@
+{
+  "name": "Thermal Report Development",
+  "image": "mcr.microsoft.com/devcontainers/python:3.9",
+  "postCreateCommand": "apt-get update && apt-get install -y libimage-exiftool-perl && pip install -r requirements.txt",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance"
+      ]
+    }
+  },
+  "forwardPorts": [],
+  "remoteUser": "root"
+}

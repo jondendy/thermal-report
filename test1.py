@@ -1,3 +1,4 @@
+import numpy as np
 from flir_processor_simple import SimpleFLIRProcessor
 
 processor = SimpleFLIRProcessor()
@@ -22,3 +23,8 @@ hot_spot = np.unravel_index(np.argmax(temp_data), temp_data.shape)
 cold_spot = np.unravel_index(np.argmin(temp_data), temp_data.shape)
 print(f"Hottest point: {hot_spot}, {temp_data[hot_spot]:.2f} °C")
 print(f"Coldest point: {cold_spot}, {temp_data[cold_spot]:.2f} °C")
+
+
+# Save temperature data
+processor.save_temperature_array(temp_data, 'temperatures.csv')
+print("\n✓ Temperature data saved to temperatures.csv")
