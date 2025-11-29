@@ -411,7 +411,8 @@ def view_heat_loss_report(batch_id):
     Display the generated heat loss report.
     """
     try:
-        batch_path = Path(app.config['REPORTS_FOLDER']) / 'batches' / batch_id        report_data_file = batch_path / 'heat_loss_report_data.json'
+        batch_path = Path(app.config['REPORTS_FOLDER']) / 'batches' / batch_id
+        report_data_file = batch_path / 'heat_loss_report_data.json'
         
         if not report_data_file.exists():
             return "Report not found. Please generate report first.", 404
