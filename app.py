@@ -139,6 +139,16 @@ def process_batch(batch_id, image_files):
         results_file = batch_dir / 'results.json'
         with open(results_file, 'w') as f:
             json.dump(results, f, indent=2)
+
+        # Save thermal analysis JSON for heat loss labeling interface
+        thermal_analysis = {
+            'batch_id': batch_id,
+            'timestamp': datetime.now().isoformat(),
+            'images': results['images']
+        }
+        thermal_analysis_file = batch_dir / 'thermal_analysis.json'
+        with open(thermal_analysis_file, 'w') as f:
+            json.dump(thermal_analysis, f, indent=2)
         
         return results
         
@@ -286,8 +296,7 @@ def label_hotspots(batch_id):
     Step 1 of heat loss reporting workflow.
     """
     try:
-        batch_path = Path(app.config['REPORTS_FOLDER']) / batch_id
-        if not batch_path.exists():
+        batch_path = Path(app.config['REPORTS_FOLDER']) / 'batches' / batch_id        if not batch_path.exists():
             return "Batch not found", 404
         
         # Load thermal analysis results (from thermal_analyzer.py)
@@ -323,8 +332,7 @@ def save_labels(batch_id):
     Receives JSON data with spot labels and numbers.
     """
     try:
-        batch_path = Path(app.config['REPORTS_FOLDER']) / batch_id
-        if not batch_path.exists():
+        batch_path = Path(app.config['REPORTS_FOLDER']) / 'batches' / batch_id        if not batch_path.exists():
             return jsonify({'error': 'Batch not found'}), 404
         
         # Get label data from request
@@ -401,8 +409,7 @@ def view_heat_loss_report(batch_id):
     Display the generated heat loss report.
     """
     try:
-        batch_path = Path(app.config['REPORTS_FOLDER']) / batch_id
-        report_data_file = batch_path / 'heat_loss_report_data.json'
+        batch_path = Path(app.config['REPORTS_FOLDER']) / 'batches' / batch_id        report_data_file = batch_path / 'heat_loss_report_data.json'
         
         if not report_data_file.exists():
             return "Report not found. Please generate report first.", 404
