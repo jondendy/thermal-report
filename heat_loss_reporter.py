@@ -341,7 +341,8 @@ class HeatLossReporter:
         
         # Save report data
         batch_path = Path(reports_dir) / 'batches' / batch_id
-        report_data_file = batch_path / 'heat_loss_report.json'        with open(report_data_file, 'w') as f:
+        report_data_file = batch_path / 'heat_loss_report.json'
+        with open(report_data_file, 'w') as f:
             json.dump(report_data, f, indent=2)
         
         return str(report_data_file)
