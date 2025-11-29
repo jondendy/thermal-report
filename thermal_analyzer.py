@@ -380,4 +380,5 @@ class ThermalAnalyzer:
         # Count by severity
         severity_counts = {}
         for spot in hot_spots:
-            severity_counts[spot.severity] = severity_
+            severity_counts[spot.severity] = severity_counts.get(spot.severity, 0) + 1
+
