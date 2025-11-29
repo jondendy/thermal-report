@@ -73,7 +73,7 @@ def process_batch(batch_id, image_files):
                 temp_data, stats = processor.process_single_image(image_path, display=False)
                 
                 # Detect hot spots using dual method (relative + absolute)
-                hot_spots = analyzer.detect_hot_spots_dual_method(temp_data)
+                hot_spots = analyzer.detect_hot_spots(temp_data)
                 
                 # Generate HTML report with thermal analysis
                 html_report = analyzer.generate_report(
