@@ -64,7 +64,7 @@
                         {% for hot_spot in image_data.hot_spots %}
                         <div class="spot-row" data-image="{{ image_data.image_name }}" data-spot-index="{{ loop.index }}">
                             <div>
-                                <div class="spot-id">Spot #{{ loop.index }}</div>
+                                <div class="spot-id">Spot #{{ loop.index }} - {{ hot_spot.temperature }}°C</div>
                                 <div class="spot-temp">{{ hot_spot.temperature }}°C</div>
                                 <span class="severity-badge severity-{{ hot_spot.severity }}">{{ hot_spot.severity }}</span>
                             </div>
