@@ -185,14 +185,13 @@
 
     <div class="image-container" id="imageContainer">
         {% if analysis_data and analysis_data.images %}
-            {% for image_name, image_data in analysis_data.images.items() %}
-            <div class="image-card">
-                <h3>{{ image_name }}</h3>
-                            <button class="add-manual-btn" onclick="toggleManualMode(this, '{{ image_name }}')">
+            {% for image_data in analysis_data.images %}            <div class="image-card">
+                <h3>{{ image_data.image_name }}</h3>
+                            <button class="add-manual-btn" onclick="toggleManualMode(this, '{{ image_data.image_name }}')">
                 ➕ Add Manual Hot Spot
             </button>
-            <div class="image-wrapper" id="wrapper_{{ image_name }}">
-                <img src="/static/{{ batch_id }}/{{ image_name }}" alt="{{ image_name }}" id="img_{{ image_name }}" onclick="handleImageClick(event, '{{ image_name }}')" onerror="this.src='/static/placeholder.jpg'">
+            <div class="image-wrapper" id="wrapper_{{ image_data.image_name }}">
+                <img src="/static/{{ batch_id }}/{{ image_data.image_name }}" alt="{{ image_data.image_name }}" id="img_{{ image_data.image_name }}" onclick="handleImageClick(event, '{{ image_name }}')" onerror="this.src='/static/placeholder.jpg'">
                             </div>
                 
                 {% if image_data.hot_spots %}
@@ -207,10 +206,10 @@
                         </div>
                         <div class="hotspot-controls">
                             <div>
-                                <label for="type_{{ image_name }}_{{ loop.index }}">Type:</label>
-                                <select id="type_{{ image_name }}_{{ loop.index }}" 
+                                <label for="type_{{ image_data.image_name }}_{{ loop.index }}">Type:</label>
+                                <select id="type_{{ image_data.image_name }}_{{ loop.index }}" 
                                         name="type" 
-                                        data-spot-id="{{ image_name }}_spot{{ loop.index }}">
+                                        data-spot-id="{{ image_data.image_name }}_spot{{ loop.index }}">
                                     <option value="">-- Select Type --</option>
                                     {% for spot_type in spot_types %}
                                     <option value="{{ spot_type }}">{{ spot_type }}</option>
@@ -218,14 +217,14 @@
                                 </select>
                             </div>
                             <div>
-                                <label for="number_{{ image_name }}_{{ loop.index }}">Spot Number:</label>
+                                <label for="number_{{ image_data.image_name }}_{{ loop.index }}">Spot Number:</label>
                                 <input type="number" 
-                                       id="number_{{ image_name }}_{{ loop.index }}" 
+                                       id="number_{{ image_data.image_name }}_{{ loop.index }}" 
                                        name="spot_number" 
                                        min="1" 
                                        max="99" 
                                        placeholder="#"
-                                       data-spot-id="{{ image_name }}_spot{{ loop.index }}">
+                                       data-spot-id="{{ image_data.image_name }}_spot{{ loop.index }}">
                             </div>
                             <div style="padding-top: 18px; font-size: 12px; color: #666;">
                                 Location: {{ hot_spot.location[0] }}, {{ hot_spot.location[1] }}<br>
