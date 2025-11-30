@@ -286,34 +286,41 @@ def help_page():
     """Redirect /help to /info"""
     return redirect(url_for('info'))
 
-
 # === HEAT LOSS REPORTING ROUTES ===
-
 
 @app.route('/edit_spots/<batch_id>')
 def edit_spots(batch_id):
-    """
-    Grid-based hot spot editing interface - improved UX for labeling spots.
-    Shows all images with their spots in a responsive grid layout.
-    """
     batch_path = Path(app.config['REPORTS_FOLDER']) / 'batches' / batch_id
     if not batch_path.exists():
         return "Batch not found", 404
     
-    # Load thermal analysis data
+    # Load thermal analysis
     analysis_file = batch_path / 'thermal_analysis.json'
-    analysis_data = None
+    analysis_data = {'images': []}  # Default empty structure
     if analysis_file.exists():
         with open(analysis_file, 'r') as f:
             analysis_data = json.load(f)
+
+    # Load existing labels and links
+    labels_file = batch_path / 'hotspot_labels.json'
+    existing_labels = {}
+    saved_links = []
     
-    # Define spot types for dropdowns
+    if labels_file.exists():
+        with open(labels_file, 'r') as f:
+            saved_data = json.load(f)
+            existing_labels = saved_data if saved_data else {}
+            saved_links = saved_data.get('links', []) if saved_data else []
+
     spot_types = ['Window', 'Door', 'Wall', 'Eaves', 'Vent', 'Roof', 'Chimney', 'Porch']
     
     return render_template('edit_spots.html',
                           batch_id=batch_id,
                           analysis_data=analysis_data,
+                          existing_labels=existing_labels,
+                          saved_links=saved_links,
                           spot_types=spot_types)
+
 @app.route('/label_hotspots/<batch_id>')
 def label_hotspots(batch_id):
     """
