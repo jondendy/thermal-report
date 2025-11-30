@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thermal Spot Editor - {{ batch_id }}</title>
+    <style>
+        :root {
+            --color-primary: #007bff;
+            --color-success: #28a745;
+            --color-danger: #dc3545;
+            --color-warning: #ffc107;
+            --color-secondary: #6c757d;
+            --color-light: #f8f9fa;
+            --color-dark: #343a40;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background: #f5f5f5; padding: 20px; padding-bottom: 120px; }
+        
+        /* Header */
+        .header { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        h1 { color: #333; margin-bottom: 10px; font-size: 24px; }
+        .batch-info { font-size: 13px; color: #666; }
+        .stats { display: flex; gap: 30px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; flex-wrap: wrap; }
+        .stat { display: flex; flex-direction: column; }
+        .stat-label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-value { font-size: 22px; font-weight: bold; color: var(--color-primary); margin-top: 4px; }
+        
+        /* Links Section */
+        .links-section { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .links-section h2 { font-size: 16px; margin-bottom: 15px; color: #333; }
+        .link-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px; }
+        .link-item { display: grid; grid-template-columns: 150px 1fr 40px; gap: 8px; align-items: center; padding: 10px; background: var(--color-light); border-radius: 4px; }
+        .link-item input { padding: 6px; border: 1px solid #ced4da; border-radius: 4px; font-size: 13px; }
+        .btn-icon { background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px; opacity: 0.6; }
+        .btn-icon:hover { opacity: 1; color: var(--color-danger); }
+        
+        /* Grid Layout */
+        .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(520px, 1fr)); gap: 20px; }
+        .image-panel { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
+        .image-header { padding: 12px 15px; background: var(--color-light); font-weight: 600; border-bottom: 1px solid #dee2e6; display: flex; justify-content: space-between; align-items: center; }
+        .image-container { position: relative; background: #000; min-height: 320px; overflow: hidden; }
+        .image-container img { width: 100%; display: block; user-select: none; }
+        .img-loading { color: #999; padding: 20px; text-align: center; font-size: 13px; }
+        
+        /* Spot Markers */
+        .spot-marker { position: absolute; width: 26px; height: 26px; border: 2px solid white; border-radius: 50%; transform: translate(-50%, -50%); cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; color: white; z-index: 20; transition: transform 0.1s; }
+        .spot-marker:hover { transform: translate(-50%, -50%) scale(1.15); z-index: 30; }
+        .spot-marker.critical { background: var(--color-danger); }
+        .spot-marker.high { background: #fd7e14; }
+        .spot-marker.medium { background: var(--color-warning); color: #333; }
+        .spot-marker.low { background: var(--color-success); }
+        .spot-marker.selected { border-color: #ffeb3b; box-shadow: 0 0 0 2px #ffeb3b; }
+        
+        /* Spots List */
+        .spots-section { padding: 12px 15px; max-height: 380px; overflow-y: auto; background: white; }
+        .spot-row { display: grid; grid-template-columns: 60px 1fr 70px 28px; gap: 8px; padding: 8px; margin-bottom: 6px; background: #f8f9fa; border-radius: 4px; align-items: center; border-left: 3px solid transparent; }
+        .spot-row:hover { background: #e9ecef; }
+        .spot-row.selected { background: #fff3cd; border-left-color: #ffeb3b; }
+        .spot-id { font-size: 12px; font-weight: bold; color: #666; }
+        .spot-type-input { padding: 4px; border: 1px solid #ced4da; border-radius: 3px; font-size: 12px; }
+        .spot-num-input { padding: 4px; text-align: center; border: 1px solid #ced4da; border-radius: 3px; font-size: 12px; }
+        .no-spots { padding: 20px; text-align: center; color: #999; font-style: italic; font-size: 13px; }
+        
+        /* Buttons */
+        .btn-small { padding: 5px 10px; font-size: 12px; border: none; border-radius: 4px; cursor: pointer; color: white; background: var(--color-success); }
+        .btn-small:hover { opacity: 0.9; }
+        .btn { padding: 10px 18px; border: none; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; color: white; transition: background 0.2s; }
+        .btn-save { background: var(--color-primary); }
+        .btn-save:hover { background: #0056b3; }
+        .btn-report { background: var(--color-success); }
+        .btn-report:hover { background: #218838; }
+        .btn-back { background: var(--color-secondary); }
+        .btn-back:hover { background: #545b62; }
+        
+        /* Modal */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 2000; align-items: center; justify-content: center; }
+        .modal.active { display: flex; }
+        .modal-dialog { background: white; padding: 25px; border-radius: 8px; width: 90%; max-width: 380px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+        .modal-dialog h3 { margin-bottom: 18px; font-size: 16px; color: #333; }
+        .form-group { margin-bottom: 14px; }
+        .form-group label { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 600; color: #555; }
+        .form-group input, .form-group select { width: 100%; padding: 6px; border: 1px solid #ced4da; border-radius: 4px; font-size: 13px; }
+        .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+        
+        /* Action Bar */
+        .action-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 12px 20px; box-shadow: 0 -2px 8px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; z-index: 1000; border-top: 1px solid #eee; }
+        .action-left, .action-right { display: flex; gap: 10px; }
+        .status { padding: 8px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; opacity: 0; transition: opacity 0.3s; }
+        .status.show { opacity: 1; }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .status.info { background: #d1ecf1; color: #0c5460; }
+        
+        @media (max-width: 768px) {
+            .grid-container { grid-template-columns: 1fr; }
+            .link-item { grid-template-columns: 100px 1fr 30px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔥 Thermal Spot Editor</h1>
+        <p class="batch-info"><strong>Batch:</strong> {{ batch_id }}</p>
+        <div class="stats">
+            <div class="stat"><span class="stat-label">Images</span><span class="stat-value" id="imgCount">0</span></div>
+            <div class="stat"><span class="stat-label">Spots</span><span class="stat-value" id="spotCount">0</span></div>
+            <div class="stat"><span class="stat-label">Labeled</span><span class="stat-value" id="labeledCount">0</span></div>
+        </div>
+    </div>
+
+    <div class="links-section">
+        <h2>📎 Documents & Links</h2>
+        <div class="link-list" id="linkList"></div>
+        <button class="btn-small" onclick="addLink()">+ Add Link</button>
+    </div>
+
+    <div class="grid-container" id="grid"></div>
+
+    <div class="action-bar">
+        <div class="action-left">
+            <button class="btn btn-back" onclick="goBack()">← Back</button>
+        </div>
+        <div id="status" class="status"></div>
+        <div class="action-right">
+            <button class="btn btn-save" onclick="saveEdits()">💾 Save</button>
+            <button class="btn btn-report" onclick="genReport()">📊 Report</button>
+        </div>
+    </div>
+
+    <!-- Add Spot Modal -->
+    <div class="modal" id="modal">
+        <div class="modal-dialog">
+            <h3>Add Thermal Point</h3>
+            <div class="form-group">
+                <label>Type</label>
+                <select id="spotType">
+                    <option value="">-- Select --</option>
+                    {% for t in spot_types %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Temperature (°C)</label>
+                <input type="number" id="spotTemp" step="0.1" value="20.0">
+            </div>
+            <div class="form-group">
+                <label>Spot Number</label>
+                <input type="number" id="spotNum" min="1" max="99">
+            </div>
+            <div class="modal-footer">
+                <button class="btn-small" onclick="closeModal()" style="background:#ccc; color:#333">Cancel</button>
+                <button class="btn-small" onclick="addSpot()">Add</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const BATCH = "{{ batch_id }}";
+        const RAW_DATA = {{ analysis_data|tojson|default('{"images":[]}') }};
+        const SAVED = {{ existing_labels|tojson|default('{}') }};
+        const TYPES = {{ spot_types|tojson }};
+
+        let state = {
+            links: {{ saved_links|tojson|default('[]') }},
+            images: [],
+            pendingSpot: null
+        };
+
+        function init() {
+            // Merge server data with saved labels
+            if (RAW_DATA.images) {
+                state.images = RAW_DATA.images.map((img, idx) => {
+                    const saved = SAVED.labeled_spots || [];
+                    const spots = (img.hot_spots || []).map((s, sidx) => {
+                        const spotId = `${img.filename}_spot${sidx + 1}`;
+                        const label = saved.find(l => l.spot_id === spotId);
+                        return {
+                            id: spotId,
+                            idx: sidx,
+                            x: s.x || 50,
+                            y: s.y || 50,
+                            temp: s.temperature || 0,
+                            sev: s.severity || 'medium',
+                            type: label ? label.type : '',
+                            num: label ? label.spot_number : ''
+                        };
+                    });
+                    return {
+                        name: img.filename,
+                        url: `/download/${BATCH}/${img.labeled_image || img.filename}`,
+                        spots: spots
+                    };
+                });
+            }
+            render();
+        }
+
+        function render() {
+            renderLinks();
+            renderGrid();
+            updateStats();
+        }
+
+        function renderLinks() {
+            const html = state.links.map((l, i) => `
+                <div class="link-item">
+                    <input type="text" placeholder="Title" value="${l.title || ''}" onchange="state.links[${i}].title=this.value">
+                    <input type="text" placeholder="URL" value="${l.url || ''}" onchange="state.links[${i}].url=this.value">
+                    <button class="btn-icon" onclick="state.links.splice(${i},1);renderLinks()">✕</button>
+                </div>
+            `).join('');
+            document.getElementById('linkList').innerHTML = html;
+        }
+
+        function addLink() {
+            state.links.push({ title: '', url: '' });
+            renderLinks();
+        }
+
+        function renderGrid() {
+            const html = state.images.map((img, imgIdx) => `
+                <div class="image-panel">
+                    <div class="image-header">
+                        <span>${img.name}</span>
+                        <button class="btn-small" style="font-size:11px" onclick="startAdd(${imgIdx})">+ Add</button>
+                    </div>
+                    <div class="image-container" id="imgContainer${imgIdx}" data-idx="${imgIdx}">
+                        <img src="${img.url}" alt="${img.name}" onerror="this.parentElement.innerHTML='<div class=img-loading>Image not found</div>'">
+                    </div>
+                    <div class="spots-section">
+                        ${renderSpots(imgIdx)}
+                    </div>
+                </div>
+            `).join('');
+            document.getElementById('grid').innerHTML = html;
+            attachMarkers();
+        }
+
+        function renderSpots(imgIdx) {
+            const spots = state.images[imgIdx].spots;
+            if (!spots.length) return '<div class="no-spots">No hot spots</div>';
+            return spots.map((s, sIdx) => `
+                <div class="spot-row" data-img="${imgIdx}" data-spot="${sIdx}">
+                    <div class="spot-id">#${s.idx + 1}</div>
+                    <select class="spot-type-input" onchange="state.images[${imgIdx}].spots[${sIdx}].type=this.value;updateStats()">
+                        <option value="">Type</option>
+                        ${TYPES.map(t => `<option value="${t}" ${s.type===t?'selected':''}>${t}</option>`).join('')}
+                    </select>
+                    <input type="number" class="spot-num-input" placeholder="#" min="1" max="99" value="${s.num || ''}" onchange="state.images[${imgIdx}].spots[${sIdx}].num=this.value;updateStats()">
+                    <button class="btn-icon" style="font-size:14px" onclick="state.images[${imgIdx}].spots.splice(${sIdx},1);renderGrid()">🗑</button>
+                </div>
+            `).join('');
+        }
+
+        function attachMarkers() {
+            state.images.forEach((img, imgIdx) => {
+                const container = document.getElementById(`imgContainer${imgIdx}`);
+                if (!container) return;
+                img.spots.forEach((s, sIdx) => {
+                    const marker = document.createElement('div');
+                    marker.className = `spot-marker ${s.sev}`;
+                    marker.style.left = s.x + 'px';
+                    marker.style.top = s.y + 'px';
+                    marker.textContent = s.num || (sIdx + 1);
+                    marker.onclick = () => container.parentElement.querySelector('.spot-row').click?.();
+                    container.appendChild(marker);
+                });
+            });
+        }
+
+        function startAdd(imgIdx) {
+            state.pendingSpot = { imgIdx };
+            showStatus('Click image to place spot', 'info');
+        }
+
+        function addSpot() {
+            const type = document.getElementById('spotType').value;
+            const temp = parseFloat(document.getElementById('spotTemp').value);
+            const num = document.getElementById('spotNum').value;
+            if (!type || !state.pendingSpot) return;
+            
+            const img = state.images[state.pendingSpot.imgIdx];
+            img.spots.push({
+                id: `manual_${Date.now()}`,
+                idx: img.spots.length,
+                x: state.pendingSpot.x,
+                y: state.pendingSpot.y,
+                temp: temp,
+                sev: temp > 25 ? 'critical' : temp > 22 ? 'high' : temp > 18 ? 'medium' : 'low',
+                type: type,
+                num: num
+            });
+            closeModal();
+            renderGrid();
+            updateStats();
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.remove('active');
+            state.pendingSpot = null;
+        }
+
+        function updateStats() {
+            let total = 0, labeled = 0;
+            state.images.forEach(img => {
+                total += img.spots.length;
+                img.spots.forEach(s => { if (s.type && s.num) labeled++; });
+            });
+            document.getElementById('imgCount').textContent = state.images.length;
+            document.getElementById('spotCount').textContent = total;
+            document.getElementById('labeledCount').textContent = labeled;
+        }
+
+        function showStatus(msg, type) {
+            const el = document.getElementById('status');
+            el.textContent = msg;
+            el.className = `status ${type} show`;
+            if (type === 'success') setTimeout(() => el.classList.remove('show'), 3000);
+        }
+
+        async function saveEdits() {
+            const spots = [];
+            state.images.forEach(img => {
+                img.spots.forEach(s => {
+                    if (s.type) {
+                        spots.push({
+                            spot_id: s.id,
+                            image_name: img.name,
+                            type: s.type,
+                            spot_number: s.num,
+                            temperature: s.temp,
+                            severity: s.sev,
+                            location: [s.x, s.y]
+                        });
+                    }
+                });
+            });
+            
+            showStatus('Saving...', 'info');
+            const res = await fetch(`/save_labels/${BATCH}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ labeled_spots: spots, links: state.links.filter(l => l.title && l.url) })
+            });
+            const data = await res.json();
+            showStatus(data.success ? '✓ Saved' : '✗ Error', data.success ? 'success' : 'error');
+        }
+
+        async function genReport() {
+            if (!state.images.some(img => img.spots.some(s => s.type && s.num))) {
+                alert('Label at least one spot');
+                return;
+            }
+            await saveEdits();
+            setTimeout(() => {
+                showStatus('Generating...', 'info');
+                fetch(`/generate_heat_loss_report/${BATCH}`, { method: 'POST' })
+                    .then(r => r.json())
+                    .then(d => { if (d.success) window.location.href = d.report_url; else showStatus('Error', 'error'); });
+            }, 500);
+        }
+
+        function goBack() {
+            if (confirm('Unsaved changes will be lost. Continue?')) window.history.back();
+        }
+
+        // Image click for adding spots
+        document.addEventListener('click', (e) => {
+            if (state.pendingSpot && e.target.tagName === 'IMG') {
+                const rect = e.target.getBoundingClientRect();
+                state.pendingSpot.x = Math.round(e.clientX - rect.left);
+                state.pendingSpot.y = Math.round(e.clientY - rect.top);
+                document.getElementById('modal').classList.add('active');
+            }
+        }, true);
+
+        init();
+    </script>
+</body>
+</html>
