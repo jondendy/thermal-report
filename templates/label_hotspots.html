@@ -191,7 +191,7 @@
                 ➕ Add Manual Hot Spot
             </button>
             <div class="image-wrapper" id="wrapper_{{ image_data.image_name }}">
-                <img src="/static/{{ batch_id }}/{{ image_data.image_name }}" alt="{{ image_data.image_name }}" id="img_{{ image_data.image_name }}" onclick="handleImageClick(event, '{{ image_name }}')" onerror="this.src='/static/placeholder.jpg'">
+                <img src="/download/{{ batch_id }}/{{ image_data.image_name }}" alt="{{ image_data.image_name }}" id="img_{{ image_data.image_name }}" onclick="handleImageClick(event, '{{ image_name }}')" onerror="this.src='/static/placeholder.jpg'">
                             </div>
                 
                 {% if image_data.hot_spots %}
