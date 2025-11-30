@@ -294,18 +294,15 @@ def edit_spots(batch_id):
     if not batch_path.exists():
         return "Batch not found", 404
     
-    # Load thermal analysis
     analysis_file = batch_path / 'thermal_analysis.json'
-    analysis_data = {'images': []}  # Default empty structure
+    analysis_data = {'images': []}
     if analysis_file.exists():
         with open(analysis_file, 'r') as f:
             analysis_data = json.load(f)
 
-    # Load existing labels and links
     labels_file = batch_path / 'hotspot_labels.json'
     existing_labels = {}
     saved_links = []
-    
     if labels_file.exists():
         with open(labels_file, 'r') as f:
             saved_data = json.load(f)
@@ -313,13 +310,8 @@ def edit_spots(batch_id):
             saved_links = saved_data.get('links', []) if saved_data else []
 
     spot_types = ['Window', 'Door', 'Wall', 'Eaves', 'Vent', 'Roof', 'Chimney', 'Porch']
-    
-    return render_template('edit_spots.html',
-                          batch_id=batch_id,
-                          analysis_data=analysis_data,
-                          existing_labels=existing_labels,
-                          saved_links=saved_links,
-                          spot_types=spot_types)
+    return render_template('edit_spots.html', batch_id=batch_id, analysis_data=analysis_data, 
+                          existing_labels=existing_labels, saved_links=saved_links, spot_types=spot_types)
 
 @app.route('/label_hotspots/<batch_id>')
 def label_hotspots(batch_id):
