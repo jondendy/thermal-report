@@ -1,0 +1,193 @@
+# ==============================================================================
+# Thermal Report Application - .gitignore
+# ==============================================================================
+# This file protects private client data while allowing demo/test content
+# in the public repository.
+#
+# Strategy:
+# - Exclude ALL images by default
+# - Use negative patterns (!) to INCLUDE approved demo/test images
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# PYTHON ENVIRONMENT
+# ------------------------------------------------------------------------------
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+.virtualenv/
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+PIPFILE.lock
+
+# PyInstaller
+*.manifest
+*.spec
+
+# ------------------------------------------------------------------------------
+# PRIVATE CLIENT DATA - CRITICAL FOR GDPR COMPLIANCE
+# ------------------------------------------------------------------------------
+# Block all thermal images from private client surveys
+Images/*
+processed_thermal/*
+
+# Block all generated reports containing client information
+reports/*.pdf
+reports/*.docx
+reports/*.html
+
+# Exception: Allow demo/test images (add specific files as needed)
+# Uncomment and customize these as you create your demo content:
+# !Images/demo/
+# !Images/test_house_example/
+# !test_images/sample_thermal_*.jpg
+
+# ------------------------------------------------------------------------------
+# APPLICATION LOGS & TEMPORARY FILES
+# ------------------------------------------------------------------------------
+# Log files may contain file paths or processing details
+*.log
+flir_batch_processing.log
+
+# Temporary processing files
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+# ------------------------------------------------------------------------------
+# CONFIGURATION & SECRETS
+# ------------------------------------------------------------------------------
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+config.local.py
+secrets.py
+
+# Instance-specific Flask config
+instance/
+.webassets-cache
+
+# ------------------------------------------------------------------------------
+# DOCKER & DEPLOYMENT
+# ------------------------------------------------------------------------------
+# Docker volumes and local data
+docker-compose.override.yml
+.docker/
+
+# ------------------------------------------------------------------------------
+# IDE & EDITOR FILES
+# ------------------------------------------------------------------------------
+# VSCode
+.vscode/
+*.code-workspace
+
+# PyCharm
+.idea/
+*.iml
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+
+# Emacs
+*~
+\#*\#
+
+# ------------------------------------------------------------------------------
+# OPERATING SYSTEM FILES
+# ------------------------------------------------------------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+.Trash-*
+
+# ------------------------------------------------------------------------------
+# TESTING & COVERAGE
+# ------------------------------------------------------------------------------
+# Pytest
+.pytest_cache/
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+.hypothesis/
+
+# ------------------------------------------------------------------------------
+# DATABASE FILES (if using local SQLite)
+# ------------------------------------------------------------------------------
+*.db
+*.sqlite
+*.sqlite3
+
+# ------------------------------------------------------------------------------
+# JUPYTER NOTEBOOKS CHECKPOINTS
+# ------------------------------------------------------------------------------
+.ipynb_checkpoints/
+
+# ------------------------------------------------------------------------------
+# DOCUMENTATION BUILD
+# ------------------------------------------------------------------------------
+docs/_build/
+target/
+
+# ==============================================================================
+# IMPORTANT NOTES:
+# ==============================================================================
+# 1. After creating this file, remove any existing private images from Git:
+#    git rm --cached -r Images/
+#    git rm --cached -r processed_thermal/
+#    git commit -m "Remove private client images from repository"
+#
+# 2. To include specific demo images, add them with ! prefix:
+#    !Images/demo_house/exterior_front.jpg
+#
+# 3. Create a separate private repository for actual client data
+#
+# 4. Store generated reports in external storage (Synology/Google Drive)
+# ==============================================================================
