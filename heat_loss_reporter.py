@@ -9,7 +9,6 @@ from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Optional
 from security_utils import validate_batch_id
-from security_utils import validate_batch_id
 
 class HeatLossReporter:
     """
