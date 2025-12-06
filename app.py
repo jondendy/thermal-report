@@ -171,9 +171,12 @@ def process_batch(batch_id, image_files):
         return results
         
     except Exception as e:
-        logger.exception(f"Batch processing error for {batch_id}: {str(e)}")
-        return {'error': 'Batch processing failed'}
-
+        logger.exception(f"Error processing image {Path(image_path).name}: {str(e)}")
+        results['images'].append({
+            'filename': Path(image_path).name,
+            'error': 'Processing failed'
+        })
+    
 def get_all_batches():
     """Get list of all processed batches"""
     batches = []
