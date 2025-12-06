@@ -137,11 +137,12 @@ def process_batch(batch_id, image_files):
                 processor.save_temperature_array(temp_data, str(csv_path))
                 
             except Exception as e:
+                logger.exception(f"Error processing image {Path(image_path).name}: {str(e)}")
                 results['images'].append({
                     'filename': Path(image_path).name,
-                    'error': str(e)
+                    'error': 'Processing failed'
                 })
-        
+                
         # Calculate batch summary
         if all_temps:
             temps = [t['mean'] for t in all_temps]
@@ -170,7 +171,8 @@ def process_batch(batch_id, image_files):
         return results
         
     except Exception as e:
-        return {'error': str(e)}
+        logger.exception(f"Batch processing error for {batch_id}: {str(e)}")
+        return {'error': 'Batch processing failed'}
 
 def get_all_batches():
     """Get list of all processed batches"""
@@ -292,7 +294,8 @@ def delete_batch(batch_id):
             shutil.rmtree(batch_dir)
         return jsonify({'success': True})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.exception(f"Error deleting batch {batch_id}: {str(e)}")
+        return jsonify({'error': 'Failed to delete batch'}), 500
 
 @app.route('/info')
 def info():
@@ -365,7 +368,8 @@ def label_hotspots(batch_id):
                              spot_types=['Window', 'Door', 'Wall', 'Eaves', 'Vent', 'Roof', 'Chimney', 'Porch'])
     
     except Exception as e:
-        return f"Error loading labeling interface: {str(e)}", 500
+        logger.exception(f"Error loading labeling interface for batch {batch_id}: {str(e)}")
+        return "An error occurred loading the labeling interface", 500
 
 
 @app.route('/save_labels/<batch_id>', methods=['POST'])
@@ -408,8 +412,8 @@ def save_labels(batch_id):
         return jsonify({'success': True, 'message': 'Labels saved successfully'})
     
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
+        logger.exception(f"Error saving labels for batch {batch_id}: {str(e)}")
+        return jsonify({'error': 'Failed to save labels'}), 500
 
 @app.route('/generate_heat_loss_report/<batch_id>', methods=['POST'])
 def generate_heat_loss_report(batch_id):
@@ -442,9 +446,11 @@ def generate_heat_loss_report(batch_id):
         })
     
     except FileNotFoundError as e:
-        return jsonify({'error': f'Required data not found: {str(e)}'}), 404
+        logger.error(f"Missing data for batch {batch_id}: {str(e)}")
+        return jsonify({'error': 'Required data not found. Please ensure hotspots are labeled.'}), 404
     except Exception as e:
-        return jsonify({'error': f'Report generation failed: {str(e)}'}), 500
+        logger.exception(f"Error generating heat loss report for batch {batch_id}: {str(e)}")
+        return jsonify({'error': 'Report generation failed'}), 500
 
 
 @app.route('/view_heat_loss_report/<batch_id>')
@@ -465,8 +471,9 @@ def view_heat_loss_report(batch_id):
         return render_template('heat_loss_report.html', report_data=report_data)
     
     except Exception as e:
-        return f"Error loading report: {str(e)}", 500
-
+        logger.exception(f"Error loading heat loss report for batch {batch_id}: {str(e)}")
+        return "An error occurred loading the report", 500
+        
 if __name__ == '__main__':
     ensure_directories()
     debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
