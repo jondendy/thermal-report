@@ -191,3 +191,5 @@ target/
 #
 # 4. Store generated reports in external storage (Synology/Google Drive)
 # ==============================================================================
+backup_*/
+*.log
