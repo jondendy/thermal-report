@@ -233,7 +233,8 @@ def upload_files():
         }), 201
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.exception(f"Upload error: {str(e)}")
+        return jsonify({'error': 'An error occurred during upload. Please try again.'}), 500
 
 @app.route('/report/<batch_id>')
 def view_report(batch_id):
