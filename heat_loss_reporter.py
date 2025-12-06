@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3 
 """
 Heat Loss Reporter - Professional thermal survey report generation
 Focuses on heat loss assessment and energy-saving recommendations
