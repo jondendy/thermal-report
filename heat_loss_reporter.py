@@ -136,7 +136,7 @@ class HeatLossReporter:
             Dictionary with batch data
         """
         if not validate_batch_id(batch_id):
-            raise ValueError(f"Invalid batch_id format: {batch_id}"
+            raise ValueError(f"Invalid batch_id format: {batch_id}")
         batch_path = Path(reports_dir) / 'batches' / batch_id        
         # Load hot spot labels
         labels_file = batch_path / 'hotspot_labels.json'
