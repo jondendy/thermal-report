@@ -14,6 +14,23 @@ from werkzeug.utils import secure_filename
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file
 from flir_processor_simple import SimpleFLIRProcessor
 from thermal_analyzer import ThermalAnalyzer
+from security_utils import validate_batch_id, safe_batch_path
+import logging
+
+logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.FileHandler('thermal_report_errors.log'), logging.StreamHandler()])
+logger = logging.getLogger(__name__)
+from security_utils import validate_batch_id, safe_batch_path
+import logging
+
+logging.basicConfig(
+    level=logging.ERROR,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('thermal_report_errors.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024  # 200MB max upload
@@ -449,7 +466,7 @@ def view_heat_loss_report(batch_id):
     except Exception as e:
         return f"Error loading report: {str(e)}", 500
 
-
 if __name__ == '__main__':
     ensure_directories()
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    app.run(debug=debug_mode, host='0.0.0.0', port=5000)

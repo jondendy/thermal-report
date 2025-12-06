@@ -8,7 +8,8 @@ import json
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Optional
-
+from security_utils import validate_batch_id
+from security_utils import validate_batch_id
 
 class HeatLossReporter:
     """
@@ -134,6 +135,8 @@ class HeatLossReporter:
         Returns:
             Dictionary with batch data
         """
+        if not validate_batch_id(batch_id):
+            raise ValueError(f"Invalid batch_id format: {batch_id}"
         batch_path = Path(reports_dir) / 'batches' / batch_id        
         # Load hot spot labels
         labels_file = batch_path / 'hotspot_labels.json'
