@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3 
 """
 Heat Loss Reporter - Professional thermal survey report generation
 Focuses on heat loss assessment and energy-saving recommendations
@@ -8,7 +8,6 @@ import json
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Optional
-from security_utils import validate_batch_id
 from security_utils import validate_batch_id
 
 class HeatLossReporter:
