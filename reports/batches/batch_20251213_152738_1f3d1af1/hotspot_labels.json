@@ -1,0 +1,174 @@
+{
+  "batch_id": "batch_20251213_152738_1f3d1af1",
+  "labeled_spots": [
+    {
+      "spot_id": "manual_1765640040008",
+      "image_name": "FLIR1466.jpg",
+      "type": "Eaves",
+      "spot_number": "3",
+      "temperature": 20,
+      "severity": "medium",
+      "location": [
+        154,
+        124
+      ]
+    },
+    {
+      "spot_id": "manual_1765640068157",
+      "image_name": "FLIR1466.jpg",
+      "type": "Door",
+      "spot_number": "1",
+      "temperature": 20,
+      "severity": "medium",
+      "location": [
+        186,
+        298
+      ]
+    },
+    {
+      "spot_id": "manual_1765640084377",
+      "image_name": "FLIR1466.jpg",
+      "type": "Vent",
+      "spot_number": "4",
+      "temperature": 20,
+      "severity": "medium",
+      "location": [
+        363,
+        259
+      ]
+    },
+    {
+      "spot_id": "manual_1765640103626",
+      "image_name": "FLIR1466.jpg",
+      "type": "Window",
+      "spot_number": "1",
+      "temperature": 20,
+      "severity": "medium",
+      "location": [
+        121,
+        292
+      ]
+    },
+    {
+      "spot_id": "manual_1765640131188",
+      "image_name": "FLIR1466.jpg",
+      "type": "Wall",
+      "spot_number": "5",
+      "temperature": 20,
+      "severity": "medium",
+      "location": [
+        117,
+        335
+      ]
+    },
+    {
+      "spot_id": "manual_1765639977875",
+      "image_name": "FLIR1468.jpg",
+      "type": "Wall",
+      "spot_number": "1",
+      "temperature": 20,
+      "severity": "medium",
+      "location": [
+        376,
+        311
+      ]
+    },
+    {
+      "spot_id": "manual_1765639999641",
+      "image_name": "FLIR1468.jpg",
+      "type": "Vent",
+      "spot_number": "1",
+      "temperature": 20,
+      "severity": "medium",
+      "location": [
+        224,
+        244
+      ]
+    },
+    {
+      "spot_id": "manual_1765639909779",
+      "image_name": "FLIR1472.jpg",
+      "type": "Wall",
+      "spot_number": "2",
+      "temperature": 20,
+      "severity": "medium",
+      "location": [
+        379,
+        263
+      ]
+    },
+    {
+      "spot_id": "manual_1765639803440",
+      "image_name": "FLIR1474.jpg",
+      "type": "Porch",
+      "spot_number": "1",
+      "temperature": 20,
+      "severity": "medium",
+      "location": [
+        222,
+        305
+      ]
+    },
+    {
+      "spot_id": "manual_1765639863289",
+      "image_name": "FLIR1474.jpg",
+      "type": "Vent",
+      "spot_number": "2",
+      "temperature": 20,
+      "severity": "medium",
+      "location": [
+        195,
+        142
+      ]
+    },
+    {
+      "spot_id": "manual_1765639880170",
+      "image_name": "FLIR1474.jpg",
+      "type": "Eaves",
+      "spot_number": "1",
+      "temperature": 20,
+      "severity": "medium",
+      "location": [
+        307,
+        118
+      ]
+    },
+    {
+      "spot_id": "manual_1765639837650",
+      "image_name": "FLIR1476.jpg",
+      "type": "Porch",
+      "spot_number": "1",
+      "temperature": 20,
+      "severity": "medium",
+      "location": [
+        464,
+        162
+      ]
+    }
+  ],
+  "timestamp": "2025-12-13 15:36:58",
+  "cross_references": {
+    "3": [
+      "manual_1765640040008"
+    ],
+    "1": [
+      "manual_1765640068157",
+      "manual_1765640103626",
+      "manual_1765639977875",
+      "manual_1765639999641",
+      "manual_1765639803440",
+      "manual_1765639880170",
+      "manual_1765639837650"
+    ],
+    "4": [
+      "manual_1765640084377"
+    ],
+    "5": [
+      "manual_1765640131188"
+    ],
+    "2": [
+      "manual_1765639909779",
+      "manual_1765639863289"
+    ]
+  }
+}

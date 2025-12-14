@@ -1,0 +1,74 @@
+{
+  "batch_id": "batch_20251206_184136_cf20de1a",
+  "property_address": "Not specified",
+  "inspector_name": "Not specified",
+  "survey_date": "2025-12-09",
+  "survey_time": "20:34",
+  "summary": {
+    "total_findings": 1,
+    "highest_severity": "Medium",
+    "severity_breakdown": {
+      "low": 0,
+      "medium": 1,
+      "high": 0,
+      "critical": 0
+    },
+    "critical_count": 0,
+    "high_count": 0
+  },
+  "findings": [
+    {
+      "spot_number": "5",
+      "type": "Wall",
+      "title": "Heat loss at Wall #5",
+      "description": "Heat loss detected at wall location. Temperature readings range from 20.0\u00b0C to 20.0\u00b0C, averaging 20.0\u00b0C. This represents moderate heat loss that should be addressed.",
+      "max_temp": 20,
+      "min_temp": 20,
+      "avg_temp": 20.0,
+      "severity": "medium",
+      "image_count": 1,
+      "images": [
+        "FLIR0592.jpg"
+      ],
+      "recommendations": {
+        "advice": [
+          "Inspect cavity wall insulation levels and top up if necessary",
+          "Consider external wall insulation (EWI) for solid wall properties",
+          "Investigate internal wall insulation (IWI) as alternative to EWI",
+          "Check for thermal bridging at structural elements (lintels, columns)",
+          "Investigate any signs of damp or missing insulation in cavity",
+          "Consider thermal render or insulated plasterboard solutions"
+        ],
+        "savings": "15-35% on heating costs",
+        "priority": "high",
+        "description": "Wall heat loss is one of the largest contributors to energy waste in buildings. Solid walls lose heat twice as fast as cavity walls, and poorly insulated cavity walls are also highly inefficient."
+      },
+      "spot_locations": [
+        [
+          "FLIR0592.jpg",
+          [
+            310,
+            241
+          ]
+        ]
+      ]
+    }
+  ],
+  "recommendations": [
+    {
+      "spot_number": "5",
+      "type": "Wall",
+      "advice": [
+        "Inspect cavity wall insulation levels and top up if necessary",
+        "Consider external wall insulation (EWI) for solid wall properties",
+        "Investigate internal wall insulation (IWI) as alternative to EWI",
+        "Check for thermal bridging at structural elements (lintels, columns)",
+        "Investigate any signs of damp or missing insulation in cavity",
+        "Consider thermal render or insulated plasterboard solutions"
+      ],
+      "savings": "15-35% on heating costs",
+      "priority": "high",
+      "severity": "medium"
+    }
+  ]
+}

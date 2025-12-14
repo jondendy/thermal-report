@@ -1,0 +1,332 @@
+{
+  "batch_id": "batch_20251213_152738_1f3d1af1",
+  "property_address": "Not specified",
+  "inspector_name": "Not specified",
+  "survey_date": "2025-12-13",
+  "survey_time": "15:36",
+  "summary": {
+    "total_findings": 5,
+    "highest_severity": "Medium",
+    "severity_breakdown": {
+      "low": 0,
+      "medium": 5,
+      "high": 0,
+      "critical": 0
+    },
+    "critical_count": 0,
+    "high_count": 0
+  },
+  "findings": [
+    {
+      "spot_number": "1",
+      "type": "Door",
+      "title": "Heat loss at Door #1",
+      "description": "Heat loss detected at door visible in 7 images. Temperature readings range from 20.0\u00b0C to 20.0\u00b0C, averaging 20.0\u00b0C. This represents moderate heat loss that should be addressed.",
+      "max_temp": 20,
+      "min_temp": 20,
+      "avg_temp": 20.0,
+      "severity": "medium",
+      "image_count": 7,
+      "images": [
+        "FLIR1466.jpg",
+        "FLIR1466.jpg",
+        "FLIR1468.jpg",
+        "FLIR1468.jpg",
+        "FLIR1474.jpg",
+        "FLIR1474.jpg",
+        "FLIR1476.jpg"
+      ],
+      "recommendations": {
+        "advice": [
+          "Install or replace door sweep at bottom to prevent air infiltration",
+          "Add weather stripping to frame perimeter for better seal",
+          "Consider installing a thermal door curtain for additional insulation",
+          "Check threshold and seal any gaps with appropriate materials",
+          "Ensure door closer is adjusted for proper seal when closed"
+        ],
+        "savings": "5-10% on heating costs",
+        "priority": "medium",
+        "description": "External doors are common heat loss points, particularly around frames and thresholds. Poor sealing can result in significant air leakage."
+      },
+      "spot_locations": [
+        [
+          "FLIR1466.jpg",
+          [
+            186,
+            298
+          ]
+        ],
+        [
+          "FLIR1466.jpg",
+          [
+            121,
+            292
+          ]
+        ],
+        [
+          "FLIR1468.jpg",
+          [
+            376,
+            311
+          ]
+        ],
+        [
+          "FLIR1468.jpg",
+          [
+            224,
+            244
+          ]
+        ],
+        [
+          "FLIR1474.jpg",
+          [
+            222,
+            305
+          ]
+        ],
+        [
+          "FLIR1474.jpg",
+          [
+            307,
+            118
+          ]
+        ],
+        [
+          "FLIR1476.jpg",
+          [
+            464,
+            162
+          ]
+        ]
+      ]
+    },
+    {
+      "spot_number": "2",
+      "type": "Wall",
+      "title": "Heat loss at Wall #2",
+      "description": "Heat loss detected at wall visible in 2 images. Temperature readings range from 20.0\u00b0C to 20.0\u00b0C, averaging 20.0\u00b0C. This represents moderate heat loss that should be addressed.",
+      "max_temp": 20,
+      "min_temp": 20,
+      "avg_temp": 20.0,
+      "severity": "medium",
+      "image_count": 2,
+      "images": [
+        "FLIR1472.jpg",
+        "FLIR1474.jpg"
+      ],
+      "recommendations": {
+        "advice": [
+          "Inspect cavity wall insulation levels and top up if necessary",
+          "Consider external wall insulation (EWI) for solid wall properties",
+          "Investigate internal wall insulation (IWI) as alternative to EWI",
+          "Check for thermal bridging at structural elements (lintels, columns)",
+          "Investigate any signs of damp or missing insulation in cavity",
+          "Consider thermal render or insulated plasterboard solutions"
+        ],
+        "savings": "15-35% on heating costs",
+        "priority": "high",
+        "description": "Wall heat loss is one of the largest contributors to energy waste in buildings. Solid walls lose heat twice as fast as cavity walls, and poorly insulated cavity walls are also highly inefficient."
+      },
+      "spot_locations": [
+        [
+          "FLIR1472.jpg",
+          [
+            379,
+            263
+          ]
+        ],
+        [
+          "FLIR1474.jpg",
+          [
+            195,
+            142
+          ]
+        ]
+      ]
+    },
+    {
+      "spot_number": "3",
+      "type": "Eaves",
+      "title": "Heat loss at Eaves #3",
+      "description": "Heat loss detected at eaves location. Temperature readings range from 20.0\u00b0C to 20.0\u00b0C, averaging 20.0\u00b0C. This represents moderate heat loss that should be addressed.",
+      "max_temp": 20,
+      "min_temp": 20,
+      "avg_temp": 20.0,
+      "severity": "medium",
+      "image_count": 1,
+      "images": [
+        "FLIR1466.jpg"
+      ],
+      "recommendations": {
+        "advice": [
+          "Improve loft insulation to recommended 270mm depth (glass wool) or 250mm (mineral wool)",
+          "Seal gaps between wall and roof structure to prevent air leakage",
+          "Check ventilation/insulation balance to prevent condensation issues",
+          "Install eaves insulation baffles to maintain airflow while improving insulation",
+          "Ensure insulation extends right to eaves but doesn't block soffit vents",
+          "Consider spray foam or rigid board insulation for difficult eaves areas"
+        ],
+        "savings": "20-30% on heating costs",
+        "priority": "high",
+        "description": "Heat rises, making the eaves area a critical heat loss point. Inadequate insulation at the eaves can undermine the entire roof insulation system."
+      },
+      "spot_locations": [
+        [
+          "FLIR1466.jpg",
+          [
+            154,
+            124
+          ]
+        ]
+      ]
+    },
+    {
+      "spot_number": "4",
+      "type": "Vent",
+      "title": "Heat loss at Vent #4",
+      "description": "Heat loss detected at vent location. Temperature readings range from 20.0\u00b0C to 20.0\u00b0C, averaging 20.0\u00b0C. This represents moderate heat loss that should be addressed.",
+      "max_temp": 20,
+      "min_temp": 20,
+      "avg_temp": 20.0,
+      "severity": "medium",
+      "image_count": 1,
+      "images": [
+        "FLIR1466.jpg"
+      ],
+      "recommendations": {
+        "advice": [
+          "Install controllable trickle vents to balance ventilation with heat retention",
+          "Assess whether vent is necessary or can be sealed (check building regulations)",
+          "Consider mechanical ventilation with heat recovery (MVHR) system",
+          "Ensure existing vents serve their intended purpose and aren't over-ventilating",
+          "Install vent covers that can be closed when not needed",
+          "Check for uncontrolled air leakage around vent installations"
+        ],
+        "savings": "5-10% on heating costs",
+        "priority": "low",
+        "description": "While ventilation is essential for air quality and preventing condensation, uncontrolled ventilation leads to unnecessary heat loss. Modern controlled ventilation systems can dramatically reduce this issue."
+      },
+      "spot_locations": [
+        [
+          "FLIR1466.jpg",
+          [
+            363,
+            259
+          ]
+        ]
+      ]
+    },
+    {
+      "spot_number": "5",
+      "type": "Wall",
+      "title": "Heat loss at Wall #5",
+      "description": "Heat loss detected at wall location. Temperature readings range from 20.0\u00b0C to 20.0\u00b0C, averaging 20.0\u00b0C. This represents moderate heat loss that should be addressed.",
+      "max_temp": 20,
+      "min_temp": 20,
+      "avg_temp": 20.0,
+      "severity": "medium",
+      "image_count": 1,
+      "images": [
+        "FLIR1466.jpg"
+      ],
+      "recommendations": {
+        "advice": [
+          "Inspect cavity wall insulation levels and top up if necessary",
+          "Consider external wall insulation (EWI) for solid wall properties",
+          "Investigate internal wall insulation (IWI) as alternative to EWI",
+          "Check for thermal bridging at structural elements (lintels, columns)",
+          "Investigate any signs of damp or missing insulation in cavity",
+          "Consider thermal render or insulated plasterboard solutions"
+        ],
+        "savings": "15-35% on heating costs",
+        "priority": "high",
+        "description": "Wall heat loss is one of the largest contributors to energy waste in buildings. Solid walls lose heat twice as fast as cavity walls, and poorly insulated cavity walls are also highly inefficient."
+      },
+      "spot_locations": [
+        [
+          "FLIR1466.jpg",
+          [
+            117,
+            335
+          ]
+        ]
+      ]
+    }
+  ],
+  "recommendations": [
+    {
+      "spot_number": "2",
+      "type": "Wall",
+      "advice": [
+        "Inspect cavity wall insulation levels and top up if necessary",
+        "Consider external wall insulation (EWI) for solid wall properties",
+        "Investigate internal wall insulation (IWI) as alternative to EWI",
+        "Check for thermal bridging at structural elements (lintels, columns)",
+        "Investigate any signs of damp or missing insulation in cavity",
+        "Consider thermal render or insulated plasterboard solutions"
+      ],
+      "savings": "15-35% on heating costs",
+      "priority": "high",
+      "severity": "medium"
+    },
+    {
+      "spot_number": "3",
+      "type": "Eaves",
+      "advice": [
+        "Improve loft insulation to recommended 270mm depth (glass wool) or 250mm (mineral wool)",
+        "Seal gaps between wall and roof structure to prevent air leakage",
+        "Check ventilation/insulation balance to prevent condensation issues",
+        "Install eaves insulation baffles to maintain airflow while improving insulation",
+        "Ensure insulation extends right to eaves but doesn't block soffit vents",
+        "Consider spray foam or rigid board insulation for difficult eaves areas"
+      ],
+      "savings": "20-30% on heating costs",
+      "priority": "high",
+      "severity": "medium"
+    },
+    {
+      "spot_number": "5",
+      "type": "Wall",
+      "advice": [
+        "Inspect cavity wall insulation levels and top up if necessary",
+        "Consider external wall insulation (EWI) for solid wall properties",
+        "Investigate internal wall insulation (IWI) as alternative to EWI",
+        "Check for thermal bridging at structural elements (lintels, columns)",
+        "Investigate any signs of damp or missing insulation in cavity",
+        "Consider thermal render or insulated plasterboard solutions"
+      ],
+      "savings": "15-35% on heating costs",
+      "priority": "high",
+      "severity": "medium"
+    },
+    {
+      "spot_number": "1",
+      "type": "Door",
+      "advice": [
+        "Install or replace door sweep at bottom to prevent air infiltration",
+        "Add weather stripping to frame perimeter for better seal",
+        "Consider installing a thermal door curtain for additional insulation",
+        "Check threshold and seal any gaps with appropriate materials",
+        "Ensure door closer is adjusted for proper seal when closed"
+      ],
+      "savings": "5-10% on heating costs",
+      "priority": "medium",
+      "severity": "medium"
+    },
+    {
+      "spot_number": "4",
+      "type": "Vent",
+      "advice": [
+        "Install controllable trickle vents to balance ventilation with heat retention",
+        "Assess whether vent is necessary or can be sealed (check building regulations)",
+        "Consider mechanical ventilation with heat recovery (MVHR) system",
+        "Ensure existing vents serve their intended purpose and aren't over-ventilating",
+        "Install vent covers that can be closed when not needed",
+        "Check for uncontrolled air leakage around vent installations"
+      ],
+      "savings": "5-10% on heating costs",
+      "priority": "low",
+      "severity": "medium"
+    }
+  ]
+}

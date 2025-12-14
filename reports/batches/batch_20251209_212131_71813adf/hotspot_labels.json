@@ -1,0 +1,66 @@
+{
+  "batch_id": "batch_20251209_212131_71813adf",
+  "labeled_spots": [
+    {
+      "spot_id": "FLIR1468.jpg_spot1",
+      "image_name": "FLIR1468.jpg",
+      "type": "Vent",
+      "spot_number": "1",
+      "temperature": 25.230037689208984,
+      "severity": "critical",
+      "location": [
+        50,
+        50
+      ]
+    },
+    {
+      "spot_id": "FLIR1468.jpg_spot2",
+      "image_name": "FLIR1468.jpg",
+      "type": "Vent",
+      "spot_number": "2",
+      "temperature": 11.10286808013916,
+      "severity": "high",
+      "location": [
+        50,
+        50
+      ]
+    },
+    {
+      "spot_id": "manual_1765315920531",
+      "image_name": "FLIR1472.jpg",
+      "type": "Vent",
+      "spot_number": "3",
+      "temperature": 20,
+      "severity": "medium",
+      "location": [
+        201,
+        176
+      ]
+    },
+    {
+      "spot_id": "FLIR1476.jpg_spot14",
+      "image_name": "FLIR1476.jpg",
+      "type": "Porch",
+      "spot_number": "1",
+      "temperature": 10.16687297821045,
+      "severity": "high",
+      "location": [
+        50,
+        50
+      ]
+    }
+  ],
+  "timestamp": "2025-12-09 21:33:59",
+  "cross_references": {
+    "1": [
+      "FLIR1468.jpg_spot1",
+      "FLIR1476.jpg_spot14"
+    ],
+    "2": [
+      "FLIR1468.jpg_spot2"
+    ],
+    "3": [
+      "manual_1765315920531"
+    ]
+  }
+}
