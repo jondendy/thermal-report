@@ -1,0 +1,23 @@
+{
+  "batch_id": "batch_20251206_184136_cf20de1a",
+  "labeled_spots": [
+    {
+      "spot_id": "manual_1765312396717",
+      "image_name": "FLIR0592.jpg",
+      "type": "Wall",
+      "spot_number": "5",
+      "temperature": 20,
+      "severity": "medium",
+      "location": [
+        310,
+        241
+      ]
+    }
+  ],
+  "timestamp": "2025-12-09 20:34:46",
+  "cross_references": {
+    "5": [
+      "manual_1765312396717"
+    ]
+  }
+}

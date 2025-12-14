@@ -1,0 +1,190 @@
+{
+  "batch_id": "batch_20251214_020728_0cade885",
+  "timestamp": "2025-12-14T02:07:28.662363",
+  "images": [
+    {
+      "filename": "FLIR1462.jpg",
+      "stats": {
+        "min": -28.16587257385254,
+        "max": 11.529132843017578,
+        "mean": 4.670158863067627,
+        "median": 8.907381057739258,
+        "std": 9.99159049987793
+      },
+      "shape": [
+        120,
+        160
+      ],
+      "hot_spots": [],
+      "hot_spot_count": 0,
+      "thermal_report": "FLIR1462_thermal_report.html",
+      "labeled_image": "FLIR1462_labeled.jpg"
+    },
+    {
+      "filename": "FLIR1464.jpg",
+      "stats": {
+        "min": -29.24207305908203,
+        "max": 11.757842063903809,
+        "mean": 3.898045539855957,
+        "median": 9.142782211303711,
+        "std": 11.309977531433105
+      },
+      "shape": [
+        120,
+        160
+      ],
+      "hot_spots": [],
+      "hot_spot_count": 0,
+      "thermal_report": "FLIR1464_thermal_report.html",
+      "labeled_image": "FLIR1464_labeled.jpg"
+    },
+    {
+      "filename": "FLIR1466.jpg",
+      "stats": {
+        "min": -27.252641677856445,
+        "max": 11.40910530090332,
+        "mean": 5.217813014984131,
+        "median": 8.862472534179688,
+        "std": 9.069750785827637
+      },
+      "shape": [
+        120,
+        160
+      ],
+      "hot_spots": [],
+      "hot_spot_count": 0,
+      "thermal_report": "FLIR1466_thermal_report.html",
+      "labeled_image": "FLIR1466_labeled.jpg"
+    },
+    {
+      "filename": "FLIR1468.jpg",
+      "stats": {
+        "min": 5.275903701782227,
+        "max": 25.230037689208984,
+        "mean": 8.817461013793945,
+        "median": 9.030763626098633,
+        "std": 0.8019577264785767
+      },
+      "shape": [
+        120,
+        160
+      ],
+      "hot_spots": [
+        {
+          "location": [
+            60,
+            56
+          ],
+          "temperature": 25.230037689208984,
+          "area_size": 51,
+          "severity": "critical",
+          "description": "",
+          "likely_cause": ""
+        },
+        {
+          "location": [
+            93,
+            54
+          ],
+          "temperature": 11.10286808013916,
+          "area_size": 5,
+          "severity": "high",
+          "description": "",
+          "likely_cause": ""
+        },
+        {
+          "location": [
+            96,
+            51
+          ],
+          "temperature": 11.004216194152832,
+          "area_size": 9,
+          "severity": "high",
+          "description": "",
+          "likely_cause": ""
+        }
+      ],
+      "hot_spot_count": 3,
+      "thermal_report": "FLIR1468_thermal_report.html",
+      "labeled_image": "FLIR1468_labeled.jpg"
+    },
+    {
+      "filename": "FLIR1470.jpg",
+      "stats": {
+        "min": -51.35525131225586,
+        "max": 9.533753395080566,
+        "mean": -7.651942729949951,
+        "median": 7.310543060302734,
+        "std": 23.547269821166992
+      },
+      "shape": [
+        120,
+        160
+      ],
+      "hot_spots": [],
+      "hot_spot_count": 0,
+      "thermal_report": "FLIR1470_thermal_report.html",
+      "labeled_image": "FLIR1470_labeled.jpg"
+    },
+    {
+      "filename": "FLIR1472.jpg",
+      "stats": {
+        "min": -36.69959259033203,
+        "max": 12.785447120666504,
+        "mean": -0.3556774854660034,
+        "median": 8.615071296691895,
+        "std": 16.180179595947266
+      },
+      "shape": [
+        120,
+        160
+      ],
+      "hot_spots": [],
+      "hot_spot_count": 0,
+      "thermal_report": "FLIR1472_thermal_report.html",
+      "labeled_image": "FLIR1472_labeled.jpg"
+    },
+    {
+      "filename": "FLIR1474.jpg",
+      "stats": {
+        "min": -35.090328216552734,
+        "max": 12.35416316986084,
+        "mean": 2.2458419799804688,
+        "median": 8.547479629516602,
+        "std": 13.5368013381958
+      },
+      "shape": [
+        120,
+        160
+      ],
+      "hot_spots": [],
+      "hot_spot_count": 0,
+      "thermal_report": "FLIR1474_thermal_report.html",
+      "labeled_image": "FLIR1474_labeled.jpg"
+    },
+    {
+      "filename": "FLIR1478.jpg",
+      "stats": {
+        "min": -30.09003257751465,
+        "max": 12.860715866088867,
+        "mean": 8.140700340270996,
+        "median": 8.716363906860352,
+        "std": 3.3247604370117188
+      },
+      "shape": [
+        120,
+        160
+      ],
+      "hot_spots": [],
+      "hot_spot_count": 0,
+      "thermal_report": "FLIR1478_thermal_report.html",
+      "labeled_image": "FLIR1478_labeled.jpg"
+    }
+  ],
+  "summary": {
+    "total_images": 8,
+    "avg_temperature": 3.1228000670671463,
+    "min_temperature": -51.35525131225586,
+    "max_temperature": 25.230037689208984
+  }
+}

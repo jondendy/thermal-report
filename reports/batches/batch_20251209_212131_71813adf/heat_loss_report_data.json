@@ -1,0 +1,184 @@
+{
+  "batch_id": "batch_20251209_212131_71813adf",
+  "property_address": "Not specified",
+  "inspector_name": "Not specified",
+  "survey_date": "2025-12-09",
+  "survey_time": "21:34",
+  "summary": {
+    "total_findings": 3,
+    "highest_severity": "Critical",
+    "severity_breakdown": {
+      "low": 0,
+      "medium": 1,
+      "high": 1,
+      "critical": 1
+    },
+    "critical_count": 1,
+    "high_count": 1
+  },
+  "findings": [
+    {
+      "spot_number": "1",
+      "type": "Vent",
+      "title": "Heat loss at Vent #1",
+      "description": "Heat loss detected at vent visible in 2 images. Temperature readings range from 10.2\u00b0C to 25.2\u00b0C, averaging 17.7\u00b0C. This represents a critical heat loss point requiring immediate attention.",
+      "max_temp": 25.230037689208984,
+      "min_temp": 10.16687297821045,
+      "avg_temp": 17.698455333709717,
+      "severity": "critical",
+      "image_count": 2,
+      "images": [
+        "FLIR1468.jpg",
+        "FLIR1476.jpg"
+      ],
+      "recommendations": {
+        "advice": [
+          "Install controllable trickle vents to balance ventilation with heat retention",
+          "Assess whether vent is necessary or can be sealed (check building regulations)",
+          "Consider mechanical ventilation with heat recovery (MVHR) system",
+          "Ensure existing vents serve their intended purpose and aren't over-ventilating",
+          "Install vent covers that can be closed when not needed",
+          "Check for uncontrolled air leakage around vent installations"
+        ],
+        "savings": "5-10% on heating costs",
+        "priority": "low",
+        "description": "While ventilation is essential for air quality and preventing condensation, uncontrolled ventilation leads to unnecessary heat loss. Modern controlled ventilation systems can dramatically reduce this issue."
+      },
+      "spot_locations": [
+        [
+          "FLIR1468.jpg",
+          [
+            50,
+            50
+          ]
+        ],
+        [
+          "FLIR1476.jpg",
+          [
+            50,
+            50
+          ]
+        ]
+      ]
+    },
+    {
+      "spot_number": "2",
+      "type": "Vent",
+      "title": "Heat loss at Vent #2",
+      "description": "Heat loss detected at vent location. Temperature readings range from 11.1\u00b0C to 11.1\u00b0C, averaging 11.1\u00b0C. This is a significant heat loss area that should be addressed promptly.",
+      "max_temp": 11.10286808013916,
+      "min_temp": 11.10286808013916,
+      "avg_temp": 11.10286808013916,
+      "severity": "high",
+      "image_count": 1,
+      "images": [
+        "FLIR1468.jpg"
+      ],
+      "recommendations": {
+        "advice": [
+          "Install controllable trickle vents to balance ventilation with heat retention",
+          "Assess whether vent is necessary or can be sealed (check building regulations)",
+          "Consider mechanical ventilation with heat recovery (MVHR) system",
+          "Ensure existing vents serve their intended purpose and aren't over-ventilating",
+          "Install vent covers that can be closed when not needed",
+          "Check for uncontrolled air leakage around vent installations"
+        ],
+        "savings": "5-10% on heating costs",
+        "priority": "low",
+        "description": "While ventilation is essential for air quality and preventing condensation, uncontrolled ventilation leads to unnecessary heat loss. Modern controlled ventilation systems can dramatically reduce this issue."
+      },
+      "spot_locations": [
+        [
+          "FLIR1468.jpg",
+          [
+            50,
+            50
+          ]
+        ]
+      ]
+    },
+    {
+      "spot_number": "3",
+      "type": "Vent",
+      "title": "Heat loss at Vent #3",
+      "description": "Heat loss detected at vent location. Temperature readings range from 20.0\u00b0C to 20.0\u00b0C, averaging 20.0\u00b0C. This represents moderate heat loss that should be addressed.",
+      "max_temp": 20,
+      "min_temp": 20,
+      "avg_temp": 20.0,
+      "severity": "medium",
+      "image_count": 1,
+      "images": [
+        "FLIR1472.jpg"
+      ],
+      "recommendations": {
+        "advice": [
+          "Install controllable trickle vents to balance ventilation with heat retention",
+          "Assess whether vent is necessary or can be sealed (check building regulations)",
+          "Consider mechanical ventilation with heat recovery (MVHR) system",
+          "Ensure existing vents serve their intended purpose and aren't over-ventilating",
+          "Install vent covers that can be closed when not needed",
+          "Check for uncontrolled air leakage around vent installations"
+        ],
+        "savings": "5-10% on heating costs",
+        "priority": "low",
+        "description": "While ventilation is essential for air quality and preventing condensation, uncontrolled ventilation leads to unnecessary heat loss. Modern controlled ventilation systems can dramatically reduce this issue."
+      },
+      "spot_locations": [
+        [
+          "FLIR1472.jpg",
+          [
+            201,
+            176
+          ]
+        ]
+      ]
+    }
+  ],
+  "recommendations": [
+    {
+      "spot_number": "1",
+      "type": "Vent",
+      "advice": [
+        "Install controllable trickle vents to balance ventilation with heat retention",
+        "Assess whether vent is necessary or can be sealed (check building regulations)",
+        "Consider mechanical ventilation with heat recovery (MVHR) system",
+        "Ensure existing vents serve their intended purpose and aren't over-ventilating",
+        "Install vent covers that can be closed when not needed",
+        "Check for uncontrolled air leakage around vent installations"
+      ],
+      "savings": "5-10% on heating costs",
+      "priority": "low",
+      "severity": "critical"
+    },
+    {
+      "spot_number": "2",
+      "type": "Vent",
+      "advice": [
+        "Install controllable trickle vents to balance ventilation with heat retention",
+        "Assess whether vent is necessary or can be sealed (check building regulations)",
+        "Consider mechanical ventilation with heat recovery (MVHR) system",
+        "Ensure existing vents serve their intended purpose and aren't over-ventilating",
+        "Install vent covers that can be closed when not needed",
+        "Check for uncontrolled air leakage around vent installations"
+      ],
+      "savings": "5-10% on heating costs",
+      "priority": "low",
+      "severity": "high"
+    },
+    {
+      "spot_number": "3",
+      "type": "Vent",
+      "advice": [
+        "Install controllable trickle vents to balance ventilation with heat retention",
+        "Assess whether vent is necessary or can be sealed (check building regulations)",
+        "Consider mechanical ventilation with heat recovery (MVHR) system",
+        "Ensure existing vents serve their intended purpose and aren't over-ventilating",
+        "Install vent covers that can be closed when not needed",
+        "Check for uncontrolled air leakage around vent installations"
+      ],
+      "savings": "5-10% on heating costs",
+      "priority": "low",
+      "severity": "medium"
+    }
+  ]
+}
