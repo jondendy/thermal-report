@@ -102,10 +102,10 @@ def edit_spots(batch_id):
         tenant_id = request.headers.get('X-Tenant-ID', settings.DEFAULT_TENANT)
         
         # Load thermal analysis data
-        analysis_data = heat_loss_service.load_batch_analysis(tenant_id, batch_id)
+        analysis_data = get_thermal_analysis(tenant_id, batch_id)
         
         # Load existing labels if they exist
-        existing_labels = heat_loss_service.load_existing_labels(tenant_id, batch_id)
+        existing_labels = get_existing_labels(tenant_id, batch_id)
         
         # Get spot types
         spot_types = ["Window", "Door", "Wall", "Eaves", "Vent", "Roof", "Chimney", "Porch"]
