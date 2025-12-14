@@ -19,8 +19,7 @@ except ImportError:
 class HotSpot:
     """Represents a detected thermal anomaly"""
     
-    def __init__(self, location: Tuple[int, int], temperature: float, 
-                 area_size: int, severity: str):
+    def __init__(self, location: Tuple[int, int], temperature: float, area_size: int, severity: str):
         self.location = location  # (row, col) in temperature array
         self.temperature = temperature
         self.area_size = area_size  # number of pixels in hot spot
@@ -68,9 +67,7 @@ class ThermalAnalyzer:
             'high': 1.5     # 1.5 std devs above mean
         }
     
-    def detect_hot_spots(self, temp_data: np.ndarray, 
-                        method='statistical',
-                        threshold=None) -> List[HotSpot]:
+    def detect_hot_spots(self, temp_data: np.ndarray, method='statistical', threshold=None) -> List[HotSpot]:
         """
         Detect hot spots in thermal image data
         
@@ -86,7 +83,8 @@ class ThermalAnalyzer:
         # Filter out sky reflection artifacts (typically < -45°C) and keep only finite values
         valid_mask = np.isfinite(temp_data) & (temp_data > -45.0)
         valid_data = temp_data[valid_mask]
-        if len(valid_data) == 0:            return []
+        if len(valid_data) == 0:
+            return []
         
         if method == 'statistical':
             return self._detect_statistical(temp_data, threshold)
@@ -97,8 +95,7 @@ class ThermalAnalyzer:
         else:
             raise ValueError(f"Unknown method: {method}")
     
-    def _detect_statistical(self, temp_data: np.ndarray, 
-                           threshold=None) -> List[HotSpot]:
+    def _detect_statistical(self, temp_data: np.ndarray, threshold=None) -> List[HotSpot]:
         """Statistical hot spot detection using mean + std deviation"""
         valid_data = temp_data[np.isfinite(temp_data)]
         mean_temp = np.mean(valid_data)
@@ -116,8 +113,7 @@ class ThermalAnalyzer:
         
         return self._extract_hot_spots(temp_data, hot_mask, 'statistical')
     
-    def _detect_absolute(self, temp_data: np.ndarray, 
-                        threshold=None) -> List[HotSpot]:
+    def _detect_absolute(self, temp_data: np.ndarray, threshold=None) -> List[HotSpot]:
         """Absolute temperature threshold detection"""
         thresh = threshold if threshold else self.base_threshold
         if thresh is None:
@@ -157,9 +153,7 @@ class ThermalAnalyzer:
         
         return self._extract_hot_spots(temp_data, is_local_max, 'relative')
     
-    def _extract_hot_spots(self, temp_data: np.ndarray, 
-                          hot_mask: np.ndarray,
-                          method_type: str) -> List[HotSpot]:
+    def _extract_hot_spots(self, temp_data: np.ndarray, hot_mask: np.ndarray, method_type: str) -> List[HotSpot]:
         """Extract connected components from hot spot mask"""
         from scipy import ndimage
         
@@ -215,8 +209,7 @@ class ThermalAnalyzer:
         else:
             return 'low'
     
-    def label_hot_spots(self, image_path: str, hot_spots: List[HotSpot], 
-                       output_path: str = None) -> Image:
+    def label_hot_spots(self, image_path: str, hot_spots: List[HotSpot], output_path: str = None) -> Image:
         """
         Create annotated thermal image with hot spot markers and labels
         
@@ -266,15 +259,12 @@ class ThermalAnalyzer:
             
             # Draw crosshair marker
             marker_size = 10
-            draw.line([(col-marker_size, row), (col+marker_size, row)], 
-                     fill=color, width=2)
-            draw.line([(col, row-marker_size), (col, row+marker_size)], 
-                     fill=color, width=2)
+            draw.line([(col-marker_size, row), (col+marker_size, row)], fill=color, width=2)
+            draw.line([(col, row-marker_size), (col, row+marker_size)], fill=color, width=2)
             
             # Draw circle around hot spot
             radius = int(np.sqrt(spot.area_size) * 2)
-            draw.ellipse([(col-radius, row-radius), (col+radius, row+radius)],
-                        outline=color, width=2)
+            draw.ellipse([(col-radius, row-radius), (col+radius, row+radius)], outline=color, width=2)
             
             # Add temperature label
             label = f"#{idx}: {spot.temperature:.1f}°C"
@@ -295,8 +285,7 @@ class ThermalAnalyzer:
         summary_text = f"Hot Spots Detected: {len(hot_spots)}"
         summary_pos = (10, 10)
         summary_bbox = draw.textbbox(summary_pos, summary_text, font=font)
-        draw.rectangle([(5, 5), (summary_bbox[2]+5, summary_bbox[3]+5)], 
-                      fill='black', outline='white', width=2)
+        draw.rectangle([(5, 5), (summary_bbox[2]+5, summary_bbox[3]+5)], fill='black', outline='white', width=2)
         draw.text(summary_pos, summary_text, fill='white', font=font)
         
         # Save if output path provided
@@ -306,8 +295,7 @@ class ThermalAnalyzer:
         
         return img
     
-    def assess_hot_spot_cause(self, hot_spot: HotSpot, 
-                             image_context: Dict = None) -> str:
+    def assess_hot_spot_cause(self, hot_spot: HotSpot, image_context: Dict = None) -> str:
         """
         Interpret what the hot spot likely indicates for building surveys
         
@@ -355,8 +343,7 @@ class ThermalAnalyzer:
         
         return ". ".join(causes) + "."
     
-    def generate_report(self, image_name: str, hot_spots: List[HotSpot],
-                       stats: Dict, image_context: Dict = None) -> str:
+    def generate_report(self, image_name: str, hot_spots: List[HotSpot], stats: Dict, image_context: Dict = None) -> str:
         """
         Generate narrative HTML report describing thermal findings
         
@@ -372,8 +359,7 @@ class ThermalAnalyzer:
         
         # Sort hot spots by severity and temperature
         severity_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
-        sorted_spots = sorted(hot_spots, 
-                            key=lambda x: (severity_order[x.severity], -x.temperature))
+        sorted_spots = sorted(hot_spots, key=lambda x: (severity_order[x.severity], -x.temperature))
         
         # Build HTML report
         html = []

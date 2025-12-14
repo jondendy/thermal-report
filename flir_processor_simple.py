@@ -24,6 +24,28 @@ except ImportError as e:
 #     print("Also install: sudo apt install exiftool (Linux) or download from https://exiftool.org")
 #     exit(1)
 
+def get_colorblind_friendly_thermal_cmap():
+    """
+    Create a colorblind-friendly thermal colormap.
+    Cold (black/blue) -> warm (red/orange/yellow) -> hot (white)
+    Blue tones only in the cold range, ensuring no blue between yellow and white.
+    """
+    colors = [
+        (0.0, 0.0, 0.0),      # Black (coldest)
+        (0.0, 0.0, 0.5),      # Dark blue
+        (0.0, 0.0, 0.8),      # Blue
+        (0.4, 0.0, 0.2),      # Dark red/purple
+        (0.7, 0.0, 0.0),      # Dark red
+        (1.0, 0.0, 0.0),      # Red
+        (1.0, 0.5, 0.0),      # Orange
+        (1.0, 0.8, 0.0),      # Yellow
+        (1.0, 1.0, 0.5),      # Light yellow
+        (1.0, 1.0, 1.0),      # White (hottest)
+    ]
+
+    return LinearSegmentedColormap.from_list('thermal_colorblind', colors, N=256)
+
+
 
 class SimpleFLIRProcessor:
     """
@@ -87,9 +109,8 @@ class SimpleFLIRProcessor:
                 axes[0].axis('off')
 
                 # Thermal image
-                im = axes[1].imshow(temp_data, cmap='jet', interpolation='nearest')
-                axes[1].set_title(f'Thermal Image\n{stats["min"]:.1f}°C - {stats["max"]:.1f}°C', 
-                                fontsize=14)
+                im = axes[1].imshow(temp_data, cmap=get_colorblind_friendly_thermal_cmap(), interpolation='nearest')
+                axes[1].set_title(f'Thermal Image\n{stats["min"]:.1f}°C - {stats["max"]:.1f}°C', fontsize=14)
                 axes[1].axis('off')
                 cbar = plt.colorbar(im, ax=axes[1], fraction=0.046, pad=0.04)
                 cbar.set_label('Temperature (°C)', fontsize=12)

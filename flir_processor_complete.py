@@ -17,6 +17,27 @@ import io
 import struct
 import logging
 
+def get_colorblind_friendly_thermal_cmap():
+    """
+    Create a colorblind-friendly thermal colormap.
+    Cold (black/blue) -> warm (red/orange/yellow) -> hot (white)
+    Blue tones only in the cold range, ensuring no blue between yellow and white.
+    """
+    colors = [
+        (0.0, 0.0, 0.0),      # Black (coldest)
+        (0.0, 0.0, 0.5),      # Dark blue
+        (0.0, 0.0, 0.8),      # Blue
+        (0.4, 0.0, 0.2),      # Dark red/purple
+        (0.7, 0.0, 0.0),      # Dark red
+        (1.0, 0.0, 0.0),      # Red
+        (1.0, 0.5, 0.0),      # Orange
+        (1.0, 0.8, 0.0),      # Yellow
+        (1.0, 1.0, 0.5),      # Light yellow
+        (1.0, 1.0, 1.0),      # White (hottest)
+    ]
+
+    return LinearSegmentedColormap.from_list('thermal_colorblind', colors, N=256)
+
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -40,8 +61,7 @@ class FlirImageProcessor:
     def _check_exiftool(self):
         """Check if exiftool is available"""
         try:
-            subprocess.run([self.exiftool_path, '-ver'], 
-                         capture_output=True, check=True)
+            subprocess.run([self.exiftool_path, '-ver'], capture_output=True, check=True)
             logger.info("ExifTool found and working")
         except (subprocess.CalledProcessError, FileNotFoundError):
             logger.error("ExifTool not found. Please install it:")
@@ -329,7 +349,7 @@ class FlirImageProcessor:
                 axes[0].axis('off')
 
                 # Display thermal image
-                im = axes[1].imshow(temp_data, cmap='jet', interpolation='nearest')
+                im = axes[1].imshow(temp_data, cmap=get_colorblind_friendly_thermal_cmap(), interpolation='nearest')
                 axes[1].set_title(f'Thermal Image\n{stats["min"]:.1f}°C to {stats["max"]:.1f}°C')
                 axes[1].axis('off')
                 plt.colorbar(im, ax=axes[1], label='Temperature (°C)')
