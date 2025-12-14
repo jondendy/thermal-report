@@ -98,27 +98,36 @@ def info():
 
 @app.route('/edit_spots/<batch_id>')
 def edit_spots(batch_id):
-    """
-    CANONICAL labeling interface.
-    
-    Step 1: Operators view images with detected hot spots
-    Step 2: Assign type (Window, Door, Wall, etc.) to each spot
-    Step 3: Number spots for cross-image identification
-    Step 4: Save labels for report generation
-    """
     try:
-        analysis = get_thermal_analysis(batch_id)
-        existing_labels = get_existing_labels(batch_id)
+        tenant_id = request.headers.get('X-Tenant-ID', settings.DEFAULT_TENANT)
         
-        spot_types = ['Window', 'Door', 'Wall', 'Eaves', 'Vent', 'Roof', 'Chimney', 'Porch']
+        # Load thermal analysis data
+        analysis_data = heat_loss_service.load_batch_analysis(tenant_id, batch_id)
+        
+        # Load existing labels if they exist
+        existing_labels = heat_loss_service.load_existing_labels(tenant_id, batch_id)
+        
+        # Get spot types
+        spot_types = ["Window", "Door", "Wall", "Eaves", "Vent", "Roof", "Chimney", "Porch"]
+        
+        # Initialize empty saved_links and saved_documents if they don't exist
+        saved_links = existing_labels.get('links', []) if existing_labels else []
+        saved_documents = existing_labels.get('documents', []) if existing_labels else []
         
         return render_template(
             'edit_spots.html',
             batch_id=batch_id,
-            analysis_data=analysis,
+            analysis_data=analysis_data,
             existing_labels=existing_labels,
-            spot_types=spot_types
+            spot_types=spot_types,
+            saved_links=saved_links,
+            saved_documents=saved_documents
         )
+        
+    except Exception as e:
+        logger.error(f"Error loading edit_spots for batch {batch_id}: {e}", exc_info=True)
+        return jsonify({"error": "An error occurred loading the labeling interface"}), 500
+
     
     except FileNotFoundError:
         return "Batch not found", 404
