@@ -194,7 +194,7 @@ def generate_heat_loss_report_route(batch_id):
         return jsonify({'error': 'Required data not found. Please ensure hotspots are labeled.'}), 404
     except ValueError as e:
         logger.error(f"Validation error for batch {batch_id}: {str(e)}")
-        return jsonify({'error': str(e)}), 400
+        return jsonify({'error': 'Invalid input data.'}), 400
     except Exception as e:
         logger.exception(f"Error generating heat loss report for batch {batch_id}: {str(e)}")
         return jsonify({'error': 'Report generation failed'}), 500
