@@ -18,6 +18,7 @@ from lib.logging_config import setup_logging
 from services.batch_service import process_batch, get_batch_id, get_all_batches, get_batch_summary
 from services.heat_loss_service import (
     get_thermal_analysis, get_existing_labels, save_labels, generate_report, get_report
+)
 from services.thermal_data_service import load_thermal_data, ThermalDataExtractor
 )
 
