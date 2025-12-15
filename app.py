@@ -306,14 +306,21 @@ def api_get_temperature(batch_id, image_name):
         batch_path = Path(settings.BASE_REPORT_DIR) / 'batches' / tenant_id / batch_id
         
         thermal_data = load_thermal_data(batch_path, image_name)
+
+              # Load visual image to get dimensions for coordinate scaling
+        from PIL import Image
+        visual_image_path = batch_path / image_name
+        visual_width, visual_height = None, None
+        if visual_image_path.exists():
+            with Image.open(visual_image_path) as img:
+                visual_width, visual_height = img.size
         
         if thermal_data is None:
             return jsonify({'error': 'Thermal data not found for this image'}), 404
         
         # Get temperature at coordinates
         extractor = ThermalDataExtractor()
-        temperature = extractor.get_temperature_at_point(thermal_data, x, y)
-        
+        temperature = extractor.get_temperature_at_point(thermal_data, x, y, visual_width, visual_height)        
         if temperature is None:
             return jsonify({'error': 'Coordinates out of bounds'}), 400
         
