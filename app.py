@@ -18,6 +18,7 @@ from lib.logging_config import setup_logging
 from services.batch_service import process_batch, get_batch_id, get_all_batches, get_batch_summary
 from services.heat_loss_service import (
     get_thermal_analysis, get_existing_labels, save_labels, generate_report, get_report
+from services.thermal_data_service import load_thermal_data, ThermalDataExtractor
 )
 
 # ============================================================================
@@ -279,6 +280,55 @@ def api_batch_analysis(batch_id):
     except Exception as e:
         logger.exception(f"Error fetching analysis for batch {batch_id}: {str(e)}")
         return jsonify({'error': 'Failed to fetch analysis'}), 500
+
+@app.route('/api/temperature/<batch_id>/<image_name>')
+def api_get_temperature(batch_id, image_name):
+    """
+    Get temperature at specific coordinates in a thermal image.
+    
+    Query parameters:
+        x: X coordinate
+        y: Y coordinate
+    
+    Returns:
+        JSON with temperature value in Celsius
+    """
+    try:
+        # Get coordinates from query parameters
+        x = request.args.get('x', type=int)
+        y = request.args.get('y', type=int)
+        
+        if x is None or y is None:
+            return jsonify({'error': 'Missing x or y coordinates'}), 400
+        
+        # Load thermal data for this image
+        tenant_id = request.headers.get('X-Tenant-ID', settings.DEFAULT_TENANT)
+        batch_path = Path(settings.BASE_REPORT_DIR) / 'batches' / tenant_id / batch_id
+        
+        thermal_data = load_thermal_data(batch_path, image_name)
+        
+        if thermal_data is None:
+            return jsonify({'error': 'Thermal data not found for this image'}), 404
+        
+        # Get temperature at coordinates
+        extractor = ThermalDataExtractor()
+        temperature = extractor.get_temperature_at_point(thermal_data, x, y)
+        
+        if temperature is None:
+            return jsonify({'error': 'Coordinates out of bounds'}), 400
+        
+        return jsonify({
+            'temperature': round(temperature, 2),
+            'x': x,
+            'y': y,
+            'image_name': image_name
+        })
+        
+    except FileNotFoundError:
+        return jsonify({'error': 'Batch or image not found'}), 404
+    except Exception as e:
+        logger.exception(f"Error getting temperature for {batch_id}/{image_name}: {str(e)}")
+        return jsonify({'error': 'Failed to get temperature'}), 500
 
 
 # ============================================================================
