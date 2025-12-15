@@ -20,7 +20,6 @@ from services.heat_loss_service import (
     get_thermal_analysis, get_existing_labels, save_labels, generate_report, get_report
 )
 from services.thermal_data_service import load_thermal_data, ThermalDataExtractor
-)
 
 # ============================================================================
 # Setup
