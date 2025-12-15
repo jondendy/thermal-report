@@ -353,4 +353,4 @@ class HeatLossReporter:
         report_data_file = batch_path / 'heat_loss_report_data.json'
         with open(report_data_file, 'w') as f:
             json.dump(report_data, f, indent=2)        
-        return str(report_data_file)
+        return report_data
