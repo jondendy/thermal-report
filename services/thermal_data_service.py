@@ -172,7 +172,7 @@ class ThermalDataExtractor:
         temp_celsius = temp_kelvin - 273.15
         return temp_celsius
     
-    def get_temperature_at_point(self, temperatures: np.ndarray, x: int, y: int) -> Optional[float]:
+    def get_temperature_at_point(self, temperatures: np.ndarray, x: int, y: int, visual_width: Optional[int] = None, visual_height: Optional[int] = None) -> Optional[float]:
         """
         Get temperature value at specific coordinates.
         
@@ -184,14 +184,24 @@ class ThermalDataExtractor:
         Returns:
             Temperature in Celsius, or None if coordinates invalid
         """
-        try:
-            height, width = temperatures.shape
+                try:
+            # Scale coordinates if visual dimensions are provided
+            scaled_x, scaled_y = x, y
             
-            if 0 <= y < height and 0 <= x < width:
-                return float(temperatures[y, x])
-            else:
-                logger.warning(f"Coordinates ({x}, {y}) out of bounds ({width}x{height})")
-                return None
+            if visual_width is not None and visual_height is not None:
+                # Get thermal data dimensions
+                thermal_height, thermal_width = temperatures.shape
+                
+                # Scale coordinates from visual resolution to thermal resolution
+                scaled_x = int(x * thermal_width / visual_width)
+                scaled_y = int(y * thermal_height / visual_height)
+        try:
+            # Get thermal dimensions if not already obtained
+            if visual_width is None or visual_height is None:
+                thermal_height, thermal_width = temperatures.shape            
+            if 0 <= scaled_y < thermal_height and 0 <= scaled_x < thermal_width:            else:
+                                return float(temperatures[scaled_y, scaled_x])
+                logger.warning(f"Coordinates ({scaled_x}, {scaled_y}) out of bounds ({thermal_width}x{thermal_height})")                return None
                 
         except Exception as e:
             logger.exception(f"Error getting temperature at ({x}, {y}): {e}")
