@@ -131,7 +131,8 @@ def generate_report(batch_id, property_address='', inspector_name='', tenant_id=
         inspector_name=inspector_name,
         org_name=settings.ORG_NAME,
         org_website=settings.ORG_WEBSITE,
-        org_contact=settings.ORG_CONTACT
+        org_contact=settings.ORG_CONTACT,
+        tenant_id=tenant_id
     )
     
     # Save report data
