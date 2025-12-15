@@ -298,7 +298,7 @@ class HeatLossReporter:
     
     def generate_html_report(self, batch_id: str, property_address: str = "",
                         inspector_name: str = "", analysis_data: dict = None, labels: dict = None,
-                        org_name: str = "", org_website: str = "", org_contact: str = "",
+                        org_name: str = "", org_website: str = "", org_contact: str = "", tenant_id: str = 'default',
                         reports_dir: str = 'reports') -> str:
 
         """Generate complete HTML heat loss report.
@@ -349,8 +349,7 @@ class HeatLossReporter:
         }
         
         # Save report data
-        batch_path = Path(reports_dir) / 'batches' / batch_id
-        report_data_file = batch_path / 'heat_loss_report_data.json'
+        batch_path = Path(reports_dir) / 'batches' / tenant_id / batch_id        report_data_file = batch_path / 'heat_loss_report_data.json'
         with open(report_data_file, 'w') as f:
             json.dump(report_data, f, indent=2)
         
