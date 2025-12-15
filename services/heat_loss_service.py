@@ -123,7 +123,7 @@ def generate_report(batch_id, property_address='', inspector_name='', tenant_id=
     reporter = HeatLossReporter()
     
     # Generate report
-    report_data = reporter.generate_report(
+    report_data = reporter.generate_html_report(
         batch_id=batch_id,
         analysis_data=analysis,
         labels=labels,
