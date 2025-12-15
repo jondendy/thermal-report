@@ -297,9 +297,11 @@ class HeatLossReporter:
         return recommendations
     
     def generate_html_report(self, batch_id: str, property_address: str = "",
-                            inspector_name: str = "", reports_dir: str = 'reports') -> str:
-        """
-        Generate complete HTML heat loss report.
+                        inspector_name: str = "", analysis_data: dict = None, labels: dict = None,
+                        org_name: str = "", org_website: str = "", org_contact: str = "",
+                        reports_dir: str = 'reports') -> str:
+
+       # Generate complete HTML heat loss report.
         
         Args:
             batch_id: Unique batch identifier
@@ -309,10 +311,14 @@ class HeatLossReporter:
             
         Returns:
             Path to generated HTML report
-        """
-        # Load batch data
-        batch_data = self.load_batch_data(batch_id, reports_dir)
-        labeled_spots = batch_data.get('labeled_spots', [])
+                            
+        # Use provided labels or load batch data
+        if labels is None:
+            batch_data = self.load_batch_data(batch_id, reports_dir)
+            labeled_spots = batch_data.get('labeled_spots', [])
+        else:
+            labeled_spots = labels.get('labeled_spots', [])
+
         
         # Group by spot number
         grouped_spots = self.group_by_spot_number(labeled_spots)
