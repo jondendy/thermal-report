@@ -11,7 +11,7 @@ All business logic is delegated to services modules:
 Configuration driven by settings.py and environment variables.
 """
 from pathlib import Path
-from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file
+from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, send_from_directory
 
 import settings
 from lib.logging_config import setup_logging
