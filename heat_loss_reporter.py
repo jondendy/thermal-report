@@ -301,7 +301,7 @@ class HeatLossReporter:
                         org_name: str = "", org_website: str = "", org_contact: str = "",
                         reports_dir: str = 'reports') -> str:
 
-       # Generate complete HTML heat loss report.
+        """Generate complete HTML heat loss report.
         
         Args:
             batch_id: Unique batch identifier
@@ -311,6 +311,7 @@ class HeatLossReporter:
             
         Returns:
             Path to generated HTML report
+        """
                             
         # Use provided labels or load batch data
         if labels is None:
