@@ -15,6 +15,7 @@ from services.batch_io import (
 )
 from flir_processor_simple import SimpleFLIRProcessor
 from thermal_analyzer import ThermalAnalyzer
+from services.thermal_data_service import ThermalDataExtractor, save_thermal_data
 
 
 def get_batch_id(files):
@@ -87,6 +88,14 @@ def process_batch(batch_id, image_files, tenant_id=None):
     for image_path in saved_images:
         try:
             temp_data, stats = processor.process_single_image(image_path, display=False)
+
+                        # Extract thermal temperature data for coordinate lookups
+            thermal_extractor = ThermalDataExtractor()
+            thermal_data = thermal_extractor.extract_thermal_data(Path(image_path))
+            
+            # Save thermal data for later retrieval
+            if thermal_data is not None:
+                save_thermal_data(batch_dir, Path(image_path).name, thermal_data)
             
             # Detect hot spots
             hot_spots = analyzer.detect_hot_spots(temp_data)
