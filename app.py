@@ -92,6 +92,18 @@ def info():
     return render_template('info.html')
 
 
+@app.route('/download/<batch_id>/<filename>')
+def download_file(batch_id, filename):
+    """Serve labeled images from batch directory."""
+    try:
+        tenant_id = request.headers.get('X-Tenant-ID', settings.DEFAULT_TENANT)
+        batch_dir = Path(settings.BASE_REPORT_DIR) / 'batches' / tenant_id / batch_id
+        return send_from_directory(batch_dir, filename)
+    except Exception as e:
+        logger.error(f"Error serving file {filename} from batch {batch_id}: {e}")
+        return jsonify({"error": "File not found"}), 404
+
+
 # ============================================================================
 # Routes – Heat Loss Workflow
 # ============================================================================
