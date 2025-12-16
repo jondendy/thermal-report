@@ -195,14 +195,15 @@ class ThermalDataExtractor:
                 # Scale coordinates from visual resolution to thermal resolution
                 scaled_x = int(x * thermal_width / visual_width)
                 scaled_y = int(y * thermal_height / visual_height)
-        try:
             # Get thermal dimensions if not already obtained
             if visual_width is None or visual_height is None:
                 thermal_height, thermal_width = temperatures.shape            
-            if 0 <= scaled_y < thermal_height and 0 <= scaled_x < thermal_width:            else:
+            if 0 <= scaled_y < thermal_height and 0 <= scaled_x < thermal_width:                                return float(temperatures[scaled_y, scaled_x])
                                 return float(temperatures[scaled_y, scaled_x])
-                logger.warning(f"Coordinates ({scaled_x}, {scaled_y}) out of bounds ({thermal_width}x{thermal_height})")                return None
-                
+                            else:
+                    logger.warning(f"Coordinates ({scaled_x}, {scaled_y}) out of bounds ({thermal_width}x{thermal_height})")                return None
+            return None
+
         except Exception as e:
             logger.exception(f"Error getting temperature at ({x}, {y}): {e}")
             return None
