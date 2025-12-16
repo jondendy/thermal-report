@@ -74,11 +74,15 @@ def save_labels(batch_id, label_data, tenant_id=None):
     # Generate cross-references (spots visible in multiple images)
     cross_refs = {}
     for spot in labels_structure['labeled_spots']:
+        spot_type = spot.get('type')
         spot_num = spot.get('spot_number')
-        if spot_num:
-            if spot_num not in cross_refs:
-                cross_refs[spot_num] = []
-            cross_refs[spot_num].append(spot.get('spot_id'))
+        if spot_type and spot_num:
+            # Use composite key: "Type_Number" (e.g., "Window_1", "Door_1")
+            group_key = f"{spot_type}_{spot_num}"
+            if group_key not in cross_refs:
+                cross_refs[group_key] = []
+            cross_refs[group_key].append(spot.get('spot_id'))
+
     
     labels_structure['cross_references'] = cross_refs
     
