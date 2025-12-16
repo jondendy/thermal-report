@@ -29,7 +29,7 @@ from services.thermal_data_service import ThermalDataExtractor
 
 # Paths and configuration
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SAMPLE_IMAGE = REPO_ROOT / "Images" / "batches" / "default" / "FLIR1468.jpg"
+SAMPLE_IMAGE = REPO_ROOT / "upload" / "FLIR1468.jpg"
 REPORTS_ROOT = REPO_ROOT / "reports" / "batches"
 
 # Where we write the human-readable summary
@@ -123,8 +123,8 @@ def test_integration_end_to_end(flask_client):
 
     # --- Step 1: upload image with metadata ---
     address = "123 Test Street"
-    inspector = "Test Surveyor"
-    appendix_url = "https://example.com/test-appendix"
+    inspector = "Test Surveyor Dendy"
+    appendix_url = "https://drive.google.com/file/d/1QJAXrvwvP32By_6j8Uf8a-hU5c_B7VZJ/view?usp=drive_link"
 
     data = {
         "address": address,
