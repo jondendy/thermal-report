@@ -172,41 +172,52 @@ class ThermalDataExtractor:
         temp_celsius = temp_kelvin - 273.15
         return temp_celsius
     
-    def get_temperature_at_point(self, temperatures: np.ndarray, x: int, y: int, visual_width: Optional[int] = None, visual_height: Optional[int] = None) -> Optional[float]:
-        """
-        Get temperature value at specific coordinates.
-        
-        Args:
-            temperatures: 2D array of temperature values
-            x: X coordinate (column)
-            y: Y coordinate (row)
-        
-        Returns:
-            Temperature in Celsius, or None if coordinates invalid
-        """
-                try:
-            # Scale coordinates if visual dimensions are provided
-            scaled_x, scaled_y = x, y
-            
-            if visual_width is not None and visual_height is not None:
-                # Get thermal data dimensions
-                thermal_height, thermal_width = temperatures.shape
-                
-                # Scale coordinates from visual resolution to thermal resolution
-                scaled_x = int(x * thermal_width / visual_width)
-                scaled_y = int(y * thermal_height / visual_height)
-            # Get thermal dimensions if not already obtained
-            if visual_width is None or visual_height is None:
-                thermal_height, thermal_width = temperatures.shape            
-            if 0 <= scaled_y < thermal_height and 0 <= scaled_x < thermal_width:                                return float(temperatures[scaled_y, scaled_x])
-                                return float(temperatures[scaled_y, scaled_x])
-                            else:
-                    logger.warning(f"Coordinates ({scaled_x}, {scaled_y}) out of bounds ({thermal_width}x{thermal_height})")                return None
-            return None
+def get_temperature_at_point(
+    self,
+    temperatures: np.ndarray,
+    x: int,
+    y: int,
+    visual_width: Optional[int] = None,
+    visual_height: Optional[int] = None,
+) -> Optional[float]:
+    """
+    Get temperature value at specific coordinates.
 
-        except Exception as e:
-            logger.exception(f"Error getting temperature at ({x}, {y}): {e}")
-            return None
+    Args:
+        temperatures: 2D array of temperature values
+        x: X coordinate (column)
+        y: Y coordinate (row)
+        visual_width: width of the visual image (if different from thermal)
+        visual_height: height of the visual image (if different from thermal)
+
+    Returns:
+        Temperature in Celsius, or None if coordinates are invalid
+    """
+    try:
+        # Default: use coordinates as-is
+        scaled_x, scaled_y = x, y
+
+        # Get thermal data dimensions
+        thermal_height, thermal_width = temperatures.shape
+
+        # Scale coordinates if visual dimensions are provided
+        if visual_width is not None and visual_height is not None:
+            scaled_x = int(x * thermal_width / visual_width)
+            scaled_y = int(y * thermal_height / visual_height)
+
+        # Bounds check
+        if 0 <= scaled_y < thermal_height and 0 <= scaled_x < thermal_width:
+            return float(temperatures[scaled_y, scaled_x])
+
+        logger.warning(
+            f"Coordinates ({scaled_x}, {scaled_y}) out of bounds "
+            f"({thermal_width}x{thermal_height})"
+        )
+        return None
+
+    except Exception as e:
+        logger.exception(f"Error getting temperature at ({x}, {y}): {e}")
+        return None
 
 
 def save_thermal_data(batch_path: Path, image_name: str, thermal_data: np.ndarray):
