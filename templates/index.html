@@ -196,7 +196,7 @@
             }
 
             const formData = new FormData();
-            selectedFiles.forEach(file => formData.append('files[]', file));
+            selectedFiles.forEach(file => formData.append('files', file));
 
             progress.style.display = 'block';
             progress.value = 0;
