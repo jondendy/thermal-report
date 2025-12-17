@@ -12,8 +12,8 @@ from typing import Dict, Any, List, Optional
 
 from settings import ORG_NAME, ORG_WEBSITE, ORG_CONTACT
 import services.batch_io as batchio
-from heatlossreporter import HeatLossReporter
-from thermalanalyzer import ThermalAnalyzer
+from heat_loss_reporter import HeatLossReporter
+from thermal_analyzer import ThermalAnalyzer
 
 
 def get_thermal_analysis(batch_id: str, tenant_id: str | None = None) -> Dict[str, Any]:
