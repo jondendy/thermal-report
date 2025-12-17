@@ -95,16 +95,16 @@ def process_batch(
     temps_sum = 0.0
     temps_count = 0
 
-    for image_path in saved_paths:
-    tempdata, stats = processor.process_single_image(str(image_path), display=False)
-    hotspots = analyzer.detect_hot_spots(tempdata, method='statistical')
-    
-    # Convert hotspots to dict format for JSON storage
-    analysis = {
-        "hotspots": [spot.to_dict() for spot in hotspots],
-        "hotspot_count": len(hotspots),
-        "method": "statistical",
-    }
+        for image_path in saved_paths:
+        tempdata, stats = processor.process_single_image(str(image_path), display=False)
+        hotspots = analyzer.detect_hot_spots(tempdata, method='statistical')
+        
+        # Convert hotspots to dict format for JSON storage
+        analysis = {
+            "hotspots": [spot.to_dict() for spot in hotspots],
+            "hotspot_count": len(hotspots),
+            "method": "statistical",
+        }
 
         # persist per-image analysis into batch_dir/analysis-images if needed
         analysis_dir = batch_dir / "analysis-images"
