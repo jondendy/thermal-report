@@ -32,7 +32,10 @@ from settings import (
     MAX_CONTENT_LENGTH,
     BATCH_SIZE_MAX,
 )
-from services import batchservice, heatlossservice, batchio
+import services.batchservice as batchservice
+import services.heatlossservice as heatlossservice
+import services.batchio as batchio
+
 from lib.securityutils import validate_tenant_id
 
 app = Flask(__name__)
