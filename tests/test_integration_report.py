@@ -135,8 +135,7 @@ def test_integration_end_to_end(flask_client):
     with SAMPLE_IMAGE.open("rb") as f:
         upload_data = {
             "batch_name": "default",
-            "images": (io.BytesIO(f.read()), SAMPLE_IMAGE.name),
-        }
+            "files[]": (io.BytesIO(f.read()), SAMPLE_IMAGE.name),        }
 
         resp = flask_client.post(
             "/upload",
