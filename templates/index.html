@@ -84,7 +84,8 @@
                         {% if batch.summary %}
                         <div class="stat-item">
                             <div class="stat-label">Avg Temperature</div>
-                            <div class="stat-value">{{ "%.1f"|format(batch.summary.avg_temperature) }}°C</div>
+                            <div class="stat-value">{{ "%.1f"|format(batch.summary.avg_temperature or batch.summary.avgtemperature) }}°C</div>
+
                         </div>
                         <div class="stat-item">
                             <div class="stat-label">Min Temperature</div>
