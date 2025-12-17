@@ -138,9 +138,9 @@ def process_batch(
         "batchid": batch_id,
         "timestamp": datetime.utcnow().isoformat(),
         "image_count": len(images_meta),
-        "mintemperature": global_min,
-        "maxtemperature": global_max,
-        "avgtemperature": avg_temp,
+        "min_temperature": global_min,
+        "max_temperature": global_max,
+        "avg_temperature": avg_temp,
     }
 
     batch_results = {
