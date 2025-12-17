@@ -75,7 +75,15 @@ def index() -> str:
 def upload() -> Any:
     tenant_id = _get_tenant_id()
     files = request.files.getlist("files")
-
+    
+    # ADD THIS DEBUG OUTPUT
+    print(f"DEBUG: Received {len(files)} files")
+    for f in files:
+        print(f"  - {f.filename} ({f.content_type})")
+    
+    if not files or len(files) == 0:
+        return jsonify({"error": "No files uploaded"}), 400
+    
     try:
         batch_id, summary = batchservice.process_batch(files, tenant_id)
     except ValueError as e:
