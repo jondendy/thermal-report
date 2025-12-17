@@ -96,8 +96,15 @@ def process_batch(
     temps_count = 0
 
     for image_path in saved_paths:
-        tempdata, stats = processor.process_single_image(str(image_path), display=False)
-        analysis = analyzer.analyze_single_image(str(image_path), tempdata, stats)
+    tempdata, stats = processor.process_single_image(str(image_path), display=False)
+    hotspots = analyzer.detect_hot_spots(tempdata, method='statistical')
+    
+    # Convert hotspots to dict format for JSON storage
+    analysis = {
+        "hotspots": [spot.to_dict() for spot in hotspots],
+        "hotspot_count": len(hotspots),
+        "method": "statistical",
+    }
 
         # persist per-image analysis into batch_dir/analysis-images if needed
         analysis_dir = batch_dir / "analysis-images"
@@ -148,7 +155,14 @@ def process_batch(
     batchio.save_batch_results(batch_id, batch_results, tenant_id)
 
     # ThermalAnalyzer can also return batch-level findings
-    batch_analysis = analyzer.generate_batch_analysis(images_meta)
+    # Simple batch-level summary (ThermalAnalyzer doesn't have generate_batch_analysis)
+    batch_analysis = {
+        "batch_id": batch_id,
+        "timestamp": datetime.utcnow().isoformat(),
+        "total_images": len(images_meta),
+        "total_hotspots": sum(img.get("analysis", {}).get("hotspot_count", 0) for img in images_meta),
+        "images": images_meta,
+    }
     batchio.save_thermal_analysis(batch_id, batch_analysis, tenant_id)
 
     return batch_id, summary
