@@ -36,7 +36,7 @@ import services.batch_service as batchservice
 import services.heat_loss_service as heatlossservice
 import services.batch_io as batchio
 
-from lib.securityutils import validate_tenant_id
+from lib.security_utils import validate_tenant_id
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
