@@ -1,20 +1,15 @@
 #!/usr/bin/env python3
 """
 Flask entrypoint for the Thermal Report web tool.
+Canonical routes that match edit_spots.html, index.html, and JS expectations.
 """
 from __future__ import annotations
 
 import json
 import shutil
 from typing import Any
-
-from flask import (
-    Flask,
-    render_template,
-    request,
-    jsonify,
-    abort,
-)
+from flask import Flask, render_template, request, jsonify, abort, url_for
+from pathlib import Path
 
 import settings
 from settings import (
@@ -23,7 +18,7 @@ from settings import (
     MAX_CONTENT_LENGTH,
     BATCH_SIZE_MAX,
 )
-# Use the correct underscore naming for imports
+
 import services.batch_service as batchservice
 import services.heat_loss_service as heatlossservice
 import services.batch_io as batchio
@@ -55,7 +50,7 @@ def index() -> str:
 @app.route("/upload", methods=["POST"])
 def upload() -> Any:
     tenant_id = _get_tenant_id()
-    files = request.files.getlist("files")  # Expects 'files' form field
+    files = request.files.getlist("files")
 
     if not files or len(files) == 0:
         return jsonify({"error": "No files uploaded"}), 400
@@ -70,99 +65,119 @@ def upload() -> Any:
     return jsonify({"batchid": batch_id, "results": {"summary": summary}})
 
 
-@app.route("/editspots/<batch_id>", methods=["GET"])
-def edit_spots(batch_id: str) -> str:
+@app.route("/editspots/<batchid>", methods=["GET"])
+def editspots(batchid: str) -> str:
+    """Display thermal hotspot editing interface."""
     tenant_id = _get_tenant_id()
     try:
-        batch_summary = batchservice.get_batch_summary(batch_id, tenant_id)
-        analysis = heatlossservice.get_thermal_analysis(batch_id, tenant_id)
-        labels = heatlossservice.get_existing_labels(batch_id, tenant_id)
-    except FileNotFoundError:
-        abort(404)
-
-    # Define spot types required by edit_spots.html template
-    spot_types = ["Window", "Door", "Wall", "Ceiling", "Floor", "Vent", "Radiator", "Pipe", "Roof", "Other"]
-
-    return render_template(
-        "edit_spots.html",        # Matches your actual template name
-        batch=batch_summary,
-        analysis_data=analysis,   # Template expects 'analysis_data'
-        existing_labels=labels,   # Template expects 'existing_labels' dict (handles tojson itself)
-        spot_types=spot_types,    # Template expects 'spot_types'
-        saved_links=saved_links,  # <--- Add this!
-    )
-
-
-@app.route("/savelabels/<batch_id>", methods=["POST"])
-def save_labels(batch_id: str) -> Any:
-    tenant_id = _get_tenant_id()
-    try:
-        label_data = request.get_json(force=True)
-    except Exception:
-        return jsonify({"error": "Invalid JSON body"}), 400
-
-    try:
-        heatlossservice.save_labels(batch_id, label_data, tenant_id)
+        # Load analysis data for the UI
+        analysisdata = heatlossservice.get_thermal_analysis(batchid, tenant_id)
+        
+        # Load existing labels if they exist
+        existinglabels = heatlossservice.get_existing_labels(batchid, tenant_id)
+        
+        # Spot types for the dropdown
+        spottypes = ["Window", "Door", "Wall", "Eaves", "Vent", "Roof", "Chimney", "Porch"]
+        
+        # Initialize empty savedlinks and saveddocuments if they don't exist
+        savedlinks = existinglabels.get("links", []) if existinglabels else []
+        saveddocuments = existinglabels.get("documents", []) if existinglabels else []
+        
+        return render_template(
+            "editspots.html",
+            batchid=batchid,
+            analysisdata=analysisdata,
+            existinglabels=existinglabels,
+            spottypes=spottypes,
+            savedlinks=savedlinks,
+            saveddocuments=saveddocuments,
+        )
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-    return jsonify({"status": "ok"})
+        return jsonify({"error": f"An error occurred loading the labeling interface: {e}"}), 500
 
 
-@app.route("/generateheatlossreport/<batch_id>", methods=["POST"])
-def generate_heatloss_report(batch_id: str) -> Any:
+@app.route("/savelabels/<batchid>", methods=["POST"])
+def savelabels(batchid: str) -> Any:
+    """Save hot spot labels submitted by operator."""
     tenant_id = _get_tenant_id()
+    try:
+        labeldata = request.get_json(force=True)
+        savedlabels = heatlossservice.save_labels(batchid, labeldata, tenant_id)
+        return jsonify({
+            "success": True,
+            "message": "Labels saved successfully",
+            "labels": savedlabels,
+        })
+    except FileNotFoundError:
+        return jsonify({"error": "Batch not found"}), 404
+    except Exception as e:
+        return jsonify({"error": f"Failed to save labels: {e}"}), 500
 
+
+@app.route("/generateheatlossreport/<batchid>", methods=["POST"])
+def generateheatlossreport(batchid: str) -> Any:
+    """Generate professional heat loss report from labeled hot spots."""
+    tenant_id = _get_tenant_id()
+    
+    # Get form parameters for report metadata
     if request.is_json:
         payload = request.get_json() or {}
-        property_address = payload.get("propertyaddress") or payload.get("property_address")
-        inspector_name = payload.get("inspectorname") or payload.get("inspector_name")
+        propertyaddress = payload.get("propertyaddress")
+        inspectorname = payload.get("inspectorname")
     else:
-        property_address = request.form.get("propertyaddress")
-        inspector_name = request.form.get("inspectorname")
-
+        propertyaddress = request.form.get("propertyaddress")
+        inspectorname = request.form.get("inspectorname")
+    
     try:
-        report_data = heatlossservice.generate_report(
-            batch_id=batch_id,
-            property_address=property_address,
-            inspector_name=inspector_name,
+        reportdata = heatlossservice.generate_report(
+            batchid,
+            propertyaddress=propertyaddress,
+            inspectorname=inspectorname,
             tenant_id=tenant_id,
         )
+        
+        # Return success with URL to view the report
+        return jsonify({
+            "success": True,
+            "message": "Heat loss report generated successfully",
+            "reporturl": url_for("viewheatlossreport", batchid=batchid),
+        })
     except FileNotFoundError as e:
-        return jsonify({"error": str(e)}), 404
+        return jsonify({
+            "error": "Required data not found. Please ensure hotspots are labeled.",
+        }), 404
+    except ValueError as e:
+        return jsonify({"error": f"Invalid input data: {e}"}), 400
     except Exception as e:
-        return jsonify({"error": f"Report generation error: {e}"}), 500
-
-    # Save HTML report
-    html_path = batchio.get_report_html_path(batch_id, tenant_id)
-    # Use heat_loss_report.html to match your actual template name
-    html = render_template("heat_loss_report.html", reportdata=report_data)
-    html_path.write_text(html, encoding="utf-8")
-
-    return jsonify({"status": "ok", "batchid": batch_id})
+        return jsonify({"error": f"Report generation failed: {e}"}), 500
 
 
-@app.route("/report/<batch_id>", methods=["GET"])
-def view_report(batch_id: str) -> str:
+@app.route("/viewheatlossreport/<batchid>", methods=["GET"])
+def viewheatlossreport(batchid: str) -> str:
+    """Display the final professional heat loss report."""
     tenant_id = _get_tenant_id()
     try:
-        report_data = heatlossservice.get_report(batch_id, tenant_id)
+        reportdata = heatlossservice.get_report(batchid, tenant_id)
+        return render_template("heatlossreport.html", reportdata=reportdata)
     except FileNotFoundError:
-        abort(404)
+        return "Report not found. Please generate the report first.", 404
+    except Exception as e:
+        return f"An error occurred loading the report: {e}", 500
 
-    return render_template("heat_loss_report.html", reportdata=report_data)
 
-
-@app.route("/delete/<batch_id>", methods=["POST"])
-def delete_batch(batch_id: str) -> Any:
+@app.route("/delete/<batchid>", methods=["POST"])
+def deletebatch(batchid: str) -> Any:
+    """Delete a batch and its associated files."""
     tenant_id = _get_tenant_id()
     try:
-        batch_path = safe_batch_path(batch_id, tenant_id)
-        if batch_path.exists():
-            shutil.rmtree(batch_path)
-        return jsonify({"status": "deleted", "batchid": batch_id})
+        batchdir = safe_batch_path(batchid, tenant_id)
+        if batchdir.exists():
+            shutil.rmtree(batchdir)
+        return jsonify({"success": True})
+    except ValueError as e:
+        return jsonify({"error": f"Invalid batch ID: {e}"}), 400
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": f"Failed to delete batch: {e}"}), 500
 
 
 @app.route("/info", methods=["GET"])
@@ -171,7 +186,6 @@ def info() -> str:
         "info.html",
         app_name=APP_NAME,
         app_version=APP_VERSION,
-        description=settings.APP_DESCRIPTION,
     )
 
 
@@ -184,21 +198,21 @@ def api_list_batches() -> Any:
     return jsonify(batches)
 
 
-@app.route("/api/batch/<batch_id>", methods=["GET"])
-def api_get_batch(batch_id: str) -> Any:
+@app.route("/api/batch/<batchid>", methods=["GET"])
+def api_get_batch(batchid: str) -> Any:
     tenant_id = _get_tenant_id()
     try:
-        data = batchservice.get_batch_summary(batch_id, tenant_id)
+        data = batchservice.get_batch_summary(batchid, tenant_id)
     except FileNotFoundError:
         return jsonify({"error": "Batch not found"}), 404
     return jsonify(data)
 
 
-@app.route("/api/batch/<batch_id>/analysis", methods=["GET"])
-def api_get_analysis(batch_id: str) -> Any:
+@app.route("/api/batch/<batchid>/analysis", methods=["GET"])
+def api_get_analysis(batchid: str) -> Any:
     tenant_id = _get_tenant_id()
     try:
-        analysis = heatlossservice.get_thermal_analysis(batch_id, tenant_id)
+        analysis = heatlossservice.get_thermal_analysis(batchid, tenant_id)
     except FileNotFoundError:
         return jsonify({"error": "Analysis not found"}), 404
     return jsonify(analysis)
