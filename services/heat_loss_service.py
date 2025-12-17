@@ -114,14 +114,23 @@ def generate_report(batch_id, property_address='', inspector_name='', tenant_id=
     
     # Load existing labels
     labels = load_hotspot_labels(batch_id, tenant_id=tenant_id)
-    if not labels or not labels.get('labeled_spots'):
-        raise ValueError(
-            f"No labels found for batch {batch_id}. "
-            "Please label hot spots before generating report."
-        )
-    
-    # Load thermal analysis
+    # Load thermal analysis first to check for auto-detected hotspots
     analysis = load_thermal_analysis(batch_id, tenant_id=tenant_id)
+    
+    # Load existing labels (may be empty if using auto-detected spots only)
+    labels = load_hotspot_labels(batch_id, tenant_id=tenant_id)
+    
+    # Check if we have either labeled spots OR auto-detected hotspots
+    has_labeled_spots = labels and labels.get('labeled_spots')
+    has_auto_hotspots = analysis and any(
+        img_data.get('hot_spots') for img_data in analysis.get('images', {}).values()
+    )
+    
+    if not has_labeled_spots and not has_auto_hotspots:
+        raise ValueError(
+            f"No hotspots found for batch {batch_id}. "
+            "Either label hot spots manually or ensure automatic detection has identified hotspots."
+        )
     
     # Initialize reporter
     reporter = HeatLossReporter()
