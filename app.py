@@ -104,12 +104,14 @@ def edit_spots(batch_id: str) -> str:
     except FileNotFoundError:
         abort(404)
 
+    # Remove json.dumps() and rename the key
     return render_template(
         "edit_spots.html",
         batch=batch_summary,
-        analysis_data=analysis,  # Changed from analysis
-        existing_labels=json.dumps(labels),
+        analysis_data=analysis,
+        existing_labels=labels,  # Just pass the dict, template handles JSON conversion
     )
+
 
 
 @app.route("/savelabels/<batch_id>", methods=["POST"])
