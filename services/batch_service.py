@@ -143,6 +143,7 @@ def process_batch(
         "avg_temperature": avg_temp,
     }
 
+
     batch_results = {
         "batchid": batch_id,
         "timestamp": summary["timestamp"],
