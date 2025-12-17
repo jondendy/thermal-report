@@ -113,7 +113,7 @@ def list_batches(tenant_id: str | None = None) -> list[Dict[str, Any]]:
       - imagecount
       - summary (optional: min/max/mean temps etc.)
     """
-    from lib.securityutils import validate_tenant_id  # avoid circular import
+    from lib.security_utils import validate_tenant_id  # avoid circular import
 
     tenant_id = validate_tenant_id(tenant_id)
     base = BASE_REPORT_PATH.resolve() / "batches" / tenant_id
