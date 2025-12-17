@@ -108,7 +108,7 @@ def edit_spots(batch_id: str) -> str:
         "edit_spots.html",
         batch=batch_summary,
         analysis_data=analysis,  # Changed from analysis
-        labels=json.dumps(labels),
+        existing_labels=json.dumps(labels),
     )
 
 
