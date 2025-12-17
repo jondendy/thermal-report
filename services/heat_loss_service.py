@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional
 
 from settings import ORG_NAME, ORG_WEBSITE, ORG_CONTACT
-from services import batchio
+import services.batch_io as batchio
 from heatlossreporter import HeatLossReporter
 from thermalanalyzer import ThermalAnalyzer
 
