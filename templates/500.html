@@ -3,6 +3,26 @@ cat > templates/500.html << 'EOF'
 <html>
 <head>
     <title>Internal Server Error</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 100px auto;
+            text-align: center;
+            padding: 20px;
+        }
+        h1 { color: #d32f2f; }
+        a {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 10px 20px;
+            background: #1976d2;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+        a:hover { background: #1565c0; }
+    </style>
 </head>
 <body>
     <h1>500 - Internal Server Error</h1>
