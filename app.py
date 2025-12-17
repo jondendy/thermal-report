@@ -107,7 +107,7 @@ def edit_spots(batch_id: str) -> str:
     return render_template(
         "edit_spots.html",
         batch=batch_summary,
-        analysis=analysis,
+        analysis_data=analysis,  # Changed from analysis
         labels=json.dumps(labels),
     )
 
