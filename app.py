@@ -105,7 +105,7 @@ def edit_spots(batch_id: str) -> str:
         abort(404)
 
     return render_template(
-        "editspots.html",
+        "edit_spots.html",
         batch=batch_summary,
         analysis=analysis,
         labels=json.dumps(labels),
@@ -154,7 +154,7 @@ def generate_heatloss_report(batch_id: str) -> Any:
 
     # Optionally render HTML immediately using template
     html_path = batchio.get_report_html_path(batch_id, tenant_id)
-    html = render_template("heatlossreport.html", reportdata=report_data)
+    html = render_template("heat_loss_report.html", reportdata=report_data)
     html_path.write_text(html, encoding="utf-8")
 
     return jsonify({"status": "ok", "batchid": batch_id})
@@ -168,7 +168,7 @@ def view_report(batch_id: str) -> str:
     except FileNotFoundError:
         abort(404)
 
-    return render_template("heatlossreport.html", reportdata=report_data)
+    return render_template("heat_loss_report.html", reportdata=report_data)
 
 
 @app.route("/info", methods=["GET"])
