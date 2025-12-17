@@ -32,9 +32,9 @@ from settings import (
     MAX_CONTENT_LENGTH,
     BATCH_SIZE_MAX,
 )
-import services.batchservice as batchservice
-import services.heatlossservice as heatlossservice
-import services.batchio as batchio
+import services.batch_service as batchservice
+import services.heat_loss_service as heatlossservice
+import services.batch_io as batchio
 
 from lib.securityutils import validate_tenant_id
 
