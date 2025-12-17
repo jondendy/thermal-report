@@ -89,6 +89,7 @@ def edit_spots(batch_id: str) -> str:
         analysis_data=analysis,   # Template expects 'analysis_data'
         existing_labels=labels,   # Template expects 'existing_labels' dict (handles tojson itself)
         spot_types=spot_types,    # Template expects 'spot_types'
+        saved_links=saved_links,  # <--- Add this!
     )
 
 
