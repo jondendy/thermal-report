@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from settings import BASE_REPORT_PATH
-from lib.securityutils import safe_batch_path
+from lib.security_utils import safe_batch_path
 
 
 # ---------------------------------------------------------------------------
