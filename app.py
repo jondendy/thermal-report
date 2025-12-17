@@ -1,27 +1,18 @@
 #!/usr/bin/env python3
 """
 Flask entrypoint for the Thermal Report web tool.
-
-Provides:
-  - Home page with batch upload and batch list
-  - Edit spots (label hotspots) page
-  - Report generation and viewing
-  - JSON API endpoints for integration
 """
-
 from __future__ import annotations
 
 import json
-from typing import Any, Dict
+import shutil
+from typing import Any
 
 from flask import (
     Flask,
     render_template,
     request,
-    redirect,
-    url_for,
     jsonify,
-    send_file,
     abort,
 )
 
@@ -32,31 +23,21 @@ from settings import (
     MAX_CONTENT_LENGTH,
     BATCH_SIZE_MAX,
 )
+# Use the correct underscore naming for imports
 import services.batch_service as batchservice
 import services.heat_loss_service as heatlossservice
 import services.batch_io as batchio
-
-from lib.security_utils import validate_tenant_id
+from lib.security_utils import validate_tenant_id, safe_batch_path
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 app.config["SECRET_KEY"] = "change-me-in-production"
 
 
-# ---------------------------------------------------------------------------
-# Helper: tenant extraction
-# ---------------------------------------------------------------------------
-
 def _get_tenant_id() -> str:
-    # In multi-tenant deployments, extract from headers or auth.
-    # For now, read from query or default.
     tenant_id = request.args.get("tenant") or None
     return validate_tenant_id(tenant_id)
 
-
-# ---------------------------------------------------------------------------
-# Web routes
-# ---------------------------------------------------------------------------
 
 @app.route("/", methods=["GET"])
 def index() -> str:
@@ -74,16 +55,11 @@ def index() -> str:
 @app.route("/upload", methods=["POST"])
 def upload() -> Any:
     tenant_id = _get_tenant_id()
-    files = request.files.getlist("files")
-    
-    # ADD THIS DEBUG OUTPUT
-    print(f"DEBUG: Received {len(files)} files")
-    for f in files:
-        print(f"  - {f.filename} ({f.content_type})")
-    
+    files = request.files.getlist("files")  # Expects 'files' form field
+
     if not files or len(files) == 0:
         return jsonify({"error": "No files uploaded"}), 400
-    
+
     try:
         batch_id, summary = batchservice.process_batch(files, tenant_id)
     except ValueError as e:
@@ -104,32 +80,16 @@ def edit_spots(batch_id: str) -> str:
     except FileNotFoundError:
         abort(404)
 
-    # Define spot types for the dropdown
+    # Define spot types required by edit_spots.html template
     spot_types = ["Window", "Door", "Wall", "Ceiling", "Floor", "Vent", "Radiator", "Pipe", "Roof", "Other"]
 
     return render_template(
-        "edit_spots.html",
+        "edit_spots.html",        # Matches your actual template name
         batch=batch_summary,
-        analysis_data=analysis,
-        existing_labels=labels,
-        spot_types=spot_types,
+        analysis_data=analysis,   # Template expects 'analysis_data'
+        existing_labels=labels,   # Template expects 'existing_labels' dict (handles tojson itself)
+        spot_types=spot_types,    # Template expects 'spot_types'
     )
-
-@app.route("/delete/<batch_id>", methods=["POST"])
-def delete_batch(batch_id: str) -> Any:
-    tenant_id = _get_tenant_id()
-    try:
-        import shutil
-        from lib.security_utils import safe_batch_path
-        
-        # Delete the batch directory
-        batch_path = safe_batch_path(batch_id, tenant_id)
-        if batch_path.exists():
-            shutil.rmtree(batch_path)
-        
-        return jsonify({"status": "deleted", "batchid": batch_id})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/savelabels/<batch_id>", methods=["POST"])
@@ -172,8 +132,9 @@ def generate_heatloss_report(batch_id: str) -> Any:
     except Exception as e:
         return jsonify({"error": f"Report generation error: {e}"}), 500
 
-    # Optionally render HTML immediately using template
+    # Save HTML report
     html_path = batchio.get_report_html_path(batch_id, tenant_id)
+    # Use heat_loss_report.html to match your actual template name
     html = render_template("heat_loss_report.html", reportdata=report_data)
     html_path.write_text(html, encoding="utf-8")
 
@@ -191,6 +152,18 @@ def view_report(batch_id: str) -> str:
     return render_template("heat_loss_report.html", reportdata=report_data)
 
 
+@app.route("/delete/<batch_id>", methods=["POST"])
+def delete_batch(batch_id: str) -> Any:
+    tenant_id = _get_tenant_id()
+    try:
+        batch_path = safe_batch_path(batch_id, tenant_id)
+        if batch_path.exists():
+            shutil.rmtree(batch_path)
+        return jsonify({"status": "deleted", "batchid": batch_id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/info", methods=["GET"])
 def info() -> str:
     return render_template(
@@ -201,9 +174,7 @@ def info() -> str:
     )
 
 
-# ---------------------------------------------------------------------------
-# JSON API routes
-# ---------------------------------------------------------------------------
+# --- API Routes ---
 
 @app.route("/api/batches", methods=["GET"])
 def api_list_batches() -> Any:
@@ -232,27 +203,21 @@ def api_get_analysis(batch_id: str) -> Any:
     return jsonify(analysis)
 
 
-# ---------------------------------------------------------------------------
-# Error handlers
-# ---------------------------------------------------------------------------
+# --- Error Handlers ---
 
 @app.errorhandler(404)
-def not_found(error):  # type: ignore[override]
+def not_found(error):
     if request.path.startswith("/api/"):
         return jsonify({"error": "Not found"}), 404
     return render_template("404.html"), 404
 
 
 @app.errorhandler(500)
-def internal_error(error):  # type: ignore[override]
+def internal_error(error):
     if request.path.startswith("/api/"):
         return jsonify({"error": "Internal server error"}), 500
     return render_template("500.html"), 500
 
-
-# ---------------------------------------------------------------------------
-# CLI entrypoint
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     app.run(debug=settings.FLASK_DEBUG, host="0.0.0.0", port=5000)
