@@ -115,6 +115,21 @@ def edit_spots(batch_id: str) -> str:
         spot_types=spot_types,
     )
 
+@app.route("/delete/<batch_id>", methods=["POST"])
+def delete_batch(batch_id: str) -> Any:
+    tenant_id = _get_tenant_id()
+    try:
+        import shutil
+        from lib.security_utils import safe_batch_path
+        
+        # Delete the batch directory
+        batch_path = safe_batch_path(batch_id, tenant_id)
+        if batch_path.exists():
+            shutil.rmtree(batch_path)
+        
+        return jsonify({"status": "deleted", "batchid": batch_id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/savelabels/<batch_id>", methods=["POST"])
