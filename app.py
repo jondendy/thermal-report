@@ -104,12 +104,15 @@ def edit_spots(batch_id: str) -> str:
     except FileNotFoundError:
         abort(404)
 
-    # Remove json.dumps() and rename the key
+    # Define spot types for the dropdown
+    spot_types = ["Window", "Door", "Wall", "Ceiling", "Floor", "Vent", "Radiator", "Pipe", "Roof", "Other"]
+
     return render_template(
         "edit_spots.html",
         batch=batch_summary,
         analysis_data=analysis,
-        existing_labels=labels,  # Just pass the dict, template handles JSON conversion
+        existing_labels=labels,
+        spot_types=spot_types,
     )
 
 
