@@ -21,7 +21,7 @@ from settings import (
     is_allowed_file,
 )
 from lib.security_utils import safe_batch_path, validate_tenant_id
-from services import batchio
+import services.batch_io as batchio
 from flirprocessorsimple import SimpleFLIRProcessor
 from thermalanalyzer import ThermalAnalyzer
 
