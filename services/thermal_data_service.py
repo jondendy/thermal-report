@@ -172,28 +172,28 @@ class ThermalDataExtractor:
         temp_celsius = temp_kelvin - 273.15
         return temp_celsius
     
-def get_temperature_at_point(
-    self,
-    temperatures: np.ndarray,
-    x: int,
-    y: int,
-    visual_width: Optional[int] = None,
-    visual_height: Optional[int] = None,
-) -> Optional[float]:
-    """
-    Get temperature value at specific coordinates.
+    def get_temperature_at_point(
+        self,
+        temperatures: np.ndarray,
+        x: int,
+        y: int,
+        visual_width: Optional[int] = None,
+        visual_height: Optional[int] = None,
+    ) -> Optional[float]:
+        """
+        Get temperature value at specific coordinates.
 
-    Args:
-        temperatures: 2D array of temperature values
-        x: X coordinate (column)
-        y: Y coordinate (row)
-        visual_width: width of the visual image (if different from thermal)
-        visual_height: height of the visual image (if different from thermal)
+        Args:
+            temperatures: 2D array of temperature values
+            x: X coordinate (column)
+            y: Y coordinate (row)
+            visual_width: width of the visual image (if different from thermal)
+            visual_height: height of the visual image (if different from thermal)
 
-    Returns:
-        Temperature in Celsius, or None if coordinates are invalid
-    """
-    try:
+        Returns:
+            Temperature in Celsius, or None if coordinates are invalid
+        """
+        try:
         # Default: use coordinates as-is
         scaled_x, scaled_y = x, y
 
