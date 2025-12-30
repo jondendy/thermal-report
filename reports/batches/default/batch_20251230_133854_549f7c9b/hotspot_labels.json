@@ -1,0 +1,99 @@
+{
+  "batch_id": "batch_20251230_133854_549f7c9b",
+  "tenant_id": "default",
+  "labeled_spots": [
+    {
+      "spot_id": "manual_1767101970673",
+      "image_name": "FLIR1462.jpg",
+      "type": "Window",
+      "spot_number": "1",
+      "temperature": 20,
+      "severity": "medium",
+      "location": [
+        287,
+        254
+      ]
+    },
+    {
+      "spot_id": "manual_1767101981027",
+      "image_name": "FLIR1466.jpg",
+      "type": "Window",
+      "spot_number": "2",
+      "temperature": 20,
+      "severity": "medium",
+      "location": [
+        341,
+        242
+      ]
+    },
+    {
+      "spot_id": "manual_1767101993778",
+      "image_name": "FLIR1468.jpg",
+      "type": "Vent",
+      "spot_number": "1",
+      "temperature": 20,
+      "severity": "medium",
+      "location": [
+        209,
+        225
+      ]
+    },
+    {
+      "spot_id": "manual_1767102001035",
+      "image_name": "FLIR1468.jpg",
+      "type": "Vent",
+      "spot_number": "2",
+      "temperature": 20,
+      "severity": "medium",
+      "location": [
+        201,
+        352
+      ]
+    },
+    {
+      "spot_id": "manual_1767102017451",
+      "image_name": "FLIR1474.jpg",
+      "type": "Window",
+      "spot_number": "3",
+      "temperature": 20,
+      "severity": "medium",
+      "location": [
+        413,
+        319
+      ]
+    },
+    {
+      "spot_id": "manual_1767102034419",
+      "image_name": "FLIR1478.jpg",
+      "type": "Window",
+      "spot_number": "4",
+      "temperature": 20,
+      "severity": "medium",
+      "location": [
+        201,
+        253
+      ]
+    }
+  ],
+  "timestamp": "2025-12-30T13:41:09.085970",
+  "cross_references": {
+    "Window_1": [
+      "manual_1767101970673"
+    ],
+    "Window_2": [
+      "manual_1767101981027"
+    ],
+    "Vent_1": [
+      "manual_1767101993778"
+    ],
+    "Vent_2": [
+      "manual_1767102001035"
+    ],
+    "Window_3": [
+      "manual_1767102017451"
+    ],
+    "Window_4": [
+      "manual_1767102034419"
+    ]
+  }
+}
