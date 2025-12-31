@@ -6,7 +6,7 @@ Builds on SimpleFLIRProcessor to add intelligence layer for building surveys
 import numpy as np
 from pathlib import Path
 from datetime import datetime
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, Any
 import json
 
 try:
