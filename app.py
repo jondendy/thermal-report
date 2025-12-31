@@ -95,14 +95,34 @@ def info():
 
 @app.route('/download/<batch_id>/<filename>')
 def download_file(batch_id, filename):
-    """Serve labeled images from batch directory."""
+    """
+    Serve files from batch directory or upload directory.
+    
+    Checks batch_dir first (for processed files like labeled images, reports),
+    then upload_dir (for original uploaded images).
+    """
     try:
         tenant_id = request.headers.get('X-Tenant-ID', settings.DEFAULT_TENANT)
+        
+        # Try batch directory first (processed files)
         batch_dir = Path(settings.BASE_REPORT_DIR) / 'batches' / tenant_id / batch_id
-        return send_from_directory(batch_dir, filename)
+        batch_file = batch_dir / filename
+        if batch_file.exists() and batch_file.is_file():
+            return send_from_directory(batch_dir, filename)
+        
+        # Fall back to upload directory (original images)
+        upload_dir = Path(settings.BASE_UPLOAD_DIR) / tenant_id / batch_id
+        upload_file = upload_dir / filename
+        if upload_file.exists() and upload_file.is_file():
+            return send_from_directory(upload_dir, filename)
+        
+        # File not found
+        logger.warning(f"File not found: batch={batch_id}, filename={filename}")
+        return jsonify({"error": "File not found"}), 404
+        
     except Exception as e:
         logger.error(f"Error serving file {filename} from batch {batch_id}: {e}")
-        return jsonify({"error": "File not found"}), 404
+        return jsonify({"error": "Error retrieving file"}), 500
 
 
 # ============================================================================
