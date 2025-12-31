@@ -53,15 +53,15 @@ def upload_files():
     """
     Handle file uploads and batch processing.
     
-    Expected: multipart form data with 'files[]' containing 6-8 JPEG images
+    Expected: multipart form data with 'files' containing JPEG images
     Returns: JSON with batch_id and processing results
     """
     try:
-        # Validate request
-        if 'files[]' not in request.files:
+        # Validate request - matches frontend FormData.append('files', file)
+        if 'files' not in request.files:
             return jsonify({'error': 'No files provided'}), 400
         
-        files = request.files.getlist('files[]')
+        files = request.files.getlist('files')
         
         # Filter valid files
         valid_files = [f for f in files if f and f.filename and _allowed_file(f.filename)]
