@@ -1,4 +1,2 @@
-"""
-Services layer – business logic for thermal-report.
-Provides orchestration for batch processing and heat loss workflows.
-"""
+"""Services package."""
+# Empty marker file - modules are imported directly

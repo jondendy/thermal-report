@@ -1,84 +1,94 @@
 """
 Configuration module for thermal-report application.
+
 All settings are driven by environment variables with sensible defaults.
+This module is intentionally dependency-free so it can be imported early.
 """
+
 import os
 from pathlib import Path
 
-# ============================================================================
-# Flask & Environment
-# ============================================================================
+# ---------------------------------------------------------------------------
+# Environment / runtime mode
+# ---------------------------------------------------------------------------
 
-FLASK_ENV = os.getenv('FLASK_ENV', 'production')
-FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
+FLASK_ENV = os.getenv("FLASK_ENV", "production")
+FLASK_DEBUG = os.getenv("FLASK_DEBUG", "false").lower() == "true"
 
-# ============================================================================
-# Paths & Storage
-# ============================================================================
+# ---------------------------------------------------------------------------
+# Paths and storage
+# ---------------------------------------------------------------------------
 
-BASE_UPLOAD_DIR = os.getenv('UPLOAD_FOLDER', 'Images')
-BASE_REPORT_DIR = os.getenv('REPORTS_FOLDER', 'reports')
+# Base directories for uploads and reports
+BASE_UPLOAD_DIR = os.getenv("UPLOAD_FOLDER", ".Images")
+BASE_REPORT_DIR = os.getenv("REPORTS_FOLDER", ".reports")
 
-# Create directories if they don't exist
-Path(BASE_UPLOAD_DIR).mkdir(exist_ok=True)
-Path(BASE_REPORT_DIR).mkdir(exist_ok=True)
+BASE_UPLOAD_PATH = Path(BASE_UPLOAD_DIR)
+BASE_REPORT_PATH = Path(BASE_REPORT_DIR)
 
-# ============================================================================
-# Tenancy (Single-tenant now, multi-tenant ready)
-# ============================================================================
+# Ensure directories exist at import time so the app can assume they are present
+BASE_UPLOAD_PATH.mkdir(parents=True, exist_ok=True)
+BASE_REPORT_PATH.mkdir(parents=True, exist_ok=True)
 
-TENANT_MODE = os.getenv('TENANT_MODE', 'single')  # 'single' or 'multi'
-DEFAULT_TENANT = os.getenv('DEFAULT_TENANT', 'default')
+# Storage abstraction (currently only "local" implemented, but env-ready)
+STORAGE_TYPE = os.getenv("STORAGETYPE", "local")  # local, googledrive, s3
+STORAGE_ADDRESS = os.getenv("STORAGEADDRESS", "")  # URL or base path for cloud
+STORAGE_ACCESS_KEY = os.getenv("STORAGEACCESSKEY", "")  # API key / service JSON
 
-# ============================================================================
-# Processing Parameters
-# ============================================================================
+# ---------------------------------------------------------------------------
+# Multi-tenant setup (single-tenant by default)
+# ---------------------------------------------------------------------------
 
-BATCH_SIZE_MAX = int(os.getenv('BATCH_SIZE_MAX', '8'))
-THERMAL_SENSITIVITY = os.getenv('THERMAL_SENSITIVITY', 'medium')  # low, medium, high
+TENANT_MODE = os.getenv("TENANTMODE", "single")  # "single" or "multi"
+DEFAULT_TENANT = os.getenv("DEFAULTTENANT", "default")
 
-ALLOWED_EXTENSIONS = {'jpg', 'jpeg'}
-MAX_CONTENT_LENGTH = 200 * 1024 * 1024  # 200MB max upload
+# ---------------------------------------------------------------------------
+# Processing limits and behavior
+# ---------------------------------------------------------------------------
 
-# ============================================================================
-# Logging
-# ============================================================================
+# Max images per batch (UI already enforces 8)
+BATCH_SIZE_MAX = int(os.getenv("BATCHSIZEMAX", "8"))
 
-LOG_LEVEL = os.getenv('LOG_LEVEL', 'ERROR')
-LOG_FILE = os.getenv('LOG_FILE', 'thermal_report_errors.log')
+# Sensitivity used by ThermalAnalyzer / heat loss logic (low, medium, high)
+THERMAL_SENSITIVITY = os.getenv("THERMALSENSITIVITY", "medium")
 
-# ============================================================================
-# Survey Organisation Details (for reports)
-# ============================================================================
+# Allowed upload extensions and max content length
+ALLOWED_EXTENSIONS = {"jpg", "jpeg"}
+MAX_CONTENT_LENGTH = 200 * 1024 * 1024  # 200 MB
 
-ORG_NAME = os.getenv('ORG_NAME', 'Your Survey Organisation')
-ORG_WEBSITE = os.getenv('ORG_WEBSITE', 'https://example.com')
-ORG_CONTACT = os.getenv('ORG_CONTACT', 'contact@example.com')
+# Upload timeout (for large batches)
+UPLOAD_TIMEOUT_SECONDS = int(os.getenv("UPLOADTIMEOUTSECONDS", "300"))
 
-# Used at end of generated reports
-REPORT_FILENAME_SUFFIX = os.getenv('REPORT_FILENAME_SUFFIX', 'thermal_survey_report')
+# ---------------------------------------------------------------------------
+# Organisation / reporting metadata
+# ---------------------------------------------------------------------------
 
-# ============================================================================
-# Storage Backend Configuration (for future cloud integration)
-# ============================================================================
+ORG_NAME = os.getenv("ORGNAME", "Your Survey Organisation")
+ORG_WEBSITE = os.getenv("ORGWEBSITE", "https://example.com")
+ORG_CONTACT = os.getenv("ORGCONTACT", "contact@example.com")
 
-# Type of storage: 'local', 'google_drive', 's3' (currently only 'local' implemented)
-STORAGE_TYPE = os.getenv('STORAGE_TYPE', 'local')
+# Suffix appended to generated report filenames
+REPORT_FILENAME_SUFFIX = os.getenv("REPORTFILENAMESUFFIX", "thermal-survey-report")
 
-# For Google Drive integration (or other cloud storage)
-STORAGE_ADDRESS = os.getenv('STORAGE_ADDRESS', '')  # Folder URL or base path
-STORAGE_ACCESS_KEY = os.getenv('STORAGE_ACCESS_KEY', '')  # API key / service account JSON path
+# ---------------------------------------------------------------------------
+# Application identity
+# ---------------------------------------------------------------------------
 
-# ============================================================================
-# Application Metadata
-# ============================================================================
+APP_NAME = "Thermal Report"
+APP_VERSION = "2.0.0"
+APP_DESCRIPTION = "Professional FLIR thermal image analysis for building heat loss surveys"
 
-APP_NAME = 'Thermal Report'
-APP_VERSION = '2.0.0'
-APP_DESCRIPTION = 'Professional FLIR thermal image analysis for building heat loss surveys'
+# ---------------------------------------------------------------------------
+# Logging configuration (used by lib.loggingconfig)
+# ---------------------------------------------------------------------------
 
-# ============================================================================
-# File Upload Configuration
-# ============================================================================
+LOG_LEVEL = os.getenv("LOGLEVEL", "ERROR")
+LOG_FILE = os.getenv("LOGFILE", "thermal-report-errors.log")
 
-UPLOAD_TIMEOUT_SECONDS = int(os.getenv('UPLOAD_TIMEOUT_SECONDS', '300'))  # 5 minutes
+
+def is_allowed_file(filename: str) -> bool:
+    """Return True if the filename has an allowed extension."""
+    if not filename or "." not in filename:
+        return False
+    ext = filename.rsplit(".", 1)[-1].lower()
+    return ext in ALLOWED_EXTENSIONS

@@ -1,130 +1,144 @@
 """
-Batch I/O abstraction layer.
-Handles all JSON read/write operations for batches.
-Centralizes file structure knowledge in one place.
+Batch IO utilities.
+
+Single source of truth for how batch-related JSON data and analysis artifacts
+are stored and loaded on disk.
 """
+
+from __future__ import annotations
+
 import json
 from pathlib import Path
-from lib.security_utils import safe_batch_path, validate_batch_id, validate_tenant_id
+from typing import Any, Dict, Optional
+
+from settings import BASE_REPORT_PATH
+from lib.security_utils import safe_batch_path
 
 
-def load_json(file_path):
-    """
-    Safely load JSON from file.
-    
-    Args:
-        file_path (str or Path): Path to JSON file
-        
-    Returns:
-        dict: Loaded JSON data
-        
-    Raises:
-        FileNotFoundError: If file doesn't exist
-        json.JSONDecodeError: If file is invalid JSON
-    """
-    file_path = Path(file_path)
-    
-    if not file_path.exists():
-        raise FileNotFoundError(f"File not found: {file_path}")
-    
-    with open(file_path, 'r') as f:
+# ---------------------------------------------------------------------------
+# Generic helpers
+# ---------------------------------------------------------------------------
+
+def _read_json(path: Path) -> Optional[Dict[str, Any]]:
+    if not path.exists():
+        return None
+    with path.open("r", encoding="utf-8") as f:
         return json.load(f)
 
 
-def save_json(file_path, data):
-    """
-    Safely save JSON to file, creating parent directories as needed.
-    
-    Args:
-        file_path (str or Path): Path to JSON file
-        data (dict): Data to save
-        
-    Raises:
-        IOError: If write fails
-    """
-    file_path = Path(file_path)
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    with open(file_path, 'w') as f:
+def _write_json(path: Path, data: Dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
 
-def ensure_batch_dir(batch_id, tenant_id=None, reports_dir=None):
+# ---------------------------------------------------------------------------
+# Batch-level helpers
+# ---------------------------------------------------------------------------
+
+def ensure_batch_dir(batch_id: str, tenant_id: str | None = None) -> Path:
     """
-    Ensure batch directory exists and is ready for use.
-    
-    Args:
-        batch_id (str): Batch ID
-        tenant_id (str): Tenant ID
-        reports_dir (str): Base reports directory
-        
-    Returns:
-        Path: Path to batch directory
+    Ensure the batch directory exists and return its Path.
+
+    Layout:
+      BASE_REPORT_PATH/
+        batches/
+          {tenant_id}/
+            {batch_id}/
+              batchresults.json
+              thermalanalysis.json
+              hotspotlabels.json
+              heatlossreportdata.json
+              heatlossreport.html
     """
-    batch_path = safe_batch_path(batch_id, tenant_id=tenant_id, reports_dir=reports_dir)
-    batch_path.mkdir(parents=True, exist_ok=True)
-    return batch_path
+    return safe_batch_path(batch_id, tenant_id)
 
 
-# ============================================================================
-# Batch Data Access Functions (Higher-level API)
-# ============================================================================
-
-def load_batch_results(batch_id, tenant_id=None, reports_dir=None):
-    """Load results.json for a batch."""
-    batch_path = safe_batch_path(batch_id, tenant_id=tenant_id, reports_dir=reports_dir)
-    results_file = batch_path / 'results.json'
-    return load_json(results_file)
+def load_batch_results(batch_id: str, tenant_id: str | None = None) -> Optional[Dict[str, Any]]:
+    batch_dir = ensure_batch_dir(batch_id, tenant_id)
+    return _read_json(batch_dir / "batchresults.json")
 
 
-def save_batch_results(batch_id, results, tenant_id=None, reports_dir=None):
-    """Save results.json for a batch."""
-    batch_path = safe_batch_path(batch_id, tenant_id=tenant_id, reports_dir=reports_dir)
-    results_file = batch_path / 'results.json'
-    save_json(results_file, results)
+def save_batch_results(batch_id: str, results: Dict[str, Any], tenant_id: str | None = None) -> None:
+    batch_dir = ensure_batch_dir(batch_id, tenant_id)
+    _write_json(batch_dir / "batchresults.json", results)
 
 
-def load_thermal_analysis(batch_id, tenant_id=None, reports_dir=None):
-    """Load thermal_analysis.json (raw analyzer output)."""
-    batch_path = safe_batch_path(batch_id, tenant_id=tenant_id, reports_dir=reports_dir)
-    analysis_file = batch_path / 'thermal_analysis.json'
-    return load_json(analysis_file)
+def load_thermal_analysis(batch_id: str, tenant_id: str | None = None) -> Optional[Dict[str, Any]]:
+    batch_dir = ensure_batch_dir(batch_id, tenant_id)
+    return _read_json(batch_dir / "thermalanalysis.json")
 
 
-def save_thermal_analysis(batch_id, analysis, tenant_id=None, reports_dir=None):
-    """Save thermal_analysis.json."""
-    batch_path = safe_batch_path(batch_id, tenant_id=tenant_id, reports_dir=reports_dir)
-    analysis_file = batch_path / 'thermal_analysis.json'
-    save_json(analysis_file, analysis)
+def save_thermal_analysis(batch_id: str, analysis: Dict[str, Any], tenant_id: str | None = None) -> None:
+    batch_dir = ensure_batch_dir(batch_id, tenant_id)
+    _write_json(batch_dir / "thermalanalysis.json", analysis)
 
 
-def load_hotspot_labels(batch_id, tenant_id=None, reports_dir=None):
-    """Load hotspot_labels.json (operator labels)."""
-    batch_path = safe_batch_path(batch_id, tenant_id=tenant_id, reports_dir=reports_dir)
-    labels_file = batch_path / 'hotspot_labels.json'
-    
-    if not labels_file.exists():
-        return {}
-    
-    return load_json(labels_file)
+def load_hotspot_labels(batch_id: str, tenant_id: str | None = None) -> Optional[Dict[str, Any]]:
+    batch_dir = ensure_batch_dir(batch_id, tenant_id)
+    return _read_json(batch_dir / "hotspotlabels.json")
 
 
-def save_hotspot_labels(batch_id, labels, tenant_id=None, reports_dir=None):
-    """Save hotspot_labels.json."""
-    batch_path = safe_batch_path(batch_id, tenant_id=tenant_id, reports_dir=reports_dir)
-    labels_file = batch_path / 'hotspot_labels.json'
-    save_json(labels_file, labels)
+def save_hotspot_labels(batch_id: str, labels: Dict[str, Any], tenant_id: str | None = None) -> None:
+    batch_dir = ensure_batch_dir(batch_id, tenant_id)
+    _write_json(batch_dir / "hotspotlabels.json", labels)
 
 
-def load_heat_loss_report(batch_id, tenant_id=None, reports_dir=None):
-    """Load heat_loss_report.json (final report data)."""
-    batch_path = safe_batch_path(batch_id, tenant_id=tenant_id, reports_dir=reports_dir)
-    report_file = batch_path / 'heat_loss_report.json'
-    return load_json(report_file)
+def load_heatloss_report(batch_id: str, tenant_id: str | None = None) -> Optional[Dict[str, Any]]:
+    batch_dir = ensure_batch_dir(batch_id, tenant_id)
+    return _read_json(batch_dir / "heatlossreportdata.json")
 
 
-def save_heat_loss_report(batch_id, report_data, tenant_id=None, reports_dir=None):
-    """Save heat_loss_report.json."""
-    batch_path = safe_batch_path(batch_id, tenant_id=tenant_id, reports_dir=reports_dir)
-    report_file = batch_path / 'heat_loss_report.json'
-    save_json(report_file, report_data)
+def save_heatloss_report(batch_id: str, report_data: Dict[str, Any], tenant_id: str | None = None) -> None:
+    batch_dir = ensure_batch_dir(batch_id, tenant_id)
+    _write_json(batch_dir / "heatlossreportdata.json", report_data)
+
+
+def get_report_html_path(batch_id: str, tenant_id: str | None = None) -> Path:
+    batch_dir = ensure_batch_dir(batch_id, tenant_id)
+    return batch_dir / "heatlossreport.html"
+
+
+# ---------------------------------------------------------------------------
+# Index listing
+# ---------------------------------------------------------------------------
+
+def list_batches(tenant_id: str | None = None) -> list[Dict[str, Any]]:
+    """
+    Return a list of batch metadata for the index page.
+
+    Each item contains:
+      - batchid
+      - timestamp (if present in batchresults.json)
+      - imagecount
+      - summary (optional: min/max/mean temps etc.)
+    """
+    from lib.security_utils import validate_tenant_id  # avoid circular import
+
+    tenant_id = validate_tenant_id(tenant_id)
+    base = BASE_REPORT_PATH.resolve() / "batches" / tenant_id
+    if not base.exists():
+        return []
+
+    items: list[Dict[str, Any]] = []
+    for batch_dir in sorted(base.iterdir()):
+        if not batch_dir.is_dir():
+            continue
+        batch_id = batch_dir.name
+        meta = load_batch_results(batch_id, tenant_id)
+        if not meta:
+            continue
+        summary = meta.get("summary") or {}
+        timestamp = meta.get("timestamp")
+        imagecount = meta.get("image_count", len(meta.get("images", [])))
+        items.append(
+            {
+                "batchid": batch_id,
+                "timestamp": timestamp,
+                "imagecount": imagecount,
+                "summary": summary,
+            }
+        )
+    # Sort newest first by timestamp if available
+    items.sort(key=lambda x: x.get("timestamp") or "", reverse=True)
+    return items

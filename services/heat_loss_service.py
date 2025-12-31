@@ -1,171 +1,94 @@
 """
-Heat loss service: orchestrates labeling and report generation workflow.
-Step 1: Load and save hot spot labels
-Step 2: Generate professional heat loss report
+Heat loss service.
+
+Connects stored thermal analysis and operator hotspot labels with the
+HeatLossReporter to generate homeowner-friendly HTML reports.
 """
+
+from __future__ import annotations
+
 from datetime import datetime
-from pathlib import Path
+from typing import Dict, Any, List, Optional
 
-import settings
-from services.batch_io import (
-    load_thermal_analysis, load_hotspot_labels, save_hotspot_labels,
-    load_heat_loss_report, save_heat_loss_report
-)
+from settings import ORG_NAME, ORG_WEBSITE, ORG_CONTACT
+import services.batch_io as batchio
 from heat_loss_reporter import HeatLossReporter
+from thermal_analyzer import ThermalAnalyzer
 
 
-def get_thermal_analysis(batch_id, tenant_id=None):
-    """
-    Load thermal analysis data for UI (labeling interface).
-    
-    Args:
-        batch_id (str): Batch ID
-        tenant_id (str): Tenant ID
-        
-    Returns:
-        dict: Thermal analysis data with detected hot spots per image
-    """
-    if tenant_id is None:
-        tenant_id = settings.DEFAULT_TENANT
-    
-    return load_thermal_analysis(batch_id, tenant_id=tenant_id)
+def get_thermal_analysis(batch_id: str, tenant_id: str | None = None) -> Dict[str, Any]:
+    analysis = batchio.load_thermal_analysis(batch_id, tenant_id)
+    if analysis is None:
+        raise FileNotFoundError(f"No thermal analysis found for batch {batch_id}")
+    return analysis
 
 
-def get_existing_labels(batch_id, tenant_id=None):
-    """
-    Load existing hot spot labels (if any).
-    
-    Args:
-        batch_id (str): Batch ID
-        tenant_id (str): Tenant ID
-        
-    Returns:
-        dict: Existing labels, or empty dict if none
-    """
-    if tenant_id is None:
-        tenant_id = settings.DEFAULT_TENANT
-    
-    return load_hotspot_labels(batch_id, tenant_id=tenant_id)
+def get_existing_labels(batch_id: str, tenant_id: str | None = None) -> Dict[str, Any]:
+    labels = batchio.load_hotspot_labels(batch_id, tenant_id)
+    return labels or {"labeled_spots": []}
 
 
-def save_labels(batch_id, label_data, tenant_id=None):
+def save_labels(batch_id: str, label_data: Dict[str, Any], tenant_id: str | None = None) -> None:
+    # Expect label_data like {"labeled_spots": [...]} from editspots.js form
+    batchio.save_hotspot_labels(batch_id, label_data, tenant_id)
+
+
+def _combine_analysis_and_labels(
+    analysis: Dict[str, Any],
+    labels: Dict[str, Any],
+) -> List[Dict[str, Any]]:
     """
-    Save hot spot labels submitted by operator.
-    
-    Args:
-        batch_id (str): Batch ID
-        label_data (dict): Label data structure
-        tenant_id (str): Tenant ID
-        
-    Returns:
-        dict: Saved label structure
+    Build a list of findings suitable for HeatLossReporter from raw analysis and labels.
     """
-    if tenant_id is None:
-        tenant_id = settings.DEFAULT_TENANT
-    
-    # Structure the data
-    labels_structure = {
-        'batch_id': batch_id,
-        'tenant_id': tenant_id,
-        'labeled_spots': label_data.get('labeled_spots', []),
-        'timestamp': datetime.now().isoformat()
+    analyzer = ThermalAnalyzer()  # sensitivity can be embedded in analysis if needed
+    findings = analyzer.merge_labels_with_analysis(analysis, labels)
+    return findings
+
+
+def generate_report(
+    batch_id: str,
+    property_address: str | None,
+    inspector_name: str | None,
+    tenant_id: str | None = None,
+) -> Dict[str, Any]:
+    """
+    Generate full heat loss report data (not HTML) and persist it.
+    """
+    analysis = get_thermal_analysis(batch_id, tenant_id)
+    labels = get_existing_labels(batch_id, tenant_id)
+    findings = _combine_analysis_and_labels(analysis, labels)
+
+    reporter = HeatLossReporter(
+        org_name=ORG_NAME,
+        org_website=ORG_WEBSITE,
+        org_contact=ORG_CONTACT,
+    )
+
+    summary = reporter.generate_executive_summary(findings)
+    recommendations = reporter.generate_recommendations(findings)
+
+    report_data = {
+        "batchid": batch_id,
+        "propertyaddress": property_address or "Not specified",
+        "inspectorname": inspector_name or "Not specified",
+        "surveydate": datetime.now().strftime("%Y-%m-%d"),
+        "surveytime": datetime.now().strftime("%H:%M"),
+        "summary": summary,
+        "findings": findings,
+        "recommendations": recommendations,
+        "organisation": {
+            "name": ORG_NAME,
+            "website": ORG_WEBSITE,
+            "contact": ORG_CONTACT,
+        },
     }
-    
-    # Generate cross-references (spots visible in multiple images)
-    cross_refs = {}
-    for spot in labels_structure['labeled_spots']:
-        spot_type = spot.get('type')
-        spot_num = spot.get('spot_number')
-        if spot_type and spot_num:
-            # Use composite key: "Type_Number" (e.g., "Window_1", "Door_1")
-            group_key = f"{spot_type}_{spot_num}"
-            if group_key not in cross_refs:
-                cross_refs[group_key] = []
-            cross_refs[group_key].append(spot.get('spot_id'))
 
-    
-    labels_structure['cross_references'] = cross_refs
-    
-    # Save
-    save_hotspot_labels(batch_id, labels_structure, tenant_id=tenant_id)
-    
-    return labels_structure
-
-
-def generate_report(batch_id, property_address='', inspector_name='', tenant_id=None):
-    """
-    Generate professional heat loss report from labeled hot spots.
-    
-    Args:
-        batch_id (str): Batch ID
-        property_address (str): Optional property address
-        inspector_name (str): Optional inspector name
-        tenant_id (str): Tenant ID
-        
-    Returns:
-        dict: Generated report data
-        
-    Raises:
-        FileNotFoundError: If required data files not found
-        ValueError: If labels not yet created
-    """
-    if tenant_id is None:
-        tenant_id = settings.DEFAULT_TENANT
-    
-    # Load existing labels
-    labels = load_hotspot_labels(batch_id, tenant_id=tenant_id)
-    # Load thermal analysis first to check for auto-detected hotspots
-    analysis = load_thermal_analysis(batch_id, tenant_id=tenant_id)
-    
-    # Load existing labels (may be empty if using auto-detected spots only)
-    labels = load_hotspot_labels(batch_id, tenant_id=tenant_id)
-    
-    # Check if we have either labeled spots OR auto-detected hotspots
-    has_labeled_spots = labels and labels.get('labeled_spots')
-    has_auto_hotspots = analysis and any(
-        img_data.get('hot_spots') for img_data in analysis.get('images', {}).values()
-    )
-    
-    if not has_labeled_spots and not has_auto_hotspots:
-        raise ValueError(
-            f"No hotspots found for batch {batch_id}. "
-            "Either label hot spots manually or ensure automatic detection has identified hotspots."
-        )
-    
-    # Initialize reporter
-    reporter = HeatLossReporter()
-    
-    # Generate report
-    report_data = reporter.generate_html_report(
-        batch_id=batch_id,
-        analysis_data=analysis,
-        labels=labels,
-        property_address=property_address,
-        inspector_name=inspector_name,
-        org_name=settings.ORG_NAME,
-        org_website=settings.ORG_WEBSITE,
-        org_contact=settings.ORG_CONTACT,
-        tenant_id=tenant_id
-    )
-    
-    # Save report data
-    save_heat_loss_report(batch_id, report_data, tenant_id=tenant_id)
-    
+    batchio.save_heatloss_report(batch_id, report_data, tenant_id)
     return report_data
 
 
-def get_report(batch_id, tenant_id=None):
-    """
-    Load a generated heat loss report.
-    
-    Args:
-        batch_id (str): Batch ID
-        tenant_id (str): Tenant ID
-        
-    Returns:
-        dict: Report data
-    """
-    if tenant_id is None:
-        tenant_id = settings.DEFAULT_TENANT
-    
-    return load_heat_loss_report(batch_id, tenant_id=tenant_id)
+def get_report(batch_id: str, tenant_id: str | None = None) -> Dict[str, Any]:
+    report_data = batchio.load_heatloss_report(batch_id, tenant_id)
+    if report_data is None:
+        raise FileNotFoundError(f"No report found for batch {batch_id}")
+    return report_data

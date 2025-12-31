@@ -73,7 +73,7 @@
                 {% for batch in batches %}
                 <div class="batch-card">
                     <div class="batch-header">
-                        <div class="batch-title"><a href="/edit_spots/{{ batch.batch_id }}" style="color: inherit; text-decoration: none;">{{ batch.batch_id }}</a><a href="/label_hotspots/{{ batch.batch_id}}" style="text-decoration: none;"> _ Add points</a></div>
+                        <div class="batch-title"><a href="/editspots/{{ batch.batchid }}">Edit Spots</a></div>
                         <div class="batch-date">{{ batch.timestamp[:19] if batch.timestamp else 'N/A' }}</div>
                     </div>
                     <div class="batch-stats">
@@ -84,7 +84,8 @@
                         {% if batch.summary %}
                         <div class="stat-item">
                             <div class="stat-label">Avg Temperature</div>
-                            <div class="stat-value">{{ "%.1f"|format(batch.summary.avg_temperature) }}°C</div>
+                            <div class="stat-value">{{ "%.1f"|format(batch.summary.avg_temperature or batch.summary.avgtemperature) }}°C</div>
+
                         </div>
                         <div class="stat-item">
                             <div class="stat-label">Min Temperature</div>
@@ -97,8 +98,8 @@
                         {% endif %}
                     </div>
                     <div class="batch-actions">
-                        <a href="/report/{{ batch.batch_id }}" class="btn btn-primary">View Report</a>
-                        <button onclick="deleteBatch('{{ batch.batch_id }}')" class="btn btn-danger">Delete</button>
+                        <a href="/report/{{ batch.batchid }}" class="btn btn-primary">View Report</a>
+                        <button onclick="deleteBatch('{{ batch.batchid }}')" class="btn btn-danger">Delete</button>
                     </div>
                 </div>
                 {% endfor %}
@@ -196,7 +197,7 @@
             }
 
             const formData = new FormData();
-            selectedFiles.forEach(file => formData.append('files[]', file));
+            selectedFiles.forEach(file => formData.append('files', file));
 
             progress.style.display = 'block';
             progress.value = 0;
