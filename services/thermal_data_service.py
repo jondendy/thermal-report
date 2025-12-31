@@ -213,11 +213,11 @@ class ThermalDataExtractor:
                 f"Coordinates ({scaled_x}, {scaled_y}) out of bounds "
                 f"({thermal_width}x{thermal_height})"
             )
-        return None
+            return None
 
-    except Exception as e:
-        logger.exception(f"Error getting temperature at ({x}, {y}): {e}")
-        return None
+        except Exception as e:
+            logger.exception(f"Error getting temperature at ({x}, {y}): {e}")
+            return None
 
 
 def save_thermal_data(batch_path: Path, image_name: str, thermal_data: np.ndarray):
