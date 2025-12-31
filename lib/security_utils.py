@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 # Validators
 # ---------------------------------------------------------------------------
 
-_BATCH_ID_PATTERN = re.compile(r"^[a-zA-Z0-9\-]+$")  # batchYYYYMMDDHHMMSShash
+_BATCH_ID_PATTERN = re.compile(r"^[a-zA-Z0-9\-_]+$")  # batch_YYYYMMDD_HHMMSS_hash
 _TENANT_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_\-]+$")
 
 
