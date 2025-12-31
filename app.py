@@ -111,6 +111,7 @@ def download_file(batch_id, filename):
 
 @app.route('/edit_spots/<batch_id>')
 def edit_spots(batch_id):
+    """Load thermal analysis UI for labeling hot spots."""
     try:
         tenant_id = request.headers.get('X-Tenant-ID', settings.DEFAULT_TENANT)
         
@@ -137,16 +138,12 @@ def edit_spots(batch_id):
             saved_documents=saved_documents
         )
         
-    except Exception as e:
-        logger.error(f"Error loading edit_spots for batch {batch_id}: {e}", exc_info=True)
-        return jsonify({"error": "An error occurred loading the labeling interface"}), 500
-
-    
-    except FileNotFoundError:
-        return "Batch not found", 404
+    except FileNotFoundError as e:
+        logger.error(f"Data not found for batch {batch_id}: {str(e)}")
+        return jsonify({"error": f"Batch data not found: {str(e)}"}), 404
     except Exception as e:
         logger.exception(f"Error loading edit_spots for batch {batch_id}: {str(e)}")
-        return "An error occurred loading the labeling interface", 500
+        return jsonify({"error": f"An error occurred loading the labeling interface: {str(e)}"}), 500
 
 
 @app.route('/save_labels/<batch_id>', methods=['POST'])
