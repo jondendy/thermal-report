@@ -22,8 +22,8 @@ from settings import (
 )
 from lib.security_utils import safe_batch_path, validate_tenant_id
 import services.batch_io as batchio
-from flir_processor_simple import SimpleFLIRProcessor
-from thermal_analyzer import ThermalAnalyzer
+from service.flir_processor_simple import SimpleFLIRProcessor
+from service.thermal_analyzer import ThermalAnalyzer
 
 
 def _generate_batch_id() -> str:
