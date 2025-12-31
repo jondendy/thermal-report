@@ -73,7 +73,7 @@
                 {% for batch in batches %}
                 <div class="batch-card">
                     <div class="batch-header">
-                        <div class="batch-title"><a href="/editspots/{{ batch.batchid }}">Edit Spots</a></div>
+                        <div class="batch-title"><a href="/edit_spots/{{ batch.batchid }}">Edit Spots</a></div>
                         <div class="batch-date">{{ batch.timestamp[:19] if batch.timestamp else 'N/A' }}</div>
                     </div>
                     <div class="batch-stats">
