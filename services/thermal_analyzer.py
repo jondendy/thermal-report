@@ -19,18 +19,37 @@ except ImportError:
 class HotSpot:
     """Represents a detected thermal anomaly"""
     
-    def __init__(self, location: Tuple[int, int], temperature: float, area_size: int, severity: str):
+    def __init__(self, location: Tuple[int, int], temperature: float, area_size: int, severity: str, thermal_shape: Tuple[int, int] = None, image_shape: Tuple[int, int] = None):
         self.location = location  # (row, col) in temperature array
         self.temperature = temperature
         self.area_size = area_size  # number of pixels in hot spot
         self.severity = severity  # 'low', 'medium', 'high', 'critical'
         self.description = ""
         self.likely_cause = ""
+        self.thermal_shape = thermal_shape  # Shape of thermal array (height, width)
+        self.image_shape = image_shape  # Shape of visual image (height, width)
     
     def to_dict(self) -> Dict:
-        """Convert to dictionary for JSON serialization"""
+        """Convert to dictionary for JSON serialization with pixel coordinates"""
+        row, col = self.location
+        
+        # Convert thermal array coordinates to pixel coordinates
+        # Assume typical FLIR: 120x160 thermal -> 480x640 visual image (4x scaling)
+        if self.thermal_shape and self.image_shape:
+            scale_y = self.image_shape[0] / self.thermal_shape[0]
+            scale_x = self.image_shape[1] / self.thermal_shape[1]
+        else:
+            # Default scaling for typical FLIR images
+            scale_y = 4.0
+            scale_x = 4.0
+        
+        x = int(col * scale_x)
+        y = int(row * scale_y)
+        
         return {
-            'location': self.location,
+            'x': x,  # Pixel x coordinate
+            'y': y,  # Pixel y coordinate
+            'location': [x, y],  # For backward compatibility
             'temperature': float(self.temperature),
             'area_size': int(self.area_size),
             'severity': self.severity,
@@ -67,7 +86,7 @@ class ThermalAnalyzer:
             'high': 1.5     # 1.5 std devs above mean
         }
     
-    def detect_hot_spots(self, temp_data: np.ndarray, method='statistical', threshold=None) -> List[HotSpot]:
+    def detect_hot_spots(self, temp_data: np.ndarray, method='statistical', threshold=None, image_path: str = None) -> List[HotSpot]:
         """
         Detect hot spots in thermal image data
         
@@ -75,10 +94,21 @@ class ThermalAnalyzer:
             temp_data: 2D numpy array of temperature values
             method: 'statistical' (auto), 'absolute' (fixed temp), 'relative' (local)
             threshold: Optional override threshold
+            image_path: Optional path to image for getting visual dimensions
         
         Returns:
             List of detected HotSpot objects
         """
+        
+        # Get image dimensions if path provided
+        thermal_shape = temp_data.shape
+        image_shape = None
+        if image_path and Image:
+            try:
+                with Image.open(image_path) as img:
+                    image_shape = (img.height, img.width)
+            except:
+                pass
         
         # Filter out sky reflection artifacts (typically < -45°C) and keep only finite values
         valid_mask = np.isfinite(temp_data) & (temp_data > -45.0)
@@ -87,15 +117,15 @@ class ThermalAnalyzer:
             return []
         
         if method == 'statistical':
-            return self._detect_statistical(temp_data, threshold)
+            return self._detect_statistical(temp_data, threshold, thermal_shape, image_shape)
         elif method == 'absolute':
-            return self._detect_absolute(temp_data, threshold)
+            return self._detect_absolute(temp_data, threshold, thermal_shape, image_shape)
         elif method == 'relative':
-            return self._detect_relative(temp_data)
+            return self._detect_relative(temp_data, thermal_shape, image_shape)
         else:
             raise ValueError(f"Unknown method: {method}")
     
-    def _detect_statistical(self, temp_data: np.ndarray, threshold=None) -> List[HotSpot]:
+    def _detect_statistical(self, temp_data: np.ndarray, threshold=None, thermal_shape=None, image_shape=None) -> List[HotSpot]:
         """Statistical hot spot detection using mean + std deviation"""
         valid_data = temp_data[np.isfinite(temp_data)]
         mean_temp = np.mean(valid_data)
@@ -111,9 +141,9 @@ class ThermalAnalyzer:
         # Find pixels above threshold
         hot_mask = temp_data > hot_threshold
         
-        return self._extract_hot_spots(temp_data, hot_mask, 'statistical')
+        return self._extract_hot_spots(temp_data, hot_mask, 'statistical', thermal_shape, image_shape)
     
-    def _detect_absolute(self, temp_data: np.ndarray, threshold=None) -> List[HotSpot]:
+    def _detect_absolute(self, temp_data: np.ndarray, threshold=None, thermal_shape=None, image_shape=None) -> List[HotSpot]:
         """Absolute temperature threshold detection"""
         thresh = threshold if threshold else self.base_threshold
         if thresh is None:
@@ -122,9 +152,9 @@ class ThermalAnalyzer:
         print(f"Absolute threshold: {thresh}°C")
         hot_mask = temp_data > thresh
         
-        return self._extract_hot_spots(temp_data, hot_mask, 'absolute')
+        return self._extract_hot_spots(temp_data, hot_mask, 'absolute', thermal_shape, image_shape)
     
-    def _detect_relative(self, temp_data: np.ndarray) -> List[HotSpot]:
+    def _detect_relative(self, temp_data: np.ndarray, thermal_shape=None, image_shape=None) -> List[HotSpot]:
         """Local relative detection - finds local maxima (hot spots warmer than neighbors)"""
         from scipy.ndimage import maximum_filter
         
@@ -151,9 +181,9 @@ class ThermalAnalyzer:
         
         print(f"Relative detection: found {np.sum(is_local_max)} local maxima")
         
-        return self._extract_hot_spots(temp_data, is_local_max, 'relative')
+        return self._extract_hot_spots(temp_data, is_local_max, 'relative', thermal_shape, image_shape)
     
-    def _extract_hot_spots(self, temp_data: np.ndarray, hot_mask: np.ndarray, method_type: str) -> List[HotSpot]:
+    def _extract_hot_spots(self, temp_data: np.ndarray, hot_mask: np.ndarray, method_type: str, thermal_shape=None, image_shape=None) -> List[HotSpot]:
         """Extract connected components from hot spot mask"""
         from scipy import ndimage
         
@@ -184,7 +214,9 @@ class ThermalAnalyzer:
                 location=location,
                 temperature=max_temp,
                 area_size=int(region_size),
-                severity=severity
+                severity=severity,
+                thermal_shape=thermal_shape or temp_data.shape,
+                image_shape=image_shape
             )
             
             hot_spots.append(hot_spot)
@@ -244,17 +276,12 @@ class ThermalAnalyzer:
             'critical': '#FF0000'  # Red
         }
         
-        # Calculate scaling between thermal array and visual image
-        # Assume typical FLIR scaling: 120x160 sensor -> 480x640 image
-        scale_y = img.height / 120  # 480 / 120 = 4.0
-        scale_x = img.width / 160   # 640 / 160 = 4.0
-
         # Label each hot spot
         for idx, spot in enumerate(hot_spots, 1):
-            row, col = spot.location
-            # Scale coordinates to match image dimensions
-            col = int(col * scale_x)
-            row = int(row * scale_y)
+            # Get pixel coordinates from the dict representation
+            spot_dict = spot.to_dict()
+            col = spot_dict['x']
+            row = spot_dict['y']
             color = severity_colors.get(spot.severity, '#FF0000')
             
             # Draw crosshair marker
@@ -378,3 +405,30 @@ class ThermalAnalyzer:
             severity_counts[spot.severity] = severity_counts.get(spot.severity, 0) + 1
 
         return '\n'.join(html)
+
+    def merge_labels_with_analysis(self, analysis: Dict[str, Any], labels: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Merge thermal analysis hot spots with operator labels.
+        
+        Args:
+            analysis: Thermal analysis data with detected hot spots
+            labels: Operator-provided labels
+        
+        Returns:
+            List of findings with merged data
+        """
+        findings = []
+        labeled_spots = labels.get('labeled_spots', [])
+        
+        for labeled in labeled_spots:
+            findings.append({
+                'image_name': labeled.get('image_name'),
+                'spot_number': labeled.get('spot_number'),
+                'type': labeled.get('type'),
+                'temperature': labeled.get('temperature'),
+                'severity': labeled.get('severity', 'medium'),
+                'location': labeled.get('location', [0, 0]),
+                'description': f"{labeled.get('type')} heat loss detected"
+            })
+        
+        return findings
