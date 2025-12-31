@@ -200,9 +200,15 @@
                             num: label ? label.spot_number : ''
                         };
                     });
+                    
+                    // Use labeled_image if available, otherwise fall back to original filename
+                    const imageUrl = img.labeled_image 
+                        ? `/download/${BATCH}/${img.labeled_image}`
+                        : `/download/${BATCH}/${img.filename}`;
+                    
                     return {
                         name: img.filename,
-                        url: `/download/${BATCH}/${img.labeled_image || img.filename}`,
+                        url: imageUrl,
                         spots: spots
                     };
                 });
@@ -240,7 +246,7 @@
                         <button class="btn-small" style="font-size:11px" onclick="startAdd(${imgIdx})">+ Add</button>
                     </div>
                     <div class="image-container" id="imgContainer${imgIdx}" data-idx="${imgIdx}">
-                        <img src="${img.url}" alt="${img.name}" onerror="this.parentElement.innerHTML='<div class=img-loading>Image not found</div>'">
+                        <img src="${img.url}" alt="${img.name}" onerror="this.parentElement.innerHTML='<div class=img-loading>⚠ Image loading failed. Try original: <a href=\'/download/${BATCH}/${img.name}\' style=\'color:#007bff;\'>${img.name}</a></div>'">
                     </div>
                     <div class="spots-section">
                         ${renderSpots(imgIdx)}
