@@ -1,5 +1,4 @@
-"""
-Batch service: orchestrates upload, processing, and batch management.
+"""Batch service: orchestrates upload, processing, and batch management.
 Separates batch logic from Flask routing.
 """
 from __future__ import annotations
@@ -114,8 +113,8 @@ def process_batch(
             if thermal_data is not None:
                 save_thermal_data(batch_dir, Path(image_path).name, thermal_data)
             
-            # Detect hot spots
-            hot_spots = analyzer.detect_hot_spots(temp_data)
+            # Detect hot spots - pass image_path so analyzer can get visual dimensions
+            hot_spots = analyzer.detect_hot_spots(temp_data, image_path=image_path)
             
             # Generate HTML report for this image
             html_report = analyzer.generate_report(
