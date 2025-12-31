@@ -194,25 +194,25 @@ class ThermalDataExtractor:
             Temperature in Celsius, or None if coordinates are invalid
         """
         try:
-        # Default: use coordinates as-is
-        scaled_x, scaled_y = x, y
+            # Default: use coordinates as-is
+            scaled_x, scaled_y = x, y
 
-        # Get thermal data dimensions
-        thermal_height, thermal_width = temperatures.shape
+            # Get thermal data dimensions
+            thermal_height, thermal_width = temperatures.shape
 
-        # Scale coordinates if visual dimensions are provided
-        if visual_width is not None and visual_height is not None:
-            scaled_x = int(x * thermal_width / visual_width)
-            scaled_y = int(y * thermal_height / visual_height)
+            # Scale coordinates if visual dimensions are provided
+            if visual_width is not None and visual_height is not None:
+                scaled_x = int(x * thermal_width / visual_width)
+                scaled_y = int(y * thermal_height / visual_height)
 
-        # Bounds check
-        if 0 <= scaled_y < thermal_height and 0 <= scaled_x < thermal_width:
-            return float(temperatures[scaled_y, scaled_x])
+            # Bounds check
+            if 0 <= scaled_y < thermal_height and 0 <= scaled_x < thermal_width:
+                return float(temperatures[scaled_y, scaled_x])
 
-        logger.warning(
-            f"Coordinates ({scaled_x}, {scaled_y}) out of bounds "
-            f"({thermal_width}x{thermal_height})"
-        )
+            logger.warning(
+                f"Coordinates ({scaled_x}, {scaled_y}) out of bounds "
+                f"({thermal_width}x{thermal_height})"
+            )
         return None
 
     except Exception as e:
