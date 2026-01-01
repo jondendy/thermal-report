@@ -155,6 +155,38 @@
         .priority-low {
             color: #7f8c8d;
         }
+        .recommendations-section {
+            background: #e3f2fd;
+            border: 2px solid #2196f3;
+            padding: 30px;
+            margin: 50px 0;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .recommendations-section h2 {
+            color: #1565c0;
+            margin-top: 0;
+        }
+        .recommendations-section p {
+            color: #424242;
+            font-size: 1.1em;
+            margin: 15px 0;
+        }
+        .recommendations-button {
+            display: inline-block;
+            background: #2196f3;
+            color: white;
+            padding: 15px 30px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 1.1em;
+            transition: background 0.3s;
+            cursor: pointer;
+        }
+        .recommendations-button:hover {
+            background: #1976d2;
+        }
         .footer {
             margin-top: 50px;
             padding-top: 20px;
@@ -168,6 +200,11 @@
             }
             .report-container {
                 box-shadow: none;
+            }
+            .recommendations-button {
+                border: 2px solid #2196f3;
+                background: white;
+                color: #2196f3;
             }
         }
     </style>
@@ -296,6 +333,19 @@
                 {% endfor %}
             </ul>
         </div>
+
+        {% if report_data.recommendations_document_url %}
+        <div class="recommendations-section">
+            <h2>📋 Additional Resources</h2>
+            <p>For more information about recommended improvements, energy-saving tips, and upcoming charity projects, please refer to our comprehensive recommendations guide:</p>
+            <a href="{{ report_data.recommendations_document_url }}" target="_blank" rel="noopener noreferrer" class="recommendations-button">
+                📄 View Recommendations & Resources
+            </a>
+            <p style="margin-top: 20px; font-size: 0.9em; color: #666;">
+                (Opens in a new window)
+            </p>
+        </div>
+        {% endif %}
 
         <div class="footer">
             <p>This report was generated using thermal imaging analysis technology.</p>
