@@ -246,7 +246,7 @@
                         <button class="btn-small" style="font-size:11px" onclick="startAdd(${imgIdx})">+ Add</button>
                     </div>
                     <div class="image-container" id="imgContainer${imgIdx}" data-idx="${imgIdx}">
-                        <img src="${img.url}" alt="${img.name}" onerror="this.parentElement.innerHTML='<div class=img-loading>⚠ Image loading failed. Try original: <a href=\'/download/${BATCH}/${img.name}\' style=\'color:#007bff;\'>${img.name}</a></div>'">
+                        <img src="${img.url}" alt="${img.name}" onerror="this.parentElement.innerHTML='<div class=img-loading>⚠ Image loading failed. Try original: <a href=\'/download/${BATCH}/${img.name}\' style=\'color:#007bff;\'>\${img.name}</a></div>'">
                     </div>
                     <div class="spots-section">
                         ${renderSpots(imgIdx)}
@@ -361,7 +361,12 @@
             const res = await fetch(`/save_labels/${BATCH}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ labeled_spots: spots, links: state.links.filter(l => l.title && l.url) })
+                body: JSON.stringify({ 
+                    labeled_spots: spots, 
+                    links: state.links.filter(l => l.title && l.url),
+                    property_address: document.getElementById('propertyAddress').value,
+                    surveyor_name: document.getElementById('surveyorName').value
+                })
             });
             const data = await res.json();
             showStatus(data.success ? '✓ Saved' : '✗ Error', data.success ? 'success' : 'error');
@@ -372,13 +377,30 @@
                 alert('Label at least one spot');
                 return;
             }
-            await saveEdits();
-            setTimeout(() => {
-                showStatus('Generating...', 'info');
-                fetch(`/generate_heat_loss_report/${BATCH}`, { method: 'POST' })
-                    .then(r => r.json())
-                    .then(d => { if (d.success) window.location.href = d.report_url; else showStatus('Error', 'error'); });
-            }, 500);
+            
+            showStatus('Generating...', 'info');
+            
+            const propertyAddress = document.getElementById('propertyAddress').value;
+            const surveyorName = document.getElementById('surveyorName').value;
+            
+            const formData = new FormData();
+            formData.append('property_address', propertyAddress);
+            formData.append('inspector_name', surveyorName);
+            formData.append('doc_mode', 'link');  // default to link mode
+            
+            fetch(`/generate_heat_loss_report/${BATCH}`, { 
+                method: 'POST',
+                body: formData
+            })
+                .then(r => r.json())
+                .then(d => { 
+                    if (d.success) {
+                        window.location.href = d.report_url;
+                    } else {
+                        showStatus('Error: ' + (d.error || 'Unknown'), 'error');
+                    }
+                })
+                .catch(e => showStatus('Error: ' + e.message, 'error'));
         }
 
         function goBack() {
