@@ -1,5 +1,4 @@
-"""
-Heat loss service.
+"""Heat loss service.
 
 Connects stored thermal analysis and operator hotspot labels with the
 HeatLossReporter to generate homeowner-friendly HTML reports.
@@ -13,7 +12,6 @@ from typing import Dict, Any, List, Optional
 from settings import ORG_NAME, ORG_WEBSITE, ORG_CONTACT
 import services.batch_io as batchio
 from services.heat_loss_reporter import HeatLossReporter
-from services.thermal_analyzer import ThermalAnalyzer
 
 
 def get_thermal_analysis(batch_id: str, tenant_id: str | None = None) -> Dict[str, Any]:
@@ -38,10 +36,32 @@ def _combine_analysis_and_labels(
     labels: Dict[str, Any],
 ) -> List[Dict[str, Any]]:
     """
-    Build a list of findings suitable for HeatLossReporter from raw analysis and labels.
+    Build a list of findings using HeatLossReporter from operator labels.
+    
+    The reporter groups spots by spot_number and generates professional
+    finding narratives with recommendations.
     """
-    analyzer = ThermalAnalyzer()  # sensitivity can be embedded in analysis if needed
-    findings = analyzer.merge_labels_with_analysis(analysis, labels)
+    reporter = HeatLossReporter(
+        org_name=ORG_NAME,
+        org_website=ORG_WEBSITE,
+        org_contact=ORG_CONTACT,
+    )
+    
+    labeled_spots = labels.get('labeled_spots', [])
+    
+    # Group spots by number
+    grouped = reporter.group_by_spot_number(labeled_spots)
+    
+    # Generate findings for each spot number
+    findings = []
+    for spot_number, spot_group in grouped.items():
+        finding = reporter.generate_finding_narrative(spot_group, spot_number)
+        findings.append(finding)
+    
+    # Sort by severity and spot number
+    severity_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
+    findings.sort(key=lambda f: (severity_order.get(f['severity'], 3), f['spot_number']))
+    
     return findings
 
 
@@ -68,11 +88,11 @@ def generate_report(
     recommendations = reporter.generate_recommendations(findings)
 
     report_data = {
-        "batchid": batch_id,
-        "propertyaddress": property_address or "Not specified",
-        "inspectorname": inspector_name or "Not specified",
-        "surveydate": datetime.now().strftime("%Y-%m-%d"),
-        "surveytime": datetime.now().strftime("%H:%M"),
+        "batch_id": batch_id,
+        "property_address": property_address or "Not specified",
+        "inspector_name": inspector_name or "Not specified",
+        "survey_date": datetime.now().strftime("%Y-%m-%d"),
+        "survey_time": datetime.now().strftime("%H:%M"),
         "summary": summary,
         "findings": findings,
         "recommendations": recommendations,
