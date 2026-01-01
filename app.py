@@ -7,10 +7,10 @@ from __future__ import annotations
 
 import json
 import shutil
-from typing import Any
-from flask import Flask, render_template, request, jsonify, abort, url_for
-from pathlib import Path
 import logging
+from typing import Any
+from flask import Flask, render_template, request, jsonify, abort, url_for, send_file
+from pathlib import Path
 
 import settings
 from settings import (
@@ -24,9 +24,10 @@ import services.batch_service as batchservice
 import services.heat_loss_service as heatlossservice
 import services.batch_io as batchio
 from lib.security_utils import validate_tenant_id, safe_batch_path
-from lib.logging_config import get_logger
+from lib.logging_config import setup_logging
 
-logger = get_logger(__name__)
+# Initialize logger
+logger = setup_logging(level='INFO')
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
@@ -245,7 +246,6 @@ def download_file(batch_id: str, filename: str) -> Any:
     """Download a file from batch storage."""
     tenant_id = _get_tenant_id()
     try:
-        from flask import send_file
         batch_path = safe_batch_path(batch_id, tenant_id)
         file_path = batch_path / filename
         
