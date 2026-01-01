@@ -183,12 +183,20 @@ def process_batch(
     # Save results
     batchio.save_batch_results(batch_id, results, tenant_id=tenant_id)
     
-    # Save thermal analysis for UI
+    # Save thermal analysis for UI (frontend expects this exact structure)
     thermal_analysis = {
         'batch_id': batch_id,
         'tenant_id': tenant_id,
         'timestamp': datetime.now().isoformat(),
-        'images': results['images']
+        'images': [
+            {
+                'filename': img['filename'],
+                'hot_spots': img.get('hot_spots', []),
+                'labeled_image': img.get('labeled_image', ''),
+            }
+            for img in results['images']
+            if 'error' not in img  # Only include successful images
+        ]
     }
     batchio.save_thermal_analysis(batch_id, thermal_analysis, tenant_id=tenant_id)
     
