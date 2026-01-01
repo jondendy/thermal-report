@@ -64,7 +64,11 @@ def upload() -> Any:
         return jsonify({"error": "No files uploaded"}), 400
 
     try:
-        batch_id, summary = batchservice.process_batch(files, tenant_id)
+        # Generate batch_id from files
+        batch_id = batchservice.get_batch_id(files)
+        # Process batch with correct argument order: batch_id, files, tenant_id
+        results = batchservice.process_batch(batch_id, files, tenant_id)
+        summary = results.get('summary', {})
     except ValueError as e:
         logger.warning(f"Validation error during upload: {str(e)}")
         return jsonify({"error": str(e)}), 400
