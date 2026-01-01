@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 
-from settings import ORG_NAME, ORG_WEBSITE, ORG_CONTACT
+from settings import ORG_NAME, ORG_WEBSITE, ORG_CONTACT, RECOMMENDATIONS_DOCUMENT_URL
 import services.batch_io as batchio
 from services.heat_loss_reporter import HeatLossReporter
 
@@ -101,6 +101,7 @@ def generate_report(
             "website": ORG_WEBSITE,
             "contact": ORG_CONTACT,
         },
+        "recommendations_document_url": RECOMMENDATIONS_DOCUMENT_URL,
     }
 
     batchio.save_heatloss_report(batch_id, report_data, tenant_id)

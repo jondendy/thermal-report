@@ -67,6 +67,13 @@ ORG_NAME = os.getenv("ORGNAME", "Your Survey Organisation")
 ORG_WEBSITE = os.getenv("ORGWEBSITE", "https://example.com")
 ORG_CONTACT = os.getenv("ORGCONTACT", "contact@example.com")
 
+# External recommendations document URL (e.g., Google Drive shareable link)
+# Set this to the public link to your recommendations PDF/document
+RECOMMENDATIONS_DOCUMENT_URL = os.getenv(
+    "RECOMMENDATIONS_DOCUMENT_URL",
+    ""  # Leave empty to hide the link in reports
+)
+
 # Suffix appended to generated report filenames
 REPORT_FILENAME_SUFFIX = os.getenv("REPORTFILENAMESUFFIX", "thermal-survey-report")
 
