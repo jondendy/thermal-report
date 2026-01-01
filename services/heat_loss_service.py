@@ -69,10 +69,18 @@ def generate_report(
     batch_id: str,
     property_address: str | None,
     inspector_name: str | None,
+    doc_mode: str = 'link',
     tenant_id: str | None = None,
 ) -> Dict[str, Any]:
     """
     Generate full heat loss report data (not HTML) and persist it.
+    
+    Args:
+        batch_id: Batch identifier
+        property_address: Property address for report
+        inspector_name: Inspector/surveyor name
+        doc_mode: 'link' to include external URL, 'embed' to embed document
+        tenant_id: Tenant identifier for multi-tenant setups
     """
     analysis = get_thermal_analysis(batch_id, tenant_id)
     labels = get_existing_labels(batch_id, tenant_id)
@@ -86,6 +94,10 @@ def generate_report(
 
     summary = reporter.generate_executive_summary(findings)
     recommendations = reporter.generate_recommendations(findings)
+
+    # Only include recommendations_document_url if doc_mode is 'link'
+    # If doc_mode is 'embed', the document content would be embedded (future feature)
+    recommendations_url = RECOMMENDATIONS_DOCUMENT_URL if doc_mode == 'link' else None
 
     report_data = {
         "batch_id": batch_id,
@@ -101,7 +113,8 @@ def generate_report(
             "website": ORG_WEBSITE,
             "contact": ORG_CONTACT,
         },
-        "recommendations_document_url": RECOMMENDATIONS_DOCUMENT_URL,
+        "recommendations_document_url": recommendations_url,
+        "doc_mode": doc_mode,
     }
 
     batchio.save_heatloss_report(batch_id, report_data, tenant_id)
