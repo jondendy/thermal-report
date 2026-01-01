@@ -79,7 +79,7 @@ def upload() -> Any:
     return jsonify({"batchid": batch_id, "results": {"summary": summary}})
 
 
-@app.route("/editspots/<batchid>", methods=["GET"])
+@app.route("/edit_spots/<batchid>", methods=["GET"])
 def editspots(batchid: str) -> str:
     """Display thermal hotspot editing interface."""
     tenant_id = _get_tenant_id()
