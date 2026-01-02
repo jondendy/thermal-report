@@ -92,6 +92,13 @@
         .status.error { background: #f8d7da; color: #721c24; }
         .status.info { background: #d1ecf1; color: #0c5460; }
         
+        /* File upload */
+        #fileInput { display: none; }
+        .file-input-label { padding: 5px 10px; font-size: 12px; background: var(--color-secondary); color: white; border-radius: 4px; cursor: pointer; }
+        .file-input-label:hover { opacity: 0.9; }
+        .uploaded-files { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+        .file-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; background: var(--color-light); border-radius: 4px; font-size: 12px; }
+        
         @media (max-width: 768px) {
             .grid-container { grid-template-columns: 1fr; }
             .link-item { grid-template-columns: 100px 1fr 30px; }
@@ -109,7 +116,7 @@
         </div>
     </div>
 
-        <!-- Survey Metadata Section -->
+    <!-- Survey Metadata Section -->
     <div class="links-section">
         <h2>📋 Survey Information</h2>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 10px;">
@@ -127,7 +134,12 @@
     <div class="links-section">
         <h2>📎 Documents & Links</h2>
         <div class="link-list" id="linkList"></div>
-        <button class="btn-small" onclick="addLink()">+ Add Link</button>
+        <button class="btn-small" onclick="addLink()" style="margin-bottom: 10px;">+ Add Link</button>
+        
+        <h3 style="font-size: 14px; margin-top: 15px; margin-bottom: 10px; color: #333;">📄 Attached Notes</h3>
+        <label class="file-input-label" for="fileInput">+ Attach Document</label>
+        <input type="file" id="fileInput" onchange="handleFileUpload(event)">
+        <div class="uploaded-files" id="uploadedFiles"></div>
     </div>
 
     <div class="grid-container" id="grid"></div>
@@ -178,6 +190,7 @@
         let state = {
             links: {{ saved_links|tojson|default('[]') }},
             images: [],
+            attachedFiles: [],
             pendingSpot: null
         };
 
@@ -189,12 +202,14 @@
                     const spots = (img.hot_spots || []).map((s, sidx) => {
                         const spotId = `${img.filename}_spot${sidx + 1}`;
                         const label = saved.find(l => l.spot_id === spotId);
+                        // Read temperature from hot_spots data
+                        const temp = s.temperature || s.temp || 20;
                         return {
                             id: spotId,
                             idx: sidx,
                             x: s.x || 50,
                             y: s.y || 50,
-                            temp: s.temperature || 0,
+                            temp: temp,
                             sev: s.severity || 'medium',
                             type: label ? label.type : '',
                             num: label ? label.spot_number : ''
@@ -213,6 +228,13 @@
                     };
                 });
             }
+            
+            // Load attached files from saved state
+            if (SAVED.attached_files) {
+                state.attachedFiles = SAVED.attached_files;
+                renderUploadedFiles();
+            }
+            
             render();
         }
 
@@ -238,6 +260,37 @@
             renderLinks();
         }
 
+        function handleFileUpload(event) {
+            const files = event.target.files;
+            if (files.length === 0) return;
+            
+            Array.from(files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    state.attachedFiles.push({
+                        name: file.name,
+                        size: file.size,
+                        data: e.target.result  // base64 encoded
+                    });
+                    renderUploadedFiles();
+                };
+                reader.readAsDataURL(file);
+            });
+            
+            // Reset file input
+            document.getElementById('fileInput').value = '';
+        }
+
+        function renderUploadedFiles() {
+            const html = state.attachedFiles.map((f, i) => `
+                <div class="file-item">
+                    <span>📎 ${f.name} (${(f.size / 1024).toFixed(1)}KB)</span>
+                    <button class="btn-icon" style="color: var(--color-danger);" onclick="state.attachedFiles.splice(${i},1);renderUploadedFiles()">✕</button>
+                </div>
+            `).join('');
+            document.getElementById('uploadedFiles').innerHTML = html;
+        }
+
         function renderGrid() {
             const html = state.images.map((img, imgIdx) => `
                 <div class="image-panel">
@@ -246,7 +299,7 @@
                         <button class="btn-small" style="font-size:11px" onclick="startAdd(${imgIdx})">+ Add</button>
                     </div>
                     <div class="image-container" id="imgContainer${imgIdx}" data-idx="${imgIdx}">
-                        <img src="${img.url}" alt="${img.name}" onerror="this.parentElement.innerHTML='<div class=img-loading>⚠ Image loading failed. Try original: <a href=\'/download/${BATCH}/${img.name}\' style=\'color:#007bff;\'>\${img.name}</a></div>'">
+                        <img src="${img.url}" alt="${img.name}" onerror="this.parentElement.innerHTML='<div class=img-loading>⚠ Image loading failed. Try original: <a href=\'/download/${BATCH}/${img.name}\' style=\'color:#007bff;\'>${img.name}</a></div>'">
                     </div>
                     <div class="spots-section">
                         ${renderSpots(imgIdx)}
@@ -267,7 +320,7 @@
                         <option value="">Type</option>
                         ${TYPES.map(t => `<option value="${t}" ${s.type===t?'selected':''}>${t}</option>`).join('')}
                     </select>
-                    <input type="number" class="spot-num-input" placeholder="#" min="1" max="99" value="${s.num || ''}" onchange="state.images[${imgIdx}].spots[${sIdx}].num=this.value;updateStats()">
+                    <input type="number" class="spot-num-input" placeholder="#" min="1" max="99" value="${s.num || ''}" onchange="state.images[${imgIdx}].spots[${sIdx}].num=this.value;updateStats()" title="${s.temp.toFixed(1)}°C">
                     <button class="btn-icon" style="font-size:14px" onclick="state.images[${imgIdx}].spots.splice(${sIdx},1);renderGrid()">🗑</button>
                 </div>
             `).join('');
@@ -283,6 +336,7 @@
                     marker.style.left = s.x + 'px';
                     marker.style.top = s.y + 'px';
                     marker.textContent = s.num || (sIdx + 1);
+                    marker.title = `${s.temp.toFixed(1)}°C`;
                     marker.onclick = () => container.parentElement.querySelector('.spot-row').click?.();
                     container.appendChild(marker);
                 });
@@ -364,6 +418,7 @@
                 body: JSON.stringify({ 
                     labeled_spots: spots, 
                     links: state.links.filter(l => l.title && l.url),
+                    attached_files: state.attachedFiles,
                     property_address: document.getElementById('propertyAddress').value,
                     surveyor_name: document.getElementById('surveyorName').value
                 })
