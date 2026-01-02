@@ -225,6 +225,21 @@ class HeatLossReporter:
             'recommendations': recommendations,
             'spot_locations': [(spot.get('image_name', ''), spot.get('location', [])) for spot in spot_group]
         }
+
+        finding = {
+            "spot_number": spot_number,
+            "title": title,
+            "severity": severity,
+            "type": spot_type,
+            "description": " ".join(description_parts),
+            "max_temp": max_temp,
+            "min_temp": min_temp,
+            "avg_temp": avg_temp,
+            'image_count': len(spot_group),
+            'images': [spot.get('image_name', '') for spot in spot_group],
+            'recommendations': recommendations,
+            'spot_locations': [(spot.get('image_name', ''), spot.get('location', [])) for spot in spot_group]
+        }
     
     def generate_executive_summary(self, findings: List[Dict]) -> Dict:
         """
