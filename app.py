@@ -4,6 +4,8 @@ Flask entrypoint for the Thermal Report web tool.
 Canonical routes that match edit_spots.html, index.html, and JS expectations.
 """
 from __future__ import annotations
+from dotenv import load_dotenv
+load_dotenv()  # call this before `import settings`
 
 import json
 import shutil
