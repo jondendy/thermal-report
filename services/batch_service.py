@@ -14,7 +14,6 @@ from werkzeug.utils import secure_filename
 from settings import (
     BASE_UPLOAD_PATH,
     BATCH_SIZE_MAX,
-    THERMAL_SENSITIVITY,
     is_allowed_file,
     ALLOWED_EXTENSIONS,
 )
@@ -50,7 +49,7 @@ def process_batch(
     Process a batch of uploaded thermal images.
     
     - Extract temperature data using SimpleFLIRProcessor
-    - Detect hot spots using ThermalAnalyzer
+    - Detect hot spots using ThermalAnalyzer with HIGH sensitivity
     - Generate labeled images and reports
     - Save results to batch directory
     
@@ -76,7 +75,8 @@ def process_batch(
     upload_dir.mkdir(parents=True, exist_ok=True)
     
     processor = SimpleFLIRProcessor()
-    analyzer = ThermalAnalyzer(sensitivity=THERMAL_SENSITIVITY)
+    # Use HIGH sensitivity to detect more hotspots for operator review
+    analyzer = ThermalAnalyzer(sensitivity='high')
     
     results = {
         'batch_id': batch_id,
