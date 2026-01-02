@@ -154,7 +154,23 @@ class HeatLossReporter:
         Args:
             spot_group: List of hot spot occurrences with same number
             spot_number: The assigned spot number
-            
+        # Assuming spot_group is a list of labeled spots with 'temperature' and 'image_name'
+        temps = [s.get("temperature") for s in spot_group if isinstance(s.get("temperature"), (int, float))]
+        max_temp = max(temps) if temps else None
+        min_temp = min(temps) if temps else None
+        avg_temp = sum(temps) / len(temps) if temps else None
+
+        # Build a human-readable temperature summary
+        if temps:
+            temp_sentence = (
+                f"The recorded temperatures for this point range from "
+                f"{min_temp:.1f}°C to {max_temp:.1f}°C, with an average around {avg_temp:.1f}°C."
+            )
+        else:
+            temp_sentence = "Temperature readings were not available for this point."
+
+        description_parts.append(temp_sentence)    
+        
         Returns:
             Dictionary with finding details
         """
