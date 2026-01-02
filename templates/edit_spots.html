@@ -320,11 +320,25 @@
                         <option value="">Type</option>
                         ${TYPES.map(t => `<option value="${t}" ${s.type===t?'selected':''}>${t}</option>`).join('')}
                     </select>
-                    <input type="number" class="spot-num-input" placeholder="#" min="1" max="99" value="${s.num || ''}" onchange="state.images[${imgIdx}].spots[${sIdx}].num=this.value;updateStats()" title="${s.temp.toFixed(1)}°C">
+                    <div style="display:flex; align-items:center; gap:4px;">
+                        <input
+                            type="number"
+                            class="spot-num-input"
+                            placeholder="#"
+                            min="1"
+                            max="99"
+                            value="${s.num || ''}"
+                            onchange="state.images[${imgIdx}].spots[${sIdx}].num=this.value;updateStats()"
+                        >
+                        <span style="font-size:11px;color:#555;white-space:nowrap;">
+                            ${s.temp.toFixed(1)}°C
+                        </span>
+                    </div>
                     <button class="btn-icon" style="font-size:14px" onclick="state.images[${imgIdx}].spots.splice(${sIdx},1);renderGrid()">🗑</button>
                 </div>
             `).join('');
         }
+
 
         function attachMarkers() {
             state.images.forEach((img, imgIdx) => {
