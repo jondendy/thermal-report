@@ -33,6 +33,9 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 app.config["SECRET_KEY"] = "change-me-in-production"
 
+# Spot types for thermal annotations
+SPOT_TYPES = ["Wall", "Window", "Door", "Roof", "Floor", "Vent", "Other"]
+
 
 def _get_tenant_id() -> str:
     """Get tenant ID from request headers or query params."""
@@ -95,7 +98,7 @@ def editspots(batchid: str) -> str:
             analysis_data=analysis_data,
             existing_labels=existing_labels,
             saved_links=saved_links,
-            spot_types=["Wall", "Window", "Door", "Roof", "Floor", "Other"],
+            spot_types=SPOT_TYPES,
         )
     except FileNotFoundError:
         logger.error(f"Batch {batchid} not found")
