@@ -154,7 +154,25 @@ class HeatLossReporter:
         Args:
             spot_group: List of hot spot occurrences with same number
             spot_number: The assigned spot number
-            
+            # Assuming spot_group is a list of labeled spots with 'temperature' and 'image_name'
+            temps = [s.get("temperature") for s in spot_group 
+                if isinstance(s.get("temperature"), (int, float))]
+                
+            max_temp = max(temps) if temps else None
+            min_temp = min(temps) if temps else None
+            avg_temp = sum(temps) / len(temps) if temps else None
+
+        # Build a human-readable temperature summary
+        if temps:
+            temp_sentence = (
+                f"The recorded temperatures for this point range from "
+                f"{min_temp:.1f}°C to {max_temp:.1f}°C, with an average around {avg_temp:.1f}°C."
+            )
+        else:
+            temp_sentence = "Temperature readings were not available for this point."
+
+        description_parts.append(temp_sentence)    
+        
         Returns:
             Dictionary with finding details
         """
@@ -208,6 +226,21 @@ class HeatLossReporter:
             'images': [spot.get('image_name', '') for spot in spot_group],
             'recommendations': recommendations,
             'spot_locations': [(spot.get('image_name', ''), spot.get('location', [])) for spot in spot_group]
+        }
+
+        finding = {
+            "spot_number": spot_number,
+            "title": title,
+            "severity": severity,
+            "type": spot_type,
+            "description": " ".join(description_parts),
+            "max_temp": max_temp,
+            "min_temp": min_temp,
+            "avg_temp": avg_temp,
+            #'image_count': len(spot_group),
+            #'images': [spot.get('image_name', '') for spot in spot_group],
+            #'recommendations': recommendations,
+            #'spot_locations': [(spot.get('image_name', ''), spot.get('location', [])) for spot in spot_group]
         }
     
     def generate_executive_summary(self, findings: List[Dict]) -> Dict:
