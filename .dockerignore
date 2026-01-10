@@ -1,0 +1,13 @@
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.git
+.gitignore
+.env
+venv/
+.venv/
+processed_thermal/
+reports/
+test_images/
+*.json
