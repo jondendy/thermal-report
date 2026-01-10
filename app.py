@@ -27,6 +27,7 @@ import services.heat_loss_service as heatlossservice
 import services.batch_io as batchio
 from lib.security_utils import validate_tenant_id, safe_batch_path
 from lib.logging_config import setup_logging
+from ingest_drive import register_ingest_routes
 
 # Initialize logger
 logger = setup_logging(level='INFO')
@@ -37,6 +38,9 @@ app.config["SECRET_KEY"] = "change-me-in-production"
 
 # Spot types for thermal annotations
 SPOT_TYPES = ["Wall", "Window", "Door", "Roof", "Floor", "Vent", "Other"]
+
+# Register ingest routes blueprint
+register_ingest_routes(app)
 
 
 def _get_tenant_id() -> str:
