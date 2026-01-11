@@ -1,5 +1,6 @@
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
 
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 
@@ -20,7 +21,6 @@ def download_file(file_id, dest_path):
     service = get_drive_service()
     request = service.files().get_media(fileId=file_id)
     with open(dest_path, "wb") as fh:
-        downloader = googleapiclient.http.MediaIoBaseDownload(fh, request)
+        downloader = MediaIoBaseDownload(fh, request)        done = False
         done = False
-        while not done:
             _, done = downloader.next_chunk()
