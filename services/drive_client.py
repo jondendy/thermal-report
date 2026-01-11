@@ -7,7 +7,8 @@ SCOPES = ["https://www.googleapis.com/auth/drive"]
 
 def get_drive_service():
     creds = service_account.Credentials.from_service_account_file(
-        os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'),        scopes=SCOPES,
+        os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'),
+        scopes=SCOPES,
     )
     return build("drive", "v3", credentials=creds)
 
