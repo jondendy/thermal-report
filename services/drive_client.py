@@ -21,6 +21,6 @@ def download_file(file_id, dest_path):
     service = get_drive_service()
     request = service.files().get_media(fileId=file_id)
     with open(dest_path, "wb") as fh:
-        downloader = MediaIoBaseDownload(fh, request)       # done = False
+        downloader = MediaIoBaseDownload(fh, request)
         done = False
         _, done = downloader.next_chunk()
