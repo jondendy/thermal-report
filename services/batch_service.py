@@ -1,7 +1,7 @@
+from __future__ import annotations
 """Batch service: orchestrates upload, processing, and batch management.
 Separates batch logic from Flask routing.
 """
-from __future__ import annotations
 
 import hashlib
 from datetime import datetime
