@@ -17,7 +17,7 @@ from settings import (
     is_allowed_file,
     ALLOWED_EXTENSIONS,
 )
-from security_utils import safe_batch_path, validate_tenant_id
+from security_utils import safe_batch_path
 import services.batch_io as batchio
 from services.flir_processor_simple import SimpleFLIRProcessor
 from services.thermal_analyzer import ThermalAnalyzer
