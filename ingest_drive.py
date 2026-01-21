@@ -23,7 +23,7 @@ import logging
 import services.drive_client as drive_client
 import services.batch_service as batchservice
 import services.heat_loss_service as heatlossservice
-from lib.security_utils import validate_tenant_id
+from security_utils import validate_tenant_id
 
 logger = logging.getLogger(__name__)
 
