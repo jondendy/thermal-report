@@ -24,6 +24,7 @@ import services.drive_client as drive_client
 import services.batch_service as batchservice
 import services.heat_loss_service as heatlossservice
 from security_utils import validate_tenant_id
+from lib import folder_parser
 
 logger = logging.getLogger(__name__)
 
@@ -54,9 +55,19 @@ def process_drive_folder():
         
         # Get tenant ID
 
-        # Check folder name - skip if it starts with underscore
-        try:
-            folder_metadata = drive_client.get_folder_metadata(folder_id)
+        # Parse folder name to extract survey information
+        survey_info = folder_parser.parse_folder_name(folder_name)
+        
+        # Extract tenant_id from folder name (owner initials)
+        if survey_info:
+            tenant_id = survey_info.owner_initials
+            logger.info(f"Extracted tenant_id '{tenant_id}' from folder name '{folder_name}'")
+            logger.info(f"Survey details: Address={survey_info.address}, Ref={survey_info.reference_number}, Surveyors={survey_info.surveyor1_initials}/{survey_info.surveyor2_initials}")
+        else:
+            # Fallback to request parameter if folder name doesn't match expected format
+            tenant_id = request.args.get('tenant') or request.headers.get('X-Tenant-ID')
+            tenant_id = validate_tenant_id(tenant_id)
+            logger.warning(f"Could not parse folder name '{folder_name}', using tenant from request: {tenant_id}")            folder_metadata = drive_client.get_folder_metadata(folder_id)
             folder_name = folder_metadata.get('name', '')
 
             if folder_name.startswith('_'):
