@@ -53,6 +53,22 @@ def process_drive_folder():
             }), 400
         
         # Get tenant ID
+
+        # Check folder name - skip if it starts with underscore
+        try:
+            folder_metadata = drive_client.get_folder_metadata(folder_id)
+            folder_name = folder_metadata.get('name', '')
+
+            if folder_name.startswith('_'):
+                logger.info(f"Skipping already processed folder: {folder_name}")
+                return jsonify({
+                    'message': 'Folder already processed',
+                    'folder_name': folder_name,
+                    'folder_id': folder_id
+                }), 200
+        except Exception as e:
+            logger.warning(f"Could not get folder metadata: {e}")
+            # Continue processing if we can't get metadata
         tenant_id = request.args.get('tenant') or request.headers.get('X-Tenant-ID')
         tenant_id = validate_tenant_id(tenant_id)
         
@@ -140,6 +156,24 @@ def process_drive_folder():
                     # Read the file content into memory
                     file_obj.stream = open(file_path, 'rb')
                     file_objects.append(file_obj)
+
+        # 7. Generate PDF report and upload to Drive
+        try:
+            # Generate PDF report
+            pdf_path = heatlossservice.generate_pdf_report(batch_id, tenant_id)
+
+            if pdf_path:
+                # Upload PDF to the Drive folder
+                drive_client.upload_file_to_folder(pdf_path, folder_id)
+                logger.info(f"Uploaded PDF report to Drive folder {folder_id}")
+
+                # Rename folder with underscore prefix to mark as processed
+                new_folder_name = f"_{folder_name}"
+                drive_client.rename_folder(folder_id, new_folder_name)
+                logger.info(f"Renamed folder to {new_folder_name}")
+        except Exception as e:
+            logger.error(f"Failed to upload PDF or rename folder: {e}")
+            # Continue even if PDF upload fails
             
             # 6. Process batch using existing service
             logger.info(f"Processing batch {batch_id} with {len(file_objects)} files")

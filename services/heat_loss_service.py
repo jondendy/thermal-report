@@ -111,6 +111,46 @@ def generate_report(
         "organisation": {
             "name": ORG_NAME,
             "website": ORG_WEBSITE,
+
+def generate_pdf_report(batch_id: str, tenant_id: str | None = None) -> str | None:
+    """
+    Generate PDF report from HTML heat loss report.
+    
+    Returns:
+        Path to generated PDF file, or None if generation failed
+    """
+    import logging
+    import subprocess
+    from pathlib import Path
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        # Get the HTML report data
+        report_data = get_report(batch_id, tenant_id)
+
+        if not report_data:
+            logger.error(f"No report data found for batch {batch_id}")
+            return None
+
+        # Create output path for PDF
+        pdf_filename = f"thermal_report_{batch_id}.pdf"
+        pdf_path = Path("/tmp") / pdf_filename
+
+        # Generate PDF using HeatLossReporter
+        reporter = HeatLossReporter()
+        pdf_bytes = reporter.generate_pdf(report_data)
+
+        # Save PDF to file
+        with open(pdf_path, 'wb') as f:
+            f.write(pdf_bytes)
+
+        logger.info(f"Generated PDF report at {pdf_path}")
+        return str(pdf_path)
+
+    except Exception as e:
+        logger.error(f"Failed to generate PDF report: {e}")
+        return None
             "contact": ORG_CONTACT,
         },
         "recommendations_document_url": recommendations_url,
