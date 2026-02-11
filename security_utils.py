@@ -46,3 +46,24 @@ def validate_tenant_id(tenant_id: str | None) -> bool:
     # Only allow safe characters: a-z, A-Z, 0-9, _, -
     return bool(re.match(r'^[a-zA-Z0-9_-]+$', tenant_id))
 
+def safe_upload_path(upload_dir: str, filename: str) -> Path:
+    """Safely construct upload path with validation"""
+    if not filename or '..' in filename or filename.startswith('/'):
+        raise ValueError(f"Invalid filename: {filename}")
+    
+    # Simple sanitization
+    clean_filename = re.sub(r'[^a-zA-Z0-9_.-]', '', filename)
+    if not clean_filename:
+        raise ValueError("Filename became empty after sanitization")
+        
+    upload_base = Path(upload_dir).resolve()
+    file_path = upload_base / clean_filename
+    
+    try:
+        resolved_path = file_path.resolve()
+        if not str(resolved_path).startswith(str(upload_base)):
+            raise ValueError("Invalid upload path: traversal attempt")
+    except (OSError, RuntimeError):
+        raise ValueError("Invalid upload path")
+        
+    return file_path
