@@ -67,7 +67,8 @@ def process_drive_folder():
             # Fallback to request parameter if folder name doesn't match expected format
             tenant_id = request.args.get('tenant') or request.headers.get('X-Tenant-ID')
             tenant_id = validate_tenant_id(tenant_id)
-            logger.warning(f"Could not parse folder name '{folder_name}', using tenant from request: {tenant_id}")            folder_metadata = drive_client.get_folder_metadata(folder_id)
+            logger.warning(f"Could not parse folder name '{folder_name}', using tenant from request: {tenant_id}")
+            folder_metadata = drive_client.get_folder_metadata(folder_id)
             folder_name = folder_metadata.get('name', '')
 
             if folder_name.startswith('_'):
