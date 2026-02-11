@@ -32,3 +32,17 @@ def safe_batch_path(reports_dir: str, batch_id: str) -> Path:
         raise ValueError("Invalid batch path")
     
     return batch_path
+
+
+def validate_tenant_id(tenant_id: str | None) -> bool:
+    """
+    Validate tenant_id to prevent injection/traversal.
+    Allows None (no tenant), alphanumeric, underscores, and hyphens.
+    """
+    if tenant_id is None:
+        return True
+    if len(tenant_id) > 50:
+        return False
+    # Only allow safe characters: a-z, A-Z, 0-9, _, -
+    return bool(re.match(r'^[a-zA-Z0-9_-]+$', tenant_id))
+
