@@ -1,4 +1,5 @@
-"""Heat loss service.
+"""
+Heat loss service.
 
 Connects stored thermal analysis and operator hotspot labels with the
 HeatLossReporter to generate homeowner-friendly HTML reports.
@@ -111,6 +112,15 @@ def generate_report(
         "organisation": {
             "name": ORG_NAME,
             "website": ORG_WEBSITE,
+            "contact": ORG_CONTACT,
+        },
+        "recommendations_document_url": recommendations_url,
+        "doc_mode": doc_mode,
+    }
+
+    batchio.save_heatloss_report(batch_id, report_data, tenant_id)
+    return report_data
+
 
 def generate_pdf_report(batch_id: str, tenant_id: str | None = None) -> str | None:
     """
@@ -120,7 +130,7 @@ def generate_pdf_report(batch_id: str, tenant_id: str | None = None) -> str | No
         Path to generated PDF file, or None if generation failed
     """
     import logging
-    import subprocess
+    # import subprocess  <-- Optional, can be removed if not used
     from pathlib import Path
 
     logger = logging.getLogger(__name__)
@@ -151,14 +161,6 @@ def generate_pdf_report(batch_id: str, tenant_id: str | None = None) -> str | No
     except Exception as e:
         logger.error(f"Failed to generate PDF report: {e}")
         return None
-            "contact": ORG_CONTACT,
-        },
-        "recommendations_document_url": recommendations_url,
-        "doc_mode": doc_mode,
-    }
-
-    batchio.save_heatloss_report(batch_id, report_data, tenant_id)
-    return report_data
 
 
 def get_report(batch_id: str, tenant_id: str | None = None) -> Dict[str, Any]:
