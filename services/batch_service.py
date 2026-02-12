@@ -4,6 +4,7 @@ Separates batch logic from Flask routing.
 """
 
 import hashlib
+import settings
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Dict, Any, Tuple, List
