@@ -1,15 +1,6 @@
 #!/usr/bin/env python3
 """
 Drive folder ingestion route for thermal-report.
-
-This module adds a /process_drive_folder route that:
-1. Accepts a Google Drive folder_id parameter
-2. Downloads images from the Drive folder to /tmp/<batch-id>
-3. Processes them using existing batch processing logic
-4. Returns a link to the generated report
-
-Usage:
-  GET/POST /process_drive_folder?folder_id=YOUR_FOLDER_ID
 """
 
 from flask import Blueprint, request, jsonify, url_for
@@ -19,6 +10,7 @@ import tempfile
 import shutil
 from datetime import datetime
 import logging
+from werkzeug.datastructures import FileStorage
 
 import services.drive_client as drive_client
 import services.batch_service as batchservice
@@ -39,200 +31,125 @@ def process_drive_folder():
     Returns:
         JSON with batch_id, status, and report_url
     """
+    temp_batch_dir = None
+    pdf_path = None
+    
     try:
-        # Get folder_id from query params
+        # --- 1. Validation & Metadata ---
         folder_id = request.args.get('folder_id')
         if not folder_id:
-            return jsonify({
-                'error': 'Missing folder_id parameter',
-                'usage': '/process_drive_folder?folder_id=YOUR_FOLDER_ID'
-            }), 400
+            return jsonify({'error': 'Missing folder_id parameter'}), 400
 
-        # 1. First, get the folder name from Drive
+        # Get folder name first
         try:
             folder_metadata = drive_client.get_folder_metadata(folder_id)
             folder_name = folder_metadata.get('name', '')
             logger.info(f"Processing folder: {folder_name} (ID: {folder_id})")
 
             if folder_name.startswith('_'):
-                logger.info(f"Skipping already processed folder: {folder_name}")
                 return jsonify({
                     'message': 'Folder already processed',
                     'folder_name': folder_name,
                     'folder_id': folder_id
                 }), 200
         except Exception as e:
-            logger.error(f"Failed to get metadata for folder {folder_id}: {e}")
-            return jsonify({'error': 'Failed to access Drive folder', 'details': str(e)}), 500
+            logger.error(f"Failed to get metadata: {e}")
+            return jsonify({'error': 'Failed to access Drive folder'}), 500
 
-        # 2. Parse folder name to extract survey information
+        # Parse survey info
         survey_info = folder_parser.parse_folder_name(folder_name)
-        
-        # Extract tenant_id from folder name (owner initials)
         if survey_info:
             tenant_id = survey_info.owner_initials
-            logger.info(f"Extracted tenant_id '{tenant_id}' from folder name '{folder_name}'")
-            logger.info(f"Survey details: Address={survey_info.address}, Ref={survey_info.reference_number}")
         else:
-            # Fallback to request parameter if folder name doesn't match expected format
             tenant_id = request.args.get('tenant') or request.headers.get('X-Tenant-ID')
             tenant_id = validate_tenant_id(tenant_id)
-            logger.warning(f"Could not parse folder name '{folder_name}', using tenant from request: {tenant_id}")
+            logger.warning(f"Using fallback tenant_id: {tenant_id}")
 
-        # 1. List files in the Drive folder
+        # --- 2. List & Filter Files ---
         try:
             files = drive_client.list_files_in_folder(folder_id)
         except Exception as e:
-            logger.error(f"Failed to list files from Drive folder {folder_id}: {e}")
-            return jsonify({
-                'error': 'Failed to access Drive folder',
-                'details': str(e),
-                'hint': 'Ensure the folder is shared with your service account'
-            }), 403
-        
-        if not files:
-            return jsonify({
-                'error': 'No files found in folder',
-                'folder_id': folder_id
-            }), 404
-        
-        # Filter for image files only
+            return jsonify({'error': f'Failed to list files: {str(e)}'}), 403
+
         image_extensions = {'.jpg', '.jpeg', '.png', '.tif', '.tiff'}
-        image_files = [
-            f for f in files 
-            if any(f['name'].lower().endswith(ext) for ext in image_extensions)
-        ]
+        image_files = [f for f in files if any(f['name'].lower().endswith(ext) for ext in image_extensions)]
         
         if not image_files:
-            return jsonify({
-                'error': 'No image files found in folder',
-                'folder_id': folder_id,
-                'total_files': len(files)
-            }), 404
+            return jsonify({'error': 'No image files found in folder'}), 404
         
-        # Sort files by name (assumption: first is thermal, second is visible)
         image_files.sort(key=lambda x: x['name'])
-        
-        logger.info(f"Found {len(image_files)} images in Drive folder")
-        
-        # 2. Generate batch ID based on current timestamp
+
+        # --- 3. Setup Batch & Download ---
         batch_id = f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        
-        # 3. Create temporary directory for this batch
         temp_batch_dir = Path(tempfile.gettempdir()) / batch_id
         temp_batch_dir.mkdir(parents=True, exist_ok=True)
         
+        downloaded_files = []
+        for file_info in image_files:
+            dest_path = temp_batch_dir / file_info['name']
+            try:
+                drive_client.download_file(file_info['id'], str(dest_path))
+                downloaded_files.append(dest_path)
+            except Exception as e:
+                logger.error(f"Failed to download {file_info['name']}: {e}")
+
+        if not downloaded_files:
+            return jsonify({'error': 'Failed to download any files'}), 500
+
+        # --- 4. Process Batch ---
+        # Create mock FileStorage objects for the existing batch service
+        file_objects = []
         try:
-            # 4. Download images from Drive to temp directory
-            logger.info(f"Downloading {len(image_files)} images to {temp_batch_dir}")
-            downloaded_files = []
-            
-            for file_info in image_files:
-                file_id = file_info['id']
-                file_name = file_info['name']
-                dest_path = temp_batch_dir / file_name
-                
-                try:
-                    drive_client.download_file(file_id, str(dest_path))
-                    downloaded_files.append(dest_path)
-                    logger.debug(f"Downloaded: {file_name}")
-                except Exception as e:
-                    logger.error(f"Failed to download {file_name}: {e}")
-                    # Continue with other files
-            
-            if not downloaded_files:
-                raise Exception("Failed to download any files")
-            
-            logger.info(f"Successfully downloaded {len(downloaded_files)} files")
-            
-            # 5. Convert Path objects to file-like objects for batch processing
-            # The existing batch processing expects werkzeug FileStorage objects
-            # We'll create a workaround by creating mock FileStorage objects
-            from werkzeug.datastructures import FileStorage
-            
-            file_objects = []
             for file_path in downloaded_files:
-                with open(file_path, 'rb') as f:
-                    file_obj = FileStorage(
-                        stream=f,
-                        filename=file_path.name,
-                        content_type='image/jpeg'
-                    )
-                    # Read the file content into memory
-                    file_obj.stream = open(file_path, 'rb')
-                    file_objects.append(file_obj)
+                f = open(file_path, 'rb')
+                file_obj = FileStorage(stream=f, filename=file_path.name, content_type='image/jpeg')
+                file_objects.append(file_obj)
 
-        except Exception as e:
-            logger.error(f"Failed to process files from Drive: {e}")
-            return jsonify({'error': str(e)}), 500
+            logger.info(f"Processing batch {batch_id} with {len(file_objects)} files")
+            results = batchservice.process_batch(batch_id, file_objects, tenant_id)
+        finally:
+            # Close file handles immediately after processing
+            for f in file_objects:
+                f.stream.close()
 
-        # 7. Generate PDF report and upload to Drive
+        # --- 5. Generate PDF & Upload ---
         try:
-            # Generate PDF report
             pdf_path = heatlossservice.generate_pdf_report(batch_id, tenant_id)
-
             if pdf_path:
-                # Upload PDF to the Drive folder
                 drive_client.upload_file_to_folder(pdf_path, folder_id)
-                logger.info(f"Uploaded PDF report to Drive folder {folder_id}")
-
-                # Rename folder with underscore prefix to mark as processed
                 new_folder_name = f"_{folder_name}"
                 drive_client.rename_folder(folder_id, new_folder_name)
                 logger.info(f"Renamed folder to {new_folder_name}")
         except Exception as e:
-            logger.error(f"Failed to upload PDF or rename folder: {e}")
-            # Continue even if PDF upload fails
-            
-            # 6. Process batch using existing service
-            logger.info(f"Processing batch {batch_id} with {len(file_objects)} files")
-            results = batchservice.process_batch(batch_id, file_objects, tenant_id)
-            
-            # Close file streams
-            for f in file_objects:
-                if hasattr(f.stream, 'close'):
-                    f.stream.close()
-            
-            summary = results.get('summary', {})
-            
-            # 7. Return success response with links
-            return jsonify({
-                'success': True,
-                'batch_id': batch_id,
-                'folder_id': folder_id,
-                'files_processed': len(downloaded_files),
-                'summary': summary,
-                'next_steps': {
-                    'edit_spots': url_for('editspots', batchid=batch_id, _external=True),
-                    'api_analysis': url_for('api_thermal_analysis', batch_id=batch_id, _external=True)
-                },
-                'message': 'Batch processed successfully. Visit edit_spots to label hotspots and generate report.'
-            })
-            
-        finally:
-            # Clean up temporary directory
-            try:
-                if temp_batch_dir.exists():
-                    shutil.rmtree(temp_batch_dir)
-                    logger.debug(f"Cleaned up temp directory: {temp_batch_dir}")
-            except Exception as e:
-                logger.warning(f"Failed to clean up temp directory {temp_batch_dir}: {e}")
-    
-    except Exception as e:
-        logger.exception(f"Error processing Drive folder: {str(e)}")
+            logger.error(f"PDF/Upload failed: {e}")
+            # We don't return error here, because the batch processing succeeded
+
+        # --- 6. Success Response ---
         return jsonify({
-            'error': 'Failed to process Drive folder',
-            'details': str(e)
-        }), 500
+            'status': 'success',
+            'message': 'Report generated and uploaded successfully',
+            'batch_id': batch_id,
+            'folder_id': folder_id,
+            'report_url': pdf_path if pdf_path else None,
+            'next_steps': {
+                'edit_spots': url_for('editspots', batchid=batch_id, _external=True)
+            }
+        }), 200
+
+    except Exception as e:
+        logger.exception(f"Unexpected error: {e}")
+        return jsonify({'error': str(e)}), 500
+        
+    finally:
+        # Cleanup temp dir
+        if temp_batch_dir and temp_batch_dir.exists():
+            try:
+                shutil.rmtree(temp_batch_dir)
+            except Exception as e:
+                logger.warning(f"Failed to cleanup temp dir: {e}")
 
 
 def register_ingest_routes(app):
-    """
-    Register the ingest blueprint with the Flask app.
-    
-    Usage in app.py:
-        from ingest_drive import register_ingest_routes
-        register_ingest_routes(app)
-    """
+    """Register the ingest blueprint with the Flask app."""
     app.register_blueprint(ingest_bp)
     logger.info("Ingest routes registered")
