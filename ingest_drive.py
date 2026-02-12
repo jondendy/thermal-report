@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 ingest_bp = Blueprint('ingest', __name__)
 
 
-@drive_bp.route('/process_drive_folder', methods=['POST'])
+@ingest_bp.route('/process_drive_folder', methods=['POST'])
 def process_drive_folder():
     """
     Trigger processing for a specific Drive folder ID.
