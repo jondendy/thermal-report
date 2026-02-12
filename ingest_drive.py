@@ -68,19 +68,21 @@ def process_drive_folder():
             tenant_id = request.args.get('tenant') or request.headers.get('X-Tenant-ID')
             tenant_id = validate_tenant_id(tenant_id)
             logger.warning(f"Could not parse folder name '{folder_name}', using tenant from request: {tenant_id}")
-            folder_metadata = drive_client.get_folder_metadata(folder_id)
-            folder_name = folder_metadata.get('name', '')
+            
+            try:
+                folder_metadata = drive_client.get_folder_metadata(folder_id)
+                folder_name = folder_metadata.get('name', '')
 
-            if folder_name.startswith('_'):
-                logger.info(f"Skipping already processed folder: {folder_name}")
-                return jsonify({
-                    'message': 'Folder already processed',
-                    'folder_name': folder_name,
-                    'folder_id': folder_id
-                }), 200
-        except Exception as e:
-            logger.warning(f"Could not get folder metadata: {e}")
-            # Continue processing if we can't get metadata
+                if folder_name.startswith('_'):
+                    logger.info(f"Skipping already processed folder: {folder_name}")
+                    return jsonify({
+                        'message': 'Folder already processed',
+                        'folder_name': folder_name,
+                        'folder_id': folder_id
+                    }), 200
+            except Exception as e:
+                logger.warning(f"Could not get folder metadata: {e}")
+                # Continue processing if we can't get metadata
         tenant_id = request.args.get('tenant') or request.headers.get('X-Tenant-ID')
         tenant_id = validate_tenant_id(tenant_id)
         
