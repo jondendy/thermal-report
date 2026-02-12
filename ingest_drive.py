@@ -171,11 +171,11 @@ def process_drive_folder():
                     file_obj.stream = open(file_path, 'rb')
                     file_objects.append(file_obj)
 
-        # 7. Generate PDF report and upload to Drive
-            except Exception as e:
-        logger.error(f"Failed to process files from Drive: {e}")
-        return jsonify({'error': str(e)}), 500
+        except Exception as e:
+            logger.error(f"Failed to process files from Drive: {e}")
+            return jsonify({'error': str(e)}), 500
 
+        # 7. Generate PDF report and upload to Drive
         try:
             # Generate PDF report
             pdf_path = heatlossservice.generate_pdf_report(batch_id, tenant_id)
