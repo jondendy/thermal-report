@@ -66,8 +66,23 @@ def process_batch(
     Raises:
         ValueError: If batch_id or tenant_id invalid
     """
+from settings import BASE_UPLOAD_PATH, BASE_REPORT_DIR  # near top if not present
+from security_utils import validate_tenant_id, safe_batch_path
+
+def process_batch(batch_id, files, tenant_id=None):
+    # 1. Normalise tenant_id
+    tenant_id = tenant_id or "NK"  # <- default when None/empty
+
+    # 2. Validate tenant_id
     if not validate_tenant_id(tenant_id):
         raise ValueError(f"Invalid tenant_id: {tenant_id}")
+
+    # 3. Build upload path (per‑tenant folder)
+    upload_dir = BASE_UPLOAD_PATH / tenant_id / batch_id
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    # 4. Build report batch path
+    batch_dir = safe_batch_path(BASE_REPORT_DIR, batch_id, tenant_id)
     
     # Create batch directory
     # Ensure settings.REPORTS_DIR is imported/available
