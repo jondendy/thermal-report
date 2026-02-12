@@ -18,6 +18,9 @@ FLASK_DEBUG = os.getenv("FLASK_DEBUG", "false").lower() == "true"
 # ---------------------------------------------------------------------------
 # Paths and storage
 # ---------------------------------------------------------------------------
+REPORTS_DIR = os.getenv('REPORTS_DIR', 'reports')
+# or if you use UPLOAD_FOLDER as the base:
+# REPORTS_DIR = UPLOAD_FOLDER
 
 # Base directories for uploads and reports
 BASE_UPLOAD_DIR = os.getenv("UPLOAD_FOLDER", ".Images")
