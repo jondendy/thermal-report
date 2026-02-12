@@ -65,7 +65,8 @@ def process_batch(
     Raises:
         ValueError: If batch_id or tenant_id invalid
     """
-    tenant_id = validate_tenant_id(tenant_id)
+    if not validate_tenant_id(tenant_id):
+        raise ValueError(f"Invalid tenant_id: {tenant_id}")
     
     # Create batch directory
     batch_dir = safe_batch_path(batch_id, tenant_id)
