@@ -71,7 +71,7 @@ def process_batch(
     
     # Create batch directory
     # Ensure settings.REPORTS_DIR is imported/available
-    batch_dir = safe_batch_path(settings.REPORTS_DIR, batch_id, tenant_id)
+    batch_dir = safe_batch_path(settings.BASE_REPORT_DIR, batch_id, tenant_id)
     batch_dir.mkdir(parents=True, exist_ok=True)
     
     # Create upload directory
