@@ -32,17 +32,12 @@ logger = logging.getLogger(__name__)
 ingest_bp = Blueprint('ingest', __name__)
 
 
-@ingest_bp.route('/process_drive_folder', methods=['GET', 'POST'])
+@drive_bp.route('/process_drive_folder', methods=['POST'])
 def process_drive_folder():
     """
-    Process images from a Google Drive folder.
-    
-    Query parameters:
-      - folder_id: Google Drive folder ID (required)
-      - tenant: Tenant ID (optional, for multi-tenancy)
-    
+    Trigger processing for a specific Drive folder ID.
     Returns:
-      JSON with batch_id, status, and report_url
+        JSON with batch_id, status, and report_url
     """
     try:
         # Get folder_id from query params
@@ -52,42 +47,38 @@ def process_drive_folder():
                 'error': 'Missing folder_id parameter',
                 'usage': '/process_drive_folder?folder_id=YOUR_FOLDER_ID'
             }), 400
-        
-        # Get tenant ID
 
-        # Parse folder name to extract survey information
+        # 1. First, get the folder name from Drive
+        try:
+            folder_metadata = drive_client.get_folder_metadata(folder_id)
+            folder_name = folder_metadata.get('name', '')
+            logger.info(f"Processing folder: {folder_name} (ID: {folder_id})")
+
+            if folder_name.startswith('_'):
+                logger.info(f"Skipping already processed folder: {folder_name}")
+                return jsonify({
+                    'message': 'Folder already processed',
+                    'folder_name': folder_name,
+                    'folder_id': folder_id
+                }), 200
+        except Exception as e:
+            logger.error(f"Failed to get metadata for folder {folder_id}: {e}")
+            return jsonify({'error': 'Failed to access Drive folder', 'details': str(e)}), 500
+
+        # 2. Parse folder name to extract survey information
         survey_info = folder_parser.parse_folder_name(folder_name)
         
         # Extract tenant_id from folder name (owner initials)
         if survey_info:
             tenant_id = survey_info.owner_initials
             logger.info(f"Extracted tenant_id '{tenant_id}' from folder name '{folder_name}'")
-            logger.info(f"Survey details: Address={survey_info.address}, Ref={survey_info.reference_number}, Surveyors={survey_info.surveyor1_initials}/{survey_info.surveyor2_initials}")
+            logger.info(f"Survey details: Address={survey_info.address}, Ref={survey_info.reference_number}")
         else:
             # Fallback to request parameter if folder name doesn't match expected format
             tenant_id = request.args.get('tenant') or request.headers.get('X-Tenant-ID')
             tenant_id = validate_tenant_id(tenant_id)
             logger.warning(f"Could not parse folder name '{folder_name}', using tenant from request: {tenant_id}")
-            
-            try:
-                folder_metadata = drive_client.get_folder_metadata(folder_id)
-                folder_name = folder_metadata.get('name', '')
 
-                if folder_name.startswith('_'):
-                    logger.info(f"Skipping already processed folder: {folder_name}")
-                    return jsonify({
-                        'message': 'Folder already processed',
-                        'folder_name': folder_name,
-                        'folder_id': folder_id
-                    }), 200
-            except Exception as e:
-                logger.warning(f"Could not get folder metadata: {e}")
-                # Continue processing if we can't get metadata
-        tenant_id = request.args.get('tenant') or request.headers.get('X-Tenant-ID')
-        tenant_id = validate_tenant_id(tenant_id)
-        
-        logger.info(f"Processing Drive folder: {folder_id}")
-        
         # 1. List files in the Drive folder
         try:
             files = drive_client.list_files_in_folder(folder_id)
