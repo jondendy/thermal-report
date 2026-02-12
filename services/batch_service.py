@@ -69,7 +69,8 @@ def process_batch(
         raise ValueError(f"Invalid tenant_id: {tenant_id}")
     
     # Create batch directory
-    batch_dir = safe_batch_path(batch_id, tenant_id)
+    # Ensure settings.REPORTS_DIR is imported/available
+    batch_dir = safe_batch_path(settings.REPORTS_DIR, batch_id, tenant_id)
     batch_dir.mkdir(parents=True, exist_ok=True)
     
     # Create upload directory
