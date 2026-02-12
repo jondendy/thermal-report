@@ -62,8 +62,12 @@ def process_drive_folder():
             tenant_id = survey_info.owner_initials
         else:
             tenant_id = request.args.get('tenant') or request.headers.get('X-Tenant-ID')
-            tenant_id = validate_tenant_id(tenant_id)
+            # Check validation but DO NOT overwrite the variable
+            if tenant_id and not validate_tenant_id(tenant_id):
+                logger.warning(f"Invalid fallback tenant_id: {tenant_id}")
+                tenant_id = None
             logger.warning(f"Using fallback tenant_id: {tenant_id}")
+
 
         # --- 2. List & Filter Files ---
         try:
