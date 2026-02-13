@@ -42,6 +42,9 @@ def get_batch_id(files: Iterable[FileStorage]) -> str:
     return f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hash_str}"
 
 
+from settings import BASE_UPLOAD_PATH, BASE_REPORT_DIR
+from security_utils import validate_tenant_id, safe_batch_path
+
 def process_batch(
     batch_id: str,
     image_files: Iterable[FileStorage],
@@ -66,10 +69,6 @@ def process_batch(
     Raises:
         ValueError: If batch_id or tenant_id invalid
     """
-from settings import BASE_UPLOAD_PATH, BASE_REPORT_DIR  # near top if not present
-from security_utils import validate_tenant_id, safe_batch_path
-
-def process_batch(batch_id, files, tenant_id=None):
     # 1. Normalise tenant_id
     tenant_id = tenant_id or "NK"  # <- default when None/empty
 
@@ -83,15 +82,7 @@ def process_batch(batch_id, files, tenant_id=None):
 
     # 4. Build report batch path
     batch_dir = safe_batch_path(BASE_REPORT_DIR, batch_id, tenant_id)
-    
-    # Create batch directory
-    # Ensure settings.REPORTS_DIR is imported/available
-    batch_dir = safe_batch_path(settings.BASE_REPORT_DIR, batch_id, tenant_id)
     batch_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Create upload directory
-    upload_dir = BASE_UPLOAD_PATH / tenant_id / batch_id
-    upload_dir.mkdir(parents=True, exist_ok=True)
     
     processor = SimpleFLIRProcessor()
     # Use HIGH sensitivity to detect more hotspots for operator review
@@ -190,34 +181,11 @@ def process_batch(batch_id, files, tenant_id=None):
     
     # Calculate batch summary
     if all_temps:
-        temps = [t['mean'] for t in all_temps]
         results['summary'] = {
-            'total_images': len(all_temps),
-            'successful_images': len(all_temps),
-            'avg_temperature': sum(temps) / len(temps),
-            'min_temperature': min([t['min'] for t in all_temps]),
-            'max_temperature': max([t['max'] for t in all_temps])
+            'total_images': len(saved_images),
+            'successful': len(all_temps),
+            'failed': len(saved_images) - len(all_temps)
         }
-    
-    # Save results
-    batchio.save_batch_results(batch_id, results, tenant_id=tenant_id)
-    
-    # Save thermal analysis for UI (frontend expects this exact structure)
-    thermal_analysis = {
-        'batch_id': batch_id,
-        'tenant_id': tenant_id,
-        'timestamp': datetime.now().isoformat(),
-        'images': [
-            {
-                'filename': img['filename'],
-                'hot_spots': img.get('hot_spots', []),
-                'labeled_image': img.get('labeled_image', ''),
-            }
-            for img in results['images']
-            if 'error' not in img  # Only include successful images
-        ]
-    }
-    batchio.save_thermal_analysis(batch_id, thermal_analysis, tenant_id=tenant_id)
     
     return results
 
