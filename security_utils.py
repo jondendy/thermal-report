@@ -7,17 +7,32 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-def validate_tenant_id(tenant_id: str | None) -> bool:
+def validate_tenant_id(tenant_id: str | None) -> str:
     """
-    Validate tenant_id to prevent injection/traversal.
-    Allows None (no tenant), alphanumeric, underscores, and hyphens.
+    Validate and normalize tenant_id.
+    
+    Args:
+        tenant_id: Tenant identifier to validate
+        
+    Returns:
+        Validated tenant_id string (defaults to 'NK' if None)
+        
+    Raises:
+        ValueError: If tenant_id is invalid
     """
-    if tenant_id is None:
-        return True
+    # Normalize None to default tenant
+    if not tenant_id:
+        return "NK"  # Default tenant
+    
+    # Validate length
     if len(tenant_id) > 50:
-        return False
-    # Only allow safe characters: a-z, A-Z, 0-9, _, -
-    return bool(re.match(r'^[a-zA-Z0-9_-]+$', tenant_id))
+        raise ValueError(f"Tenant ID too long: {tenant_id}")
+    
+    # Validate format (alphanumeric + underscore only)
+    if not re.match(r'^[a-zA-Z0-9_]+$', tenant_id):
+        raise ValueError(f"Invalid tenant_id format: {tenant_id}")
+    
+    return tenant_id
 
 def validate_batch_id(batch_id: str) -> bool:
     """Validate batch_id to prevent path traversal attacks"""
