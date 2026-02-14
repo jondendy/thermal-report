@@ -116,16 +116,15 @@ def process_drive_folder():
                 f.stream.close()
 
         # --- 5. Generate PDF & Upload ---
+        # PDF generation moved to after user edits hot spots
+        # Just rename folder to mark as processed
         try:
-            pdf_path = heatlossservice.generate_pdf_report(batch_id, tenant_id)
-            if pdf_path:
-                drive_client.upload_file_to_folder(pdf_path, folder_id)
-                new_folder_name = f"_{folder_name}"
-                drive_client.rename_folder(folder_id, new_folder_name)
-                logger.info(f"Renamed folder to {new_folder_name}")
+            new_folder_name = f"_{folder_name}"
+            drive_client.rename_folder(folder_id, new_folder_name)
+            logger.info(f"Renamed folder to {new_folder_name}")
         except Exception as e:
-            logger.error(f"PDF/Upload failed: {e}")
-            # We don't return error here, because the batch processing succeeded
+            logger.error(f"Rename failed: {e}")
+        # We don't return error here, because the batch processing succeeded
 
         # --- 6. Success Response ---
         return jsonify({
