@@ -50,6 +50,7 @@ def safe_batch_path(reports_dir: str, batch_id: str, tenant_id: str | None = Non
         logger.warning(f"Invalid batch_id attempted: {batch_id}")
         raise ValueError(f"Invalid batch_id: {batch_id}")
 
+    reports_base = Path(reports_dir).resolve() 
     batch_path = reports_base / batch_id
     
     try:
