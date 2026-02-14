@@ -186,7 +186,11 @@ def process_batch(
             'successful': len(all_temps),
             'failed': len(saved_images) - len(all_temps)
         }
-    
+
+    # ⭐ ADD THIS: Save the report data for PDF generation
+    from services.batch_io import save_heatloss_report
+    save_heatloss_report(batch_id, results, tenant_id)
+
     return results
 
 
