@@ -116,12 +116,12 @@ def process_drive_folder():
                 f.stream.close()
 
         # --- 5. Generate PDF & Upload ---
-        # PDF generation moved to after user edits hot spots
-        # Just rename folder to mark as processed
+        # Don't generate PDF yet - user needs to edit hotspots first
+        # PDF will be generated when user clicks "Generate Report" after editing
         try:
             new_folder_name = f"_{folder_name}"
             drive_client.rename_folder(folder_id, new_folder_name)
-            logger.info(f"Renamed folder to {new_folder_name}")
+            logger.info(f"Renamed folder to {new_folder_name}. User can now edit hotspots and generate final PDF.")
         except Exception as e:
             logger.error(f"Rename failed: {e}")
         # We don't return error here, because the batch processing succeeded
