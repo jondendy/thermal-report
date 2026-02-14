@@ -57,9 +57,9 @@ def safe_batch_path(reports_dir: str, batch_id: str, tenant_id: str | None = Non
     # The path construction remains standard to ensure app compatibility.
     # Use tenant-based directory structure
     if tenant_id:
-        batch_path = reports_base / tenant_id / batch_id
+        batch_path = reports_base / batch_id
     else:
-        batch_path = reports_base / 'NK' / batch_id  # Default tenant
+        batch_path = reports_base / batch_id  # Default tenant
     
     try:
         batch_resolved = batch_path.resolve()
