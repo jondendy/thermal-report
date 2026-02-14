@@ -56,14 +56,14 @@ def _get_tenant_id() -> str:
 @app.route("/", methods=["GET"])
 def index() -> str:
     """Display batch list and upload interface."""
-    tenant_id = _get_tenant_id()
-    batches = batchservice.get_all_batches(None)
+    tenant_id = None  # No longer using tenant subdirectories
+    batches = batchservice.get_all_batches(None)  # Pass None instead of tenant_id
+    
     return render_template(
-        "index.html",
-        app_name=APP_NAME,
-        app_version=APP_VERSION,
+        "index.html", 
         batches=batches,
-        batch_size_max=BATCH_SIZE_MAX,
+        app_name=APP_NAME,
+        app_version=APP_VERSION
     )
 
 
