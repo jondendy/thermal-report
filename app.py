@@ -95,11 +95,10 @@ def upload() -> Any:
 @app.route("/edit_spots/<batchid>", methods=["GET"])
 def editspots(batchid: str) -> str:
     """Display thermal hotspot editing interface."""
-    tenant_id = _get_tenant_id()
     try:
-        # Load thermal analysis and existing labels
-        analysis_data = heatlossservice.get_thermal_analysis(batchid, tenant_id)
-        existing_labels = heatlossservice.get_existing_labels(batchid, tenant_id)
+        # Load thermal analysis and existing labels (no tenant_id needed)
+        analysis_data = heatlossservice.get_thermal_analysis(batchid, None)
+        existing_labels = heatlossservice.get_existing_labels(batchid, None)
         saved_links = existing_labels.get("links", [])
 
         return render_template(
