@@ -57,7 +57,7 @@ def _get_tenant_id() -> str:
 def index() -> str:
     """Display batch list and upload interface."""
     tenant_id = _get_tenant_id()
-    batches = batchservice.get_all_batches(tenant_id)
+    batches = batchservice.get_all_batches(None)
     return render_template(
         "index.html",
         app_name=APP_NAME,
