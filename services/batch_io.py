@@ -107,13 +107,15 @@ def list_batches(tenant_id: str | None = None) -> list[Dict[str, Any]]:
     from security_utils import validate_tenant_id  # avoid circular import
 
     tenant_id = validate_tenant_id(tenant_id)
-    base = BASE_REPORT_PATH.resolve() / "batches" / tenant_id
+    # No longer using tenant subdirectories - scan reports/ directly
+    base = BASE_REPORT_PATH.resolve()
+
     if not base.exists():
         return []
 
     items: list[Dict[str, Any]] = []
     for batch_dir in sorted(base.iterdir()):
-        if not batch_dir.is_dir():
+        if not batch_dir.is_dir() or not batch_dir.name.startswith('batch_'):
             continue
         batch_id = batch_dir.name
         meta = load_batch_results(batch_id, tenant_id)
