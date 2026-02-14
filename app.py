@@ -135,20 +135,16 @@ def save_labels(batchid: str) -> Any:
 def generate_heat_loss_report_route(batch_id):
     """
     Generate professional heat loss report from labeled hot spots.
-    
-    Step 2: Creates final HTML report with energy-saving recommendations
-    
-    Optional form parameters:
-    - property_address: Property address for report
-    - inspector_name: Inspector name for report
-    - doc_mode: 'link' to include external link, 'embed' to embed document
+    Now also generates PDF and uploads to Drive if folder_id is provided.
     """
     try:
         tenant_id = request.headers.get('X-Tenant-ID', settings.DEFAULT_TENANT)
         property_address = request.form.get('property_address', '')
         inspector_name = request.form.get('inspector_name', '')
-        doc_mode = request.form.get('doc_mode', 'link')  # 'link' or 'embed'
+        doc_mode = request.form.get('doc_mode', 'link')
+        folder_id = request.form.get('folder_id')  # Optional: Drive folder ID
         
+        # Generate report data (HTML structure)
         report_data = heatlossservice.generate_report(
             batch_id,
             property_address=property_address,
@@ -157,10 +153,30 @@ def generate_heat_loss_report_route(batch_id):
             tenant_id=tenant_id
         )
         
+        # NEW: Generate PDF from the report data
+        pdf_path = None
+        try:
+            pdf_path = heatlossservice.generate_pdf_from_report_data(
+                batch_id, 
+                report_data, 
+                tenant_id
+            )
+            
+            # Upload to Drive if folder_id provided
+            if pdf_path and folder_id:
+                import services.drive_client as drive_client
+                drive_client.upload_file_to_folder(pdf_path, folder_id)
+                logger.info(f"Uploaded PDF to Drive folder {folder_id}")
+                
+        except Exception as e:
+            logger.warning(f"PDF generation/upload failed (non-fatal): {e}")
+            # Continue even if PDF fails
+        
         return jsonify({
             'success': True,
             'message': 'Heat loss report generated successfully',
-            'report_url': url_for('view_heat_loss_report', batch_id=batch_id)
+            'report_url': url_for('view_heat_loss_report', batch_id=batch_id),
+            'pdf_generated': pdf_path is not None
         })
     
     except FileNotFoundError as e:
