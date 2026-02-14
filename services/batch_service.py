@@ -205,7 +205,7 @@ def get_all_batches(tenant_id: str | None = None) -> List[Dict[str, Any]]:
         list: List of batch summaries, sorted by date (newest first)
     """
     tenant_id = validate_tenant_id(tenant_id)
-    return batchio.list_batches(tenant_id)
+    return batchio.list_batches(None)
 
 
 def get_batch_summary(batch_id: str, tenant_id: str | None = None) -> Dict[str, Any]:
