@@ -122,45 +122,260 @@ def generate_report(
     return report_data
 
 
-def generate_pdf_report(batch_id: str, tenant_id: str | None = None) -> str | None:
+def generate_pdf_from_report_data(
+    batch_id: str, 
+    report_data: Dict[str, Any], 
+    tenant_id: str | None = None
+) -> str | None:
     """
-    Generate PDF report from HTML heat loss report.
+    Generate a professional PDF from report data using weasyprint.
     
+    Args:
+        batch_id: Batch identifier
+        report_data: The complete report data dictionary from generate_report()
+        tenant_id: Tenant identifier
+        
     Returns:
         Path to generated PDF file, or None if generation failed
     """
     import logging
-    # import subprocess  <-- Optional, can be removed if not used
     from pathlib import Path
-
+    from security_utils import safe_batch_path
+    from settings import BASE_REPORT_DIR
+    
     logger = logging.getLogger(__name__)
-
+    
     try:
-        # Get the HTML report data
-        report_data = get_report(batch_id, tenant_id)
-
-        if not report_data:
-            logger.error(f"No report data found for batch {batch_id}")
-            return None
-
-        # Create output path for PDF
+        # Get batch directory
+        batch_dir = safe_batch_path(BASE_REPORT_DIR, batch_id, tenant_id)
+        
+        # Create HTML from report data
+        html_content = _render_report_html(report_data)
+        
+        # Save HTML temporarily
+        html_path = batch_dir / f"final_report_{batch_id}.html"
+        with open(html_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        
+        # Generate PDF filename
         pdf_filename = f"thermal_report_{batch_id}.pdf"
-        pdf_path = Path("/tmp") / pdf_filename
-
-        # Generate PDF using HeatLossReporter
-        reporter = HeatLossReporter()
-        pdf_bytes = reporter.generate_pdf(report_data)
-
-        # Save PDF to file
-        with open(pdf_path, 'wb') as f:
-            f.write(pdf_bytes)
-
-        logger.info(f"Generated PDF report at {pdf_path}")
+        pdf_path = batch_dir / pdf_filename
+        
+        # Try to use weasyprint for PDF generation
+        try:
+            from weasyprint import HTML
+            HTML(string=html_content, base_url=str(batch_dir)).write_pdf(str(pdf_path))
+            logger.info(f"Generated PDF report at {pdf_path} using weasyprint")
+            
+        except ImportError:
+            # Fallback: if weasyprint not available, try pdfkit
+            logger.warning("weasyprint not available, trying pdfkit...")
+            try:
+                import pdfkit
+                pdfkit.from_string(html_content, str(pdf_path))
+                logger.info(f"Generated PDF report at {pdf_path} using pdfkit")
+                
+            except ImportError:
+                # If no PDF libraries available, just save HTML
+                logger.error("No PDF library available (weasyprint or pdfkit). Saved HTML only.")
+                return str(html_path)  # Return HTML path as fallback
+        
         return str(pdf_path)
-
+        
     except Exception as e:
-        logger.error(f"Failed to generate PDF report: {e}")
+        logger.error(f"Failed to generate PDF: {e}", exc_info=True)
         return None
+
+
+def _render_report_html(report_data: Dict[str, Any]) -> str:
+    """
+    Render professional HTML from report data.
+    
+    Creates a standalone HTML document with embedded CSS for PDF generation.
+    """
+    from datetime import datetime
+    
+    # Extract data
+    property_address = report_data.get('property_address', 'Not specified')
+    inspector_name = report_data.get('inspector_name', 'Not specified')
+    survey_date = report_data.get('survey_date', datetime.now().strftime('%Y-%m-%d'))
+    summary = report_data.get('summary', {})
+    findings = report_data.get('findings', [])
+    recommendations = report_data.get('recommendations', [])
+    org = report_data.get('organisation', {})
+    
+    # Build HTML with embedded CSS
+    html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Thermal Survey Report - {property_address}</title>
+    <style>
+        @page {{
+            size: A4;
+            margin: 2cm;
+        }}
+        body {{
+            font-family: 'Segoe UI', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+        }}
+        .header {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+        }}
+        .header h1 {{
+            margin: 0 0 10px 0;
+            font-size: 28px;
+        }}
+        .header p {{
+            margin: 5px 0;
+            opacity: 0.9;
+        }}
+        .section {{
+            margin-bottom: 30px;
+            page-break-inside: avoid;
+        }}
+        .section h2 {{
+            color: #667eea;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }}
+        .finding {{
+            background: #f8f9fa;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+        }}
+        .finding h3 {{
+            margin-top: 0;
+            color: #495057;
+        }}
+        .recommendation {{
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+        }}
+        .stats {{
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }}
+        .stat-box {{
+            background: #fff;
+            border: 1px solid #dee2e6;
+            padding: 15px;
+            border-radius: 4px;
+            text-align: center;
+        }}
+        .stat-value {{
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }}
+        .stat-label {{
+            font-size: 12px;
+            color: #6c757d;
+            text-transform: uppercase;
+        }}
+        .footer {{
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #dee2e6;
+            text-align: center;
+            color: #6c757d;
+            font-size: 12px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Thermal Survey Report</h1>
+        <p><strong>Property:</strong> {property_address}</p>
+        <p><strong>Inspector:</strong> {inspector_name}</p>
+        <p><strong>Survey Date:</strong> {survey_date}</p>
+    </div>
+    
+    <div class="section">
+        <h2>Executive Summary</h2>
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-value">{summary.get('total_findings', 0)}</div>
+                <div class="stat-label">Total Findings</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value">{summary.get('critical_count', 0)}</div>
+                <div class="stat-label">Critical Issues</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value">{summary.get('moderate_count', 0)}</div>
+                <div class="stat-label">Moderate Issues</div>
+            </div>
+        </div>
+        <p>{summary.get('overview', 'No summary available.')}</p>
+    </div>
+    
+    <div class="section">
+        <h2>Detailed Findings</h2>
+"""
+    
+    # Add findings
+    for i, finding in enumerate(findings, 1):
+        spot_label = finding.get('label', f'Spot {i}')
+        description = finding.get('narrative', finding.get('description', 'No description available'))
+        severity = finding.get('severity', 'Unknown')
+        
+        html += f"""
+        <div class="finding">
+            <h3>Finding {i}: {spot_label}</h3>
+            <p><strong>Severity:</strong> {severity}</p>
+            <p>{description}</p>
+        </div>
+"""
+    
+    html += """
+    </div>
+    
+    <div class="section">
+        <h2>Recommendations</h2>
+"""
+    
+    # Add recommendations
+    for i, rec in enumerate(recommendations, 1):
+        rec_title = rec.get('title', f'Recommendation {i}')
+        rec_desc = rec.get('description', 'No description available')
+        
+        html += f"""
+        <div class="recommendation">
+            <h3>{rec_title}</h3>
+            <p>{rec_desc}</p>
+        </div>
+"""
+    
+    html += f"""
+    </div>
+    
+    <div class="footer">
+        <p><strong>{org.get('name', 'Thermal Survey Services')}</strong></p>
+        <p>{org.get('website', '')} | {org.get('contact', '')}</p>
+        <p>Report generated on {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
+    </div>
+</body>
+</html>
+"""
+    
+    return html
 
 
 def get_report(batch_id: str, tenant_id: str | None = None) -> Dict[str, Any]:
