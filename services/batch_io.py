@@ -37,21 +37,12 @@ def _write_json(path: Path, data: Dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 def ensure_batch_dir(batch_id: str, tenant_id: str | None = None) -> Path:
-    """
-    Ensure the batch directory exists and return its Path.
-
-    Layout:
-      BASE_REPORT_PATH/
-        batches/
-          {tenant_id}/
-            {batch_id}/
-              batchresults.json
-              thermalanalysis.json
-              hotspotlabels.json
-              heatlossreportdata.json
-              heatlossreport.html
-    """
-    return safe_batch_path(batch_id, tenant_id)
+    from security_utils import safe_batch_path
+    from settings import BASE_REPORT_DIR
+    
+    batch_dir = safe_batch_path(BASE_REPORT_DIR, batch_id, tenant_id)
+    batch_dir.mkdir(parents=True, exist_ok=True)
+    return batch_dir
 
 
 def load_batch_results(batch_id: str, tenant_id: str | None = None) -> Optional[Dict[str, Any]]:
