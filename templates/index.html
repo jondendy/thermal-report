@@ -53,7 +53,7 @@
     <div class="container">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                 <h1>🔬 Thermal Report - Batch Upload</h1>
-                <button onclick="window.location.href='#drive-folders'" style="background: #d32f2f; color: white; border: 2px solid #b71c1c; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 4px; cursor: pointer; transition: background 0.3s;">📁 Drive →</button>
+                <button onclick="window.location.href='#drive-folders'" style="background: #2196F3; color: white; border: 2px solid #1976D2; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 4px; cursor: pointer; transition: background 0.3s;">📁 Drive →</button>
             </div>
         <p class="subtitle">Upload 6-8 FLIR thermal images at a time for processing</p>
 
@@ -73,6 +73,33 @@
         <div class="batches-section">
             <h2>Previous Batches</h2>
             {% if batches %}
+
+                    <!-- Drive Folder Selection Section -->
+        <div class="upload-section" id="drive-folders" style="margin-top: 30px; border-top: 2px solid #ddd; padding-top: 30px;">
+            <h2>📁 Process from Google Drive</h2>
+            <p>Enter a Google Drive folder ID to select and process thermal images</p>
+            <div style="display: flex; gap: 10px; align-items: center; margin-top: 15px;">
+                <input type="text" id="driveFolderId" placeholder="Paste Google Drive Folder ID here..." 
+                       style="flex: 1; padding: 12px; font-size: 14px; border: 2px solid #ddd; border-radius: 4px;">
+                <button onclick="openDriveFolder()" class="upload-btn" style="background: #2196F3; border: 2px solid #1976D2;">
+                    Open Folder →
+                </button>
+            </div>
+            <p style="margin-top: 10px; font-size: 12px; color: #666;">
+                <strong>Tip:</strong> Open your Drive folder, copy the ID from the URL (e.g., <code>12hjnGQk...</code>), and paste it here.
+            </p>
+        </div>
+
+        <script>
+        function openDriveFolder() {
+            const folderId = document.getElementById('driveFolderId').value.trim();
+            if (!folderId) {
+                alert('Please enter a Google Drive folder ID');
+                return;
+            }
+            window.location.href = `/select_images/${folderId}`;
+        }
+        </script>
                 {% for batch in batches %}
                 <div class="batch-card">
                     <div class="batch-header">
