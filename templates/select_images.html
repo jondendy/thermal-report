@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Select Images - {{ folder_name }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        h1 { color: #333; }
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .image-card {
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .image-card:hover { border-color: #4CAF50; transform: scale(1.05); }
+        .image-card.selected { border-color: #4CAF50; background: #e8f5e9; }
+        .image-card img { width: 100%; height: 150px; object-fit: cover; border-radius: 4px; }
+        .image-card input[type="checkbox"] { margin-top: 10px; transform: scale(1.5); }
+        .controls { position: sticky; top: 0; background: white; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); z-index: 100; }
+        button { padding: 12px 24px; font-size: 16px; cursor: pointer; border: none; border-radius: 4px; margin-right: 10px; }
+        .btn-primary { background: #4CAF50; color: white; }
+        .btn-secondary { background: #2196F3; color: white; }
+        #selectedCount { font-weight: bold; color: #4CAF50; }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <h1>Select Images from: {{ folder_name }}</h1>
+        <p>Click images to select them for processing. <span id="selectedCount">0 selected</span></p>
+        <button class="btn-secondary" onclick="selectAll()">Select All</button>
+        <button class="btn-secondary" onclick="deselectAll()">Deselect All</button>
+        <button class="btn-primary" onclick="processSelected()">Process Selected Images</button>
+    </div>
+
+    <div class="image-grid">
+        {% for image in images %}
+        <div class="image-card" data-file-id="{{ image.id }}" onclick="toggleSelection(this)">
+            <img src="{{ image.thumbnailLink }}" alt="{{ image.name }}">
+            <p style="font-size: 12px; margin: 5px 0;">{{ image.name }}</p>
+            <input type="checkbox" class="image-checkbox" value="{{ image.id }}">
+        </div>
+        {% endfor %}
+    </div>
+
+    <script>
+        function toggleSelection(card) {
+            card.classList.toggle('selected');
+            const checkbox = card.querySelector('input');
+            checkbox.checked = !checkbox.checked;
+            updateCount();
+        }
+
+        function selectAll() {
+            document.querySelectorAll('.image-card').forEach(card => {
+                card.classList.add('selected');
+                card.querySelector('input').checked = true;
+            });
+            updateCount();
+        }
+
+        function deselectAll() {
+            document.querySelectorAll('.image-card').forEach(card => {
+                card.classList.remove('selected');
+                card.querySelector('input').checked = false;
+            });
+            updateCount();
+        }
+
+        function updateCount() {
+            const count = document.querySelectorAll('input:checked').length;
+            document.getElementById('selectedCount').textContent = count + ' selected';
+        }
+
+        function processSelected() {
+            const selected = Array.from(document.querySelectorAll('input:checked')).map(cb => cb.value);
+            if (selected.length === 0) {
+                alert('Please select at least one image');
+                return;
+            }
+
+            // Send selected file IDs to new route
+            fetch('/process_selected_images', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    folder_id: '{{ folder_id }}',
+                    file_ids: selected
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.batch_id) {
+                    // Redirect to hotspot editing page
+                    window.location.href = `/edit_spots/${data.batch_id}`;
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(err => alert('Network error: ' + err));
+        }
+    </script>
+</body>
+</html>
