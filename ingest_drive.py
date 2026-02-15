@@ -150,6 +150,64 @@ def process_drive_folder():
                 logger.warning(f"Failed to cleanup temp dir: {e}")
 
 
+
+@ingest_bp.route('/process_selected_images', methods=['POST'])
+def process_selected_images():
+    """Process only user-selected images from Drive folder."""
+    try:
+        data = request.get_json()
+        folder_id = data.get('folder_id')
+        file_ids = data.get('file_ids', [])
+        
+        if not folder_id or not file_ids:
+            return jsonify({'error': 'Missing folder_id or file_ids'}), 400
+        
+        # Get folder metadata for batch naming
+        folder_metadata = drive_client.get_folder_metadata(folder_id)
+        folder_name = folder_metadata.get('name', '')
+        survey_info = folder_parser.parse_folder_name(folder_name)
+        tenant_id = survey_info.owner_initials if survey_info else 'NK'
+        
+        # Generate batch ID
+        batch_id = f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        temp_batch_dir = Path(tempfile.gettempdir()) / batch_id
+        temp_batch_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Download only selected files
+        downloaded_files = []
+        for file_id in file_ids:
+            # Get file name
+            file_info = drive_client.get_drive_service().files().get(
+                fileId=file_id, fields='name'
+            ).execute()
+            
+            dest_path = temp_batch_dir / file_info['name']
+            drive_client.download_file(file_id, str(dest_path))
+            downloaded_files.append(dest_path)
+        
+        # Process batch
+        file_objects = []
+        try:
+            for file_path in downloaded_files:
+                f = open(file_path, 'rb')
+                file_obj = FileStorage(stream=f, filename=file_path.name, content_type='image/jpeg')
+                file_objects.append(file_obj)
+            
+            results = batchservice.process_batch(batch_id, file_objects, tenant_id)
+        finally:
+            for f in file_objects:
+                f.stream.close()
+            shutil.rmtree(temp_batch_dir, ignore_errors=True)
+        
+        return jsonify({
+            'status': 'success',
+            'batch_id': batch_id,
+            'message': f'Processed {len(file_ids)} images'
+        }), 200
+    
+    except Exception as e:
+        logger.exception(f"Error processing selected images: {e}")
+        return jsonify({'error': str(e)}), 500
 def register_ingest_routes(app):
     """Register the ingest blueprint with the Flask app."""
     app.register_blueprint(ingest_bp)
