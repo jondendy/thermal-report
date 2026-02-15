@@ -119,11 +119,24 @@ def select_images(folder_id: str):
         image_files = [f for f in files if f.get('mimeType') in image_mimes]
         
         if not image_files:
-            return render_template(
-                "error.html",
-                message="No image files found in this folder",
-                folder_name=folder_name
-            )
+            return f'''
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>No Images Found</title>
+                <style>
+                    body {{ font-family: Arial, sans-serif; margin: 40px; text-align: center; }}
+                    h1 {{ color: #d32f2f; }}
+                    a {{ color: #1976d2; text-decoration: none; }}
+                </style>
+            </head>
+            <body>
+                <h1>No Image Files Found</h1>
+                <p>The folder "{folder_name}" does not contain any image files (JPEG, PNG, or TIFF).</p>
+                <p><a href="/">← Return to Home</a></p>
+            </body>
+            </html>
+        '''
         
         return render_template(
             "select_images.html",
