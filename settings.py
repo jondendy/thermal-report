@@ -6,10 +6,15 @@ This module is intentionally dependency-free so it can be imported early.
 """
 
 from dotenv import load_dotenv
-load_dotenv()  # Load .env file before reading environment variables
+from pathlib import Path
+
+# Get the directory where this settings.py file is located
+SETTINGS_DIR = Path(__file__).resolve().parent
+# Load .env from the same directory as settings.py
+load_dotenv(SETTINGS_DIR / '.env')
 
 import os
-from pathlib import Path
+# from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Environment / runtime mode
