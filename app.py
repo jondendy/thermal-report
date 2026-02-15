@@ -91,6 +91,26 @@ def upload() -> Any:
 
     return jsonify({"batchid": batch_id, "results": {"summary": summary}})
 
+@app.route("/list_folders")
+def list_folders():
+    """List all folders in the STORAGE_ADDRESS folder."""
+    try:
+        import services.drive_client as drive_client
+        from settings import STORAGE_ADDRESS
+        
+        if not STORAGE_ADDRESS:
+            return '<h1>Error</h1><p>STORAGE_ADDRESS not configured in .env file</p>', 500
+        
+        # List all folders in the parent folder
+        folders = drive_client.list_files_in_folder(STORAGE_ADDRESS)
+        
+        # Filter to only show folders (mimeType = 'application/vnd.google-apps.folder')
+        folder_list = [f for f in folders if f.get('mimeType') == 'application/vnd.google-apps.folder']
+        
+        return render_template('list_folders.html', folders=folder_list, parent_id=STORAGE_ADDRESS)
+    except Exception as e:
+        logger.exception(f"Error listing folders: {str(e)}")
+        return f'<h1>Error</h1><p>Failed to list folders: {str(e)}</p>', 500
 
 
 @app.route("/select_images/<folder_id>", methods=["GET"])
