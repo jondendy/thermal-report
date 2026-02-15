@@ -5,6 +5,9 @@ All settings are driven by environment variables with sensible defaults.
 This module is intentionally dependency-free so it can be imported early.
 """
 
+from dotenv import load_dotenv
+load_dotenv()  # Load .env file before reading environment variables
+
 import os
 from pathlib import Path
 
