@@ -92,6 +92,49 @@ def upload() -> Any:
     return jsonify({"batchid": batch_id, "results": {"summary": summary}})
 
 
+
+@app.route("/select_images/<folder_id>", methods=["GET"])
+def select_images(folder_id: str):
+    """Display Google Drive folder contents for image selection."""
+    try:
+        import services.drive_client as drive_client
+        
+        # Get folder metadata
+        folder_metadata = drive_client.get_folder_metadata(folder_id)
+        folder_name = folder_metadata.get('name', 'Unknown Folder')
+        
+        # List files with thumbnailLink field
+        service = drive_client.get_drive_service()
+        query = f"'{folder_id}' in parents and trashed = false"
+        results = service.files().list(
+            q=query,
+            fields="files(id, name, thumbnailLink, mimeType)",
+            orderBy="name"
+        ).execute()
+        
+        files = results.get('files', [])
+        
+        # Filter to image files only
+        image_mimes = ['image/jpeg', 'image/png', 'image/tiff']
+        image_files = [f for f in files if f.get('mimeType') in image_mimes]
+        
+        if not image_files:
+            return render_template(
+                "error.html",
+                message="No image files found in this folder",
+                folder_name=folder_name
+            )
+        
+        return render_template(
+            "select_images.html",
+            folder_id=folder_id,
+            folder_name=folder_name,
+            images=image_files
+        )
+    
+    except Exception as e:
+        logger.exception(f"Error listing folder {folder_id}: {str(e)}")
+        abort(500)
 @app.route("/edit_spots/<batchid>", methods=["GET"])
 def editspots(batchid: str) -> str:
     """Display thermal hotspot editing interface."""
