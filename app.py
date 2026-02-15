@@ -109,6 +109,10 @@ def list_folders():
         
         return render_template('list_folders.html', folders=folder_list, parent_id=STORAGE_ADDRESS)
     except Exception as e:
+        print(f"ERROR in list_folders: {e}")
+        print(f"Type: {type(e)}")
+        import traceback
+        traceback.print_exc()
         logger.exception(f"Error listing folders: {str(e)}")
         return f'<h1>Error</h1><p>Failed to list folders: {str(e)}</p>', 500
 
