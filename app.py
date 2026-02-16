@@ -293,7 +293,7 @@ def delete_batch(batch_id: str) -> Any:
     """Delete batch and all associated files."""
     tenant_id = _get_tenant_id()
     try:
-        batch_path = safe_batch_path(batch_id, tenant_id)
+        batch_path = safe_batch_path(settings.REPORTS_DIR, batch_id, tenant_id)
         if batch_path.exists():
             shutil.rmtree(batch_path)
             logger.info(f"Deleted batch {batch_id}")
@@ -358,7 +358,7 @@ def download_file(batch_id: str, filename: str) -> Any:
     """Download a file from batch storage."""
     tenant_id = _get_tenant_id()
     try:
-        batch_path = safe_batch_path(batch_id, tenant_id)
+        batch_path = safe_batch_path(settings.REPORTS_DIR, batch_id, tenant_id)
         file_path = batch_path / filename
         
         # Verify file is within batch directory (security check)
