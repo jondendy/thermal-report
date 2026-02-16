@@ -15,7 +15,7 @@ def get_drive_service():
 def list_files_in_folder(folder_id):
     service = get_drive_service()
     q = f"'{folder_id}' in parents and trashed = false"
-    results = service.files().list(q=q, fields="files(id, name)").execute()
+    results = service.files().list(q=q, fields="files(id, name, mimeType)").execute()
     return results.get("files", [])
 
 def download_file(file_id, dest_path):
