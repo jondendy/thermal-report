@@ -70,14 +70,18 @@ def process_batch(
         ValueError: If batch_id or tenant_id invalid
     """
     # 1. Normalise tenant_id
-    tenant_id = tenant_id or "NK"  # <- default when None/empty
+    #     tenant_id = tenant_id or "NK"  # <- default when None/empty
 
     # 2. Validate tenant_id
     if not validate_tenant_id(tenant_id):
         raise ValueError(f"Invalid tenant_id: {tenant_id}")
 
     # 3. Build upload path (per‑tenant folder)
-    upload_dir = BASE_UPLOAD_PATH / tenant_id / batch_id
+        # When tenant_id is None, don't create tenant subdirectory
+    if tenant_id:
+        upload_dir = BASE_UPLOAD_PATH / tenant_id / batch_id
+    else:
+        upload_dir = BASE_UPLOAD_PATH / batch_id
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     # 4. Build report batch path
