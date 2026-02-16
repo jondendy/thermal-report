@@ -194,6 +194,8 @@ def process_batch(
     # ⭐ ADD THIS: Save the report data for PDF generation
     from services.batch_io import save_heatloss_report
     save_heatloss_report(batch_id, results, tenant_id)
+        # Also save thermal analysis data for edit_spots page
+        batchio.save_thermal_analysis(batch_id, results, tenant_id)
 
     return results
 
