@@ -367,7 +367,25 @@
             const type = document.getElementById('spotType').value;
             const temp = parseFloat(document.getElementById('spotTemp').value);
             const num = document.getElementById('spotNum').value;
-            if (!type || !state.pendingSpot) return;
+    // Validation: require at least type OR number
+    if ((!type && !num) || !state.pendingSpot) {
+        alert('Please provide either a spot type OR spot number');
+        return;
+    }
+    
+    // Auto-number: if type provided but no number, find next available for this type
+    if (type && !num) {
+        const existingNums = [];
+        state.images.forEach(img => {
+            img.spots.forEach(s => {
+                if (s.type === type && s.num) {
+                    existingNums.push(parseInt(s.num));
+                }
+            });
+        });
+        num = existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1;
+        num = String(num); // Convert to string to match expected format
+    }
             
             const img = state.images[state.pendingSpot.imgIdx];
             img.spots.push({
