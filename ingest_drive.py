@@ -165,8 +165,8 @@ def process_selected_images():
         # Get folder metadata for batch naming
         folder_metadata = drive_client.get_folder_metadata(folder_id)
         folder_name = folder_metadata.get('name', '')
-        survey_info = folder_parser.parse_folder_name(folder_name)
-        tenant_id = survey_info.owner_initials if survey_info else 'NK'
+#         survey_info = folder_parser.parse_folder_name(folder_name)
+        tenant_id = None
         
         # Generate batch ID
         batch_id = f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
