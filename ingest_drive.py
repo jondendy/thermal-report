@@ -202,8 +202,9 @@ def process_selected_images():
         return jsonify({
             'status': 'success',
             'batch_id': batch_id,
-            'message': f'Processed {len(file_ids)} images'
+            'redirect_url': url_for('editspots', batchid=batch_id)
         }), 200
+
     
     except Exception as e:
         logger.exception(f"Error processing selected images: {e}")
