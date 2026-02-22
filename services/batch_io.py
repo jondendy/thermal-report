@@ -59,8 +59,8 @@ def load_thermal_analysis(batch_id: str, tenant_id: str | None = None) -> Option
     batch_dir = ensure_batch_dir(batch_id, tenant_id)
     return _read_json(batch_dir / "thermalanalysis.json")
 
-
-def save_thermal_analysis(batch_id: str, analysis: Dict[str, Any], tenant_id: str | None = None) -> None:
+def save_thermal_analysis(batch_id, analysis, tenant_id=None):
+# def save_thermal_analysis(batch_id: str, analysis: Dict[str, Any], tenant_id: str | None = None) -> None:
     batch_dir = ensure_batch_dir(batch_id, tenant_id)
     _write_json(batch_dir / "thermalanalysis.json", analysis)
 
