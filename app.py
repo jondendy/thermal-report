@@ -363,19 +363,20 @@ def info() -> str:
 @app.route("/download/<batch_id>/<filename>", methods=["GET"])
 def download_file(batch_id: str, filename: str) -> Any:
     """Download a file from batch storage."""
-    tenant_id = _get_tenant_id()
     try:
-        batch_path = safe_batch_path(settings.REPORTS_DIR, batch_id, tenant_id)
-        file_path = batch_path / filename
-        
-        # Verify file is within batch directory (security check)
-        if not str(file_path.resolve()).startswith(str(batch_path.resolve())):
+        # Use BASE_REPORT_PATH, not REPORTS_DIR — files live in .reports/
+        batch_path = (settings.BASE_REPORT_PATH / batch_id).resolve()
+        file_path = (batch_path / filename).resolve()
+
+        # Security check
+        if not str(file_path).startswith(str(batch_path)):
             abort(403)
-        
+
         if not file_path.exists():
+            logger.error(f"File not found: {file_path}")
             abort(404)
-        
-        return send_file(file_path, as_attachment=True)
+
+        return send_file(file_path, as_attachment=False)  # False so images render inline
     except Exception as e:
         logger.exception(f"Error downloading file: {str(e)}")
         abort(500)
