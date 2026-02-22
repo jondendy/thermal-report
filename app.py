@@ -178,7 +178,12 @@ def editspots(batchid: str) -> str:
     try:
         # Load thermal analysis and existing labels (no tenant_id needed)
         analysis_data = heatlossservice.get_thermal_analysis(batchid, None)
+        # If analysis_data is nested, unwrap it for the template
+        if "images" not in analysis_data and "results" in analysis_data:
+            analysis_data = analysis_data["results"]
+
         existing_labels = heatlossservice.get_existing_labels(batchid, None)
+
         saved_links = existing_labels.get("links", [])
 
         return render_template(
