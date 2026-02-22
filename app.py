@@ -172,19 +172,22 @@ def select_images(folder_id: str):
     except Exception as e:
         logger.exception(f"Error listing folder {folder_id}: {str(e)}")
         abort(500)
+
 @app.route("/edit_spots/<batchid>", methods=["GET"])
 def editspots(batchid: str) -> str:
     """Display thermal hotspot editing interface."""
     try:
-        # Load thermal analysis and existing labels (no tenant_id needed)
         analysis_data = heatlossservice.get_thermal_analysis(batchid, None)
-        # If analysis_data is nested, unwrap it for the template
-        if "images" not in analysis_data and "results" in analysis_data:
-            analysis_data = analysis_data["results"]
-
         existing_labels = heatlossservice.get_existing_labels(batchid, None)
-
         saved_links = existing_labels.get("links", [])
+
+        # NEW: normalise shape for template/JS
+        if "images" not in analysis_data:
+            # common patterns: {"results": {"images": [...]}} or {"images_data": [...]}
+            if "results" in analysis_data and "images" in analysis_data["results"]:
+                analysis_data = analysis_data["results"]
+            elif "images_data" in analysis_data:
+                analysis_data = {"images": analysis_data["images_data"]}
 
         return render_template(
             "edit_spots.html",
@@ -200,7 +203,6 @@ def editspots(batchid: str) -> str:
     except Exception as e:
         logger.exception(f"Error loading batch {batchid}: {str(e)}")
         abort(500)
-
 
 @app.route("/save_labels/<batchid>", methods=["POST"])
 def save_labels(batchid: str) -> Any:
