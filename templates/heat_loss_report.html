@@ -232,4 +232,226 @@
             <h1>Building Heat Loss Survey Report</h1>
             <div class="subtitle">Thermal Imaging Analysis and Energy Assessment</div>
             <a href="/download_pdf/{{ batch_id }}" class="download-btn">
-                
+                &#x1f4e5; Download PDF
+            </a>
+        </div>
+
+        <div class="property-info">
+            <h2>Property Information</h2>
+            <p><strong>Address:</strong> {{ report_data.property_address }}</p>
+            <p><strong>Survey Date:</strong> {{ report_data.survey_date }}</p>
+            <p><strong>Survey Time:</strong> {{ report_data.survey_time }}</p>
+            <p><strong>Inspector:</strong> {{ report_data.inspector_name }}</p>
+            <p><strong>Batch ID:</strong> {{ report_data.batch_id }}</p>
+        </div>
+
+        <div class="summary-box">
+            <h2>Executive Summary</h2>
+            <p><strong>Total Heat Loss Points Identified:</strong> {{ report_data.summary.total_findings }}</p>
+            <p><strong>Highest Severity Level:</strong>
+                <span class="severity-badge severity-{{ report_data.summary.highest_severity|lower }}">
+                    {{ report_data.summary.highest_severity }}
+                </span>
+            </p>
+
+            <p><strong>Severity Breakdown:</strong></p>
+            <div>
+                {% if report_data.summary.severity_breakdown.critical > 0 %}
+                    <span class="severity-badge severity-critical">Critical: {{ report_data.summary.severity_breakdown.critical }}</span>
+                {% endif %}
+                {% if report_data.summary.severity_breakdown.high > 0 %}
+                    <span class="severity-badge severity-high">High: {{ report_data.summary.severity_breakdown.high }}</span>
+                {% endif %}
+                {% if report_data.summary.severity_breakdown.medium > 0 %}
+                    <span class="severity-badge severity-medium">Medium: {{ report_data.summary.severity_breakdown.medium }}</span>
+                {% endif %}
+                {% if report_data.summary.severity_breakdown.low > 0 %}
+                    <span class="severity-badge severity-low">Low: {{ report_data.summary.severity_breakdown.low }}</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <h2 style="color: #2c3e50; margin-top: 50px;">Detailed Findings</h2>
+
+        {% for finding in report_data.findings %}
+        <div class="finding">
+            <h3>{{ finding.title }}</h3>
+
+            <div>
+                <span class="severity-badge severity-{{ finding.severity }}">{{ finding.severity|upper }} PRIORITY</span>
+                {% if finding.image_count > 1 %}
+                    <span style="background: #95a5a6; color: white; padding: 5px 15px; border-radius: 20px; font-weight: bold; margin-left: 10px;">
+                        Visible in {{ finding.image_count }} images
+                    </span>
+                {% endif %}
+            </div>
+
+            <div class="temperature-stats">
+                <strong>Temperature Analysis:</strong><br>
+                Max: {{ "%.1f"|format(finding.max_temp) }}&deg;C |
+                Avg: {{ "%.1f"|format(finding.avg_temp) }}&deg;C |
+                Min: {{ "%.1f"|format(finding.min_temp) }}&deg;C
+            </div>
+
+            <p>{{ finding.description }}</p>
+
+            <div class="finding-images">
+                {% for image_name, location in finding.spot_locations %}
+                <div class="finding-image">
+                    <img src="/download/{{ report_data.batch_id }}/{{ image_name | replace('.jpg', '_labeled.jpg') }}"
+                         alt="Thermal image showing {{ finding.type }}">
+                    <div class="caption">{{ image_name }} - Location: ({{ location[0] }}, {{ location[1] }})</div>
+                </div>
+                {% endfor %}
+            </div>
+
+            {% if finding.recommendations %}
+            <div class="recommendations">
+                <h4>&#x1f527; Recommended Actions <span class="priority-{{ finding.recommendations.priority }}">{{ finding.recommendations.priority|upper }} PRIORITY</span></h4>
+                <ul>
+                    {% for advice in finding.recommendations.advice %}
+                    <li>{{ advice }}</li>
+                    {% endfor %}
+                </ul>
+
+                <div class="savings-estimate">
+                    &#x1f4a1; Estimated Energy Savings: {{ finding.recommendations.savings }}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        <!-- All Images Grid -->
+        <div style="margin: 50px 0;">
+            <h2 style="color: #2c3e50;">Survey Images</h2>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 20px;">
+                {% for finding in report_data.findings %}
+                    {% for image_name, location in finding.spot_locations %}
+                    <div style="border: 1px solid #ddd; border-radius: 5px; overflow: hidden;">
+                        <img src="/download/{{ report_data.batch_id }}/{{ image_name | replace('.jpg', '_labeled.jpg') }}"
+                             alt="Thermal image"
+                             style="width: 100%; height: auto; display: block;">
+                        <div style="background: #2c3e50; color: white; padding: 10px; text-align: center; font-size: 0.9em;">
+                            {{ image_name }}
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="summary-box" style="margin-top: 50px;">
+            <h2>Priority Action Plan</h2>
+            <p>Based on this thermal survey, we recommend addressing issues in the following order:</p>
+
+            <h3 class="priority-high">&#x1f534; High Priority (Address Immediately)</h3>
+            <ul>
+                {% for rec in report_data.recommendations %}
+                    {% if rec.priority == 'high' %}
+                    <li><strong>{{ rec.type }} (#{{ rec.spot_number }}):</strong> {{ rec.advice[0] }} - <em>{{ rec.savings }}</em></li>
+                    {% endif %}
+                {% endfor %}
+            </ul>
+
+            <h3 class="priority-medium">&#x1f7e1; Medium Priority (Address Soon)</h3>
+            <ul>
+                {% for rec in report_data.recommendations %}
+                    {% if rec.priority == 'medium' %}
+                    <li><strong>{{ rec.type }} (#{{ rec.spot_number }}):</strong> {{ rec.advice[0] }} - <em>{{ rec.savings }}</em></li>
+                    {% endif %}
+                {% endfor %}
+            </ul>
+
+            <h3 class="priority-low">&#x26aa; Low Priority (Monitor)</h3>
+            <ul>
+                {% for rec in report_data.recommendations %}
+                    {% if rec.priority == 'low' %}
+                    <li><strong>{{ rec.type }} (#{{ rec.spot_number }}):</strong> {{ rec.advice[0] }} - <em>{{ rec.savings }}</em></li>
+                    {% endif %}
+                {% endfor %}
+            </ul>
+        </div>
+
+        {% if report_data.recommendations_document_url %}
+        <div class="recommendations-section">
+            <h2>&#x1f4cb; Additional Resources</h2>
+            <p>For more information about recommended improvements, energy-saving tips, and upcoming charity projects, please refer to our comprehensive recommendations guide:</p>
+            <a href="{{ report_data.recommendations_document_url }}" target="_blank" rel="noopener noreferrer" class="recommendations-button">
+                &#x1f4c4; View Recommendations &amp; Resources
+            </a>
+            <p style="margin-top: 20px; font-size: 0.9em; color: #666;">
+                (Opens in a new window)
+            </p>
+        </div>
+        {% endif %}
+
+        <!-- Documents & Links -->
+        {% if report_data.links %}
+        {% set valid_links = [] %}
+        {% for link in report_data.links %}
+            {% if link.title and link.url %}
+                {% if valid_links.append(link) %}{% endif %}
+            {% endif %}
+        {% endfor %}
+        {% if valid_links %}
+        <div class="links-section">
+            <h2>&#x1f4ce; Documents &amp; Links</h2>
+            <ul>
+                {% for link in valid_links %}
+                <li><a href="{{ link.url }}" target="_blank" rel="noopener noreferrer">{{ link.title }}</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        {% endif %}
+
+        <!-- Attached Notes (HTML content rendered inline) -->
+        {% if report_data.attached_files %}
+        {% set html_notes = [] %}
+        {% for af in report_data.attached_files %}
+            {% if af.name and (af.name.endswith('.html') or af.name.endswith('.htm')) and af.data %}
+                {% if html_notes.append(af) %}{% endif %}
+            {% endif %}
+        {% endfor %}
+        {% if html_notes %}
+        <div class="attached-notes">
+            <h2>&#x1f4c4; Attached Notes</h2>
+            {% for note in html_notes %}
+            <div class="note-page">
+                <h3>{{ note.name }}</h3>
+                <div class="note-content">
+                    {{ note.data | safe }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Non-HTML attachments listed by name -->
+        {% set other_files = [] %}
+        {% for af in report_data.attached_files %}
+            {% if af.name and not af.name.endswith('.html') and not af.name.endswith('.htm') %}
+                {% if other_files.append(af) %}{% endif %}
+            {% endif %}
+        {% endfor %}
+        {% if other_files %}
+        <div style="margin: 40px 0;">
+            <h2 style="color: #2c3e50;">Other Attachments</h2>
+            <ul>
+                {% for af in other_files %}
+                <li>{{ af.name }} ({{ (af.size / 1024)|round(1) }} KB)</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        {% endif %}
+
+        <div class="footer">
+            <p>This report was generated using thermal imaging analysis technology.</p>
+            <p>For questions or additional analysis, please contact your energy assessor.</p>
+            <p><em>Report generated: {{ report_data.survey_date }} {{ report_data.survey_time }}</em></p>
+        </div>
+    </div>
+</body>
+</html>
