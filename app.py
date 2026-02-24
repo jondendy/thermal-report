@@ -75,9 +75,7 @@ def upload() -> Any:
         return jsonify({"error": "No files uploaded"}), 400
 
     try:
-        # Generate batch_id from files
         batch_id = batchservice.get_batch_id(files)
-        # Process batch with None tenant_id (tenants deprecated)
         results = batchservice.process_batch(batch_id, files, None)
         summary = results.get('summary', {})
     except ValueError as e:
@@ -89,6 +87,7 @@ def upload() -> Any:
 
     return jsonify({"batchid": batch_id, "results": {"summary": summary}})
 
+
 @app.route("/list_folders")
 def list_folders():
     """List all folders in the STORAGE_ADDRESS folder."""
@@ -99,10 +98,7 @@ def list_folders():
         if not STORAGE_ADDRESS:
             return '<h1>Error</h1><p>STORAGE_ADDRESS not configured in .env file</p>', 500
         
-        # List all folders in the parent folder
         folders = drive_client.list_files_in_folder(STORAGE_ADDRESS)
-        
-        # Filter to only show folders (mimeType = 'application/vnd.google-apps.folder')
         folder_list = [f for f in folders if f.get('mimeType') == 'application/vnd.google-apps.folder']
         
         return render_template('list_folders.html', folders=folder_list, parent_id=STORAGE_ADDRESS)
@@ -121,11 +117,9 @@ def select_images(folder_id: str):
     try:
         import services.drive_client as drive_client
         
-        # Get folder metadata
         folder_metadata = drive_client.get_folder_metadata(folder_id)
         folder_name = folder_metadata.get('name', 'Unknown Folder')
         
-        # List files with thumbnailLink field
         service = drive_client.get_drive_service()
         query = f"'{folder_id}' in parents and trashed = false"
         results = service.files().list(
@@ -135,8 +129,6 @@ def select_images(folder_id: str):
         ).execute()
         
         files = results.get('files', [])
-        
-        # Filter to image files only
         image_mimes = ['image/jpeg', 'image/png', 'image/tiff']
         image_files = [f for f in files if f.get('mimeType') in image_mimes]
         
@@ -155,7 +147,7 @@ def select_images(folder_id: str):
             <body>
                 <h1>No Image Files Found</h1>
                 <p>The folder "{folder_name}" does not contain any image files (JPEG, PNG, or TIFF).</p>
-                <p><a href="/">← Return to Home</a></p>
+                <p><a href="/">&larr; Return to Home</a></p>
             </body>
             </html>
         '''
@@ -171,6 +163,7 @@ def select_images(folder_id: str):
         logger.exception(f"Error listing folder {folder_id}: {str(e)}")
         abort(500)
 
+
 @app.route("/edit_spots/<batchid>", methods=["GET"])
 def editspots(batchid: str) -> str:
     """Display thermal hotspot editing interface."""
@@ -179,9 +172,7 @@ def editspots(batchid: str) -> str:
         existing_labels = heatlossservice.get_existing_labels(batchid, None)
         saved_links = existing_labels.get("links", [])
 
-        # NEW: normalise shape for template/JS
         if "images" not in analysis_data:
-            # common patterns: {"results": {"images": [...]}} or {"images_data": [...]}
             if "results" in analysis_data and "images" in analysis_data["results"]:
                 analysis_data = analysis_data["results"]
             elif "images_data" in analysis_data:
@@ -202,6 +193,7 @@ def editspots(batchid: str) -> str:
         logger.exception(f"Error loading batch {batchid}: {str(e)}")
         abort(500)
 
+
 @app.route("/save_labels/<batchid>", methods=["POST"])
 def save_labels(batchid: str) -> Any:
     """Save operator hotspot labels and document links."""
@@ -218,15 +210,14 @@ def save_labels(batchid: str) -> Any:
 def generate_heat_loss_report_route(batch_id):
     """
     Generate professional heat loss report from labeled hot spots.
-    Now also generates PDF and uploads to Drive if folder_id is provided.
+    Also generates PDF and uploads to Drive if folder_id is provided.
     """
     try:
         property_address = request.form.get('property_address', '')
         inspector_name = request.form.get('inspector_name', '')
         doc_mode = request.form.get('doc_mode', 'link')
-        folder_id = request.form.get('folder_id')  # Optional: Drive folder ID
+        folder_id = request.form.get('folder_id')
         
-        # Generate report data (HTML structure) — pass None for tenant_id
         report_data = heatlossservice.generate_report(
             batch_id,
             property_address=property_address,
@@ -235,16 +226,15 @@ def generate_heat_loss_report_route(batch_id):
             tenant_id=None
         )
         
-        # NEW: Generate PDF from the report data
+        # Generate PDF from the report data
         pdf_path = None
         try:
             pdf_path = heatlossservice.generate_pdf_from_report_data(
                 batch_id, 
                 report_data, 
-                None  # tenant_id deprecated
+                None
             )
             
-            # Upload to Drive if folder_id provided
             if pdf_path and folder_id:
                 import services.drive_client as drive_client
                 drive_client.upload_file_to_folder(pdf_path, folder_id)
@@ -252,7 +242,6 @@ def generate_heat_loss_report_route(batch_id):
                 
         except Exception as e:
             logger.warning(f"PDF generation/upload failed (non-fatal): {e}")
-            # Continue even if PDF fails
         
         return jsonify({
             'success': True,
@@ -287,6 +276,40 @@ def view_heat_loss_report(batch_id: str) -> str:
         abort(404)
     except Exception as e:
         logger.exception(f"Error loading report for batch {batch_id}: {str(e)}")
+        abort(500)
+
+
+@app.route("/download_pdf/<batch_id>", methods=["GET"])
+def download_pdf(batch_id: str) -> Any:
+    """
+    Generate (if needed) and download the PDF report for a batch.
+    """
+    try:
+        batch_dir = safe_batch_path(settings.BASE_REPORT_DIR, batch_id, None)
+        pdf_filename = f"thermal_report_{batch_id}.pdf"
+        pdf_path = batch_dir / pdf_filename
+        
+        # If PDF doesn't exist yet, generate it now
+        if not pdf_path.exists():
+            report_data = heatlossservice.get_report(batch_id, None)
+            result_path = heatlossservice.generate_pdf_from_report_data(
+                batch_id, report_data, None
+            )
+            if not result_path or not Path(result_path).exists():
+                return jsonify({"error": "PDF generation failed"}), 500
+            pdf_path = Path(result_path)
+        
+        return send_file(
+            str(pdf_path),
+            as_attachment=True,
+            download_name=pdf_filename,
+            mimetype='application/pdf'
+        )
+    except FileNotFoundError:
+        logger.error(f"Report for batch {batch_id} not found")
+        abort(404)
+    except Exception as e:
+        logger.exception(f"Error downloading PDF for batch {batch_id}: {str(e)}")
         abort(500)
 
 
@@ -355,11 +378,9 @@ def info() -> str:
 def download_file(batch_id: str, filename: str) -> Any:
     """Download a file from batch storage."""
     try:
-        # Use BASE_REPORT_PATH, not REPORTS_DIR — files live in .reports/
         batch_path = (settings.BASE_REPORT_PATH / batch_id).resolve()
         file_path = (batch_path / filename).resolve()
 
-        # Security check
         if not str(file_path).startswith(str(batch_path)):
             abort(403)
 
@@ -367,7 +388,7 @@ def download_file(batch_id: str, filename: str) -> Any:
             logger.error(f"File not found: {file_path}")
             abort(404)
 
-        return send_file(file_path, as_attachment=False)  # False so images render inline
+        return send_file(file_path, as_attachment=False)
     except Exception as e:
         logger.exception(f"Error downloading file: {str(e)}")
         abort(500)
@@ -375,13 +396,11 @@ def download_file(batch_id: str, filename: str) -> Any:
 
 @app.errorhandler(404)
 def not_found(error) -> tuple:
-    """Handle 404 errors."""
     return jsonify({"error": "Not found"}), 404
 
 
 @app.errorhandler(500)
 def server_error(error) -> tuple:
-    """Handle 500 errors."""
     logger.exception(f"Server error: {str(error)}")
     return jsonify({"error": "Internal server error"}), 500
 

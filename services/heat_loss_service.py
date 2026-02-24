@@ -28,7 +28,6 @@ def get_existing_labels(batch_id: str, tenant_id: str | None = None) -> Dict[str
 
 
 def save_labels(batch_id: str, label_data: Dict[str, Any], tenant_id: str | None = None) -> None:
-    # Expect label_data like {"labeled_spots": [...]} from editspots.js form
     batchio.save_hotspot_labels(batch_id, label_data, tenant_id)
 
 
@@ -38,9 +37,6 @@ def _combine_analysis_and_labels(
 ) -> List[Dict[str, Any]]:
     """
     Build a list of findings using HeatLossReporter from operator labels.
-    
-    The reporter groups spots by spot_number and generates professional
-    finding narratives with recommendations.
     """
     reporter = HeatLossReporter(
         org_name=ORG_NAME,
@@ -49,17 +45,13 @@ def _combine_analysis_and_labels(
     )
     
     labeled_spots = labels.get('labeled_spots', [])
-    
-    # Group spots by number
     grouped = reporter.group_by_spot_number(labeled_spots)
     
-    # Generate findings for each spot number
     findings = []
     for spot_number, spot_group in grouped.items():
         finding = reporter.generate_finding_narrative(spot_group, spot_number)
         findings.append(finding)
     
-    # Sort by severity and spot number
     severity_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
     findings.sort(key=lambda f: (severity_order.get(f['severity'], 3), f['spot_number']))
     
@@ -75,13 +67,7 @@ def generate_report(
 ) -> Dict[str, Any]:
     """
     Generate full heat loss report data (not HTML) and persist it.
-    
-    Args:
-        batch_id: Batch identifier
-        property_address: Property address for report
-        inspector_name: Inspector/surveyor name
-        doc_mode: 'link' to include external URL, 'embed' to embed document
-        tenant_id: Tenant identifier for multi-tenant setups
+    Now also reads attached_files and links from saved labels.
     """
     analysis = get_thermal_analysis(batch_id, tenant_id)
     labels = get_existing_labels(batch_id, tenant_id)
@@ -95,10 +81,11 @@ def generate_report(
 
     summary = reporter.generate_executive_summary(findings)
     recommendations = reporter.generate_recommendations(findings)
-
-    # Only include recommendations_document_url if doc_mode is 'link'
-    # If doc_mode is 'embed', the document content would be embedded (future feature)
     recommendations_url = RECOMMENDATIONS_DOCUMENT_URL if doc_mode == 'link' else None
+
+    # Pull attached notes and links from saved labels
+    attached_files = labels.get('attached_files', [])
+    links = labels.get('links', [])
 
     report_data = {
         "batch_id": batch_id,
@@ -116,6 +103,8 @@ def generate_report(
         },
         "recommendations_document_url": recommendations_url,
         "doc_mode": doc_mode,
+        "attached_files": attached_files,
+        "links": links,
     }
 
     batchio.save_heatloss_report(batch_id, report_data, tenant_id)
@@ -129,14 +118,7 @@ def generate_pdf_from_report_data(
 ) -> str | None:
     """
     Generate a professional PDF from report data using weasyprint.
-    
-    Args:
-        batch_id: Batch identifier
-        report_data: The complete report data dictionary from generate_report()
-        tenant_id: Tenant identifier
-        
-    Returns:
-        Path to generated PDF file, or None if generation failed
+    Returns path to generated PDF file, or None if generation failed.
     """
     import logging
     from pathlib import Path
@@ -146,39 +128,32 @@ def generate_pdf_from_report_data(
     logger = logging.getLogger(__name__)
     
     try:
-        # Get batch directory
         batch_dir = safe_batch_path(BASE_REPORT_DIR, batch_id, tenant_id)
         
-        # Create HTML from report data
-        html_content = _render_report_html(report_data)
+        # Create HTML from report data, passing batch_dir for image paths
+        html_content = _render_report_html(report_data, batch_dir=str(batch_dir))
         
-        # Save HTML temporarily
+        # Save HTML for reference
         html_path = batch_dir / f"final_report_{batch_id}.html"
         with open(html_path, 'w', encoding='utf-8') as f:
             f.write(html_content)
         
-        # Generate PDF filename
         pdf_filename = f"thermal_report_{batch_id}.pdf"
         pdf_path = batch_dir / pdf_filename
         
-        # Try to use weasyprint for PDF generation
         try:
             from weasyprint import HTML
             HTML(string=html_content, base_url=str(batch_dir)).write_pdf(str(pdf_path))
             logger.info(f"Generated PDF report at {pdf_path} using weasyprint")
-            
         except ImportError:
-            # Fallback: if weasyprint not available, try pdfkit
             logger.warning("weasyprint not available, trying pdfkit...")
             try:
                 import pdfkit
                 pdfkit.from_string(html_content, str(pdf_path))
                 logger.info(f"Generated PDF report at {pdf_path} using pdfkit")
-                
             except ImportError:
-                # If no PDF libraries available, just save HTML
                 logger.error("No PDF library available (weasyprint or pdfkit). Saved HTML only.")
-                return str(html_path)  # Return HTML path as fallback
+                return str(html_path)
         
         return str(pdf_path)
         
@@ -187,15 +162,19 @@ def generate_pdf_from_report_data(
         return None
 
 
-def _render_report_html(report_data: Dict[str, Any]) -> str:
+def _render_report_html(
+    report_data: Dict[str, Any],
+    batch_dir: str | None = None,
+) -> str:
     """
     Render professional HTML from report data.
-    
     Creates a standalone HTML document with embedded CSS for PDF generation.
+    Includes labeled images per finding, attached HTML notes, and links.
     """
     from datetime import datetime
+    import base64
+    from pathlib import Path
     
-    # Extract data
     property_address = report_data.get('property_address', 'Not specified')
     inspector_name = report_data.get('inspector_name', 'Not specified')
     survey_date = report_data.get('survey_date', datetime.now().strftime('%Y-%m-%d'))
@@ -203,10 +182,11 @@ def _render_report_html(report_data: Dict[str, Any]) -> str:
     findings = report_data.get('findings', [])
     recommendations = report_data.get('recommendations', [])
     org = report_data.get('organisation', {})
+    attached_files = report_data.get('attached_files', [])
+    links = report_data.get('links', [])
+    batch_id = report_data.get('batch_id', '')
     
-    # Build HTML with embedded CSS
-    html = f"""
-<!DOCTYPE html>
+    html = f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
@@ -230,14 +210,8 @@ def _render_report_html(report_data: Dict[str, Any]) -> str:
             margin-bottom: 30px;
             border-radius: 8px;
         }}
-        .header h1 {{
-            margin: 0 0 10px 0;
-            font-size: 28px;
-        }}
-        .header p {{
-            margin: 5px 0;
-            opacity: 0.9;
-        }}
+        .header h1 {{ margin: 0 0 10px 0; font-size: 28px; }}
+        .header p {{ margin: 5px 0; opacity: 0.9; }}
         .section {{
             margin-bottom: 30px;
             page-break-inside: avoid;
@@ -255,9 +229,13 @@ def _render_report_html(report_data: Dict[str, Any]) -> str:
             margin-bottom: 15px;
             border-radius: 4px;
         }}
-        .finding h3 {{
-            margin-top: 0;
-            color: #495057;
+        .finding h3 {{ margin-top: 0; color: #495057; }}
+        .finding img {{
+            width: 100%;
+            max-width: 600px;
+            margin: 10px 0;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
         }}
         .recommendation {{
             background: #e7f3ff;
@@ -279,15 +257,43 @@ def _render_report_html(report_data: Dict[str, Any]) -> str:
             border-radius: 4px;
             text-align: center;
         }}
-        .stat-value {{
-            font-size: 24px;
-            font-weight: bold;
-            color: #667eea;
+        .stat-value {{ font-size: 24px; font-weight: bold; color: #667eea; }}
+        .stat-label {{ font-size: 12px; color: #6c757d; text-transform: uppercase; }}
+        .links-section {{
+            background: #f0f7ff;
+            border: 1px solid #b3d4fc;
+            padding: 20px;
+            margin: 30px 0;
+            border-radius: 8px;
         }}
-        .stat-label {{
-            font-size: 12px;
-            color: #6c757d;
-            text-transform: uppercase;
+        .links-section a {{
+            color: #1565c0;
+            text-decoration: none;
+        }}
+        .links-section a:hover {{ text-decoration: underline; }}
+        .attached-notes {{
+            page-break-before: always;
+            margin-top: 40px;
+        }}
+        .attached-notes h2 {{
+            color: #667eea;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }}
+        .note-page {{
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            background: #fafafa;
+            page-break-inside: avoid;
+        }}
+        .note-page h3 {{
+            color: #495057;
+            margin-top: 0;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #eee;
         }}
         .footer {{
             margin-top: 50px;
@@ -306,7 +312,7 @@ def _render_report_html(report_data: Dict[str, Any]) -> str:
         <p><strong>Inspector:</strong> {inspector_name}</p>
         <p><strong>Survey Date:</strong> {survey_date}</p>
     </div>
-    
+
     <div class="section">
         <h2>Executive Summary</h2>
         <div class="stats">
@@ -319,54 +325,147 @@ def _render_report_html(report_data: Dict[str, Any]) -> str:
                 <div class="stat-label">Critical Issues</div>
             </div>
             <div class="stat-box">
-                <div class="stat-value">{summary.get('moderate_count', 0)}</div>
-                <div class="stat-label">Moderate Issues</div>
+                <div class="stat-value">{summary.get('high_count', 0)}</div>
+                <div class="stat-label">High Priority</div>
             </div>
         </div>
-        <p>{summary.get('overview', 'No summary available.')}</p>
     </div>
-    
+
     <div class="section">
         <h2>Detailed Findings</h2>
 """
     
-    # Add findings
+    # Add findings with labeled images
     for i, finding in enumerate(findings, 1):
-        spot_label = finding.get('label', f'Spot {i}')
-        description = finding.get('narrative', finding.get('description', 'No description available'))
+        spot_label = finding.get('title', f'Spot {i}')
+        description = finding.get('description', 'No description available')
         severity = finding.get('severity', 'Unknown')
+        spot_type = finding.get('type', '')
+        max_temp = finding.get('max_temp', 0)
+        min_temp = finding.get('min_temp', 0)
+        avg_temp = finding.get('avg_temp', 0)
         
-        html += f"""
-        <div class="finding">
+        html += f"""        <div class="finding">
             <h3>Finding {i}: {spot_label}</h3>
-            <p><strong>Severity:</strong> {severity}</p>
+            <p><strong>Severity:</strong> {severity.upper()} | <strong>Type:</strong> {spot_type}</p>
+            <p><strong>Temperature:</strong> Max {max_temp:.1f}\u00b0C / Avg {avg_temp:.1f}\u00b0C / Min {min_temp:.1f}\u00b0C</p>
             <p>{description}</p>
-        </div>
 """
+        
+        # Embed labeled images for this finding
+        spot_locations = finding.get('spot_locations', [])
+        if batch_dir and spot_locations:
+            for image_name, location in spot_locations:
+                if image_name:
+                    labeled_name = image_name.replace('.jpg', '_labeled.jpg').replace('.jpeg', '_labeled.jpeg')
+                    labeled_path = Path(batch_dir) / labeled_name
+                    if labeled_path.exists():
+                        img_data = base64.b64encode(labeled_path.read_bytes()).decode('utf-8')
+                        html += f'            <img src="data:image/jpeg;base64,{img_data}" alt="{labeled_name}">\n'
+        
+        html += "        </div>\n"
     
-    html += """
-    </div>
-    
+    html += """    </div>
+
     <div class="section">
         <h2>Recommendations</h2>
 """
     
-    # Add recommendations
     for i, rec in enumerate(recommendations, 1):
-        rec_title = rec.get('title', f'Recommendation {i}')
-        rec_desc = rec.get('description', 'No description available')
+        rec_type = rec.get('type', f'Item {i}')
+        spot_num = rec.get('spot_number', '')
+        advice_list = rec.get('advice', [])
+        savings = rec.get('savings', '')
+        priority = rec.get('priority', 'medium')
         
-        html += f"""
-        <div class="recommendation">
-            <h3>{rec_title}</h3>
-            <p>{rec_desc}</p>
+        advice_html = ''.join(f'<li>{a}</li>' for a in advice_list)
+        
+        html += f"""        <div class="recommendation">
+            <h3>{rec_type} #{spot_num} ({priority.upper()} priority)</h3>
+            <ul>{advice_html}</ul>
+            <p><strong>Estimated savings:</strong> {savings}</p>
         </div>
 """
     
-    html += f"""
-    </div>
+    html += "    </div>\n"
     
-    <div class="footer">
+    # Links section
+    valid_links = [l for l in links if l.get('title') and l.get('url')]
+    if valid_links:
+        html += """    <div class="links-section">
+        <h2>\ud83d\udcce Documents &amp; Links</h2>
+        <ul>
+"""
+        for link in valid_links:
+            html += f'            <li><a href="{link["url"]}">{link["title"]}</a></li>\n'
+        html += """        </ul>
+    </div>
+"""
+    
+    # Recommendations document URL
+    rec_url = report_data.get('recommendations_document_url')
+    if rec_url:
+        html += f"""    <div class="links-section" style="text-align:center;">
+        <h2>\ud83d\udccb Additional Resources</h2>
+        <p>For detailed improvement guidance, visit our recommendations document:</p>
+        <p><a href="{rec_url}" style="font-weight:bold; font-size:16px;">{rec_url}</a></p>
+    </div>
+"""
+    
+    # Attached HTML notes — appended as full pages at the end
+    html_notes = [f for f in attached_files if f.get('data') and f.get('name', '').lower().endswith(('.html', '.htm'))]
+    if html_notes:
+        html += """    <div class="attached-notes">
+        <h2>Attached Notes</h2>
+"""
+        for note in html_notes:
+            note_name = note.get('name', 'Untitled')
+            note_data = note.get('data', '')
+            
+            # The data is base64-encoded with a data: prefix from the FileReader
+            # Format: "data:text/html;base64,XXXXX" or "data:application/octet-stream;base64,XXXXX"
+            note_html = ''
+            if ',' in note_data:
+                import base64 as b64
+                try:
+                    encoded = note_data.split(',', 1)[1]
+                    note_html = b64.b64decode(encoded).decode('utf-8', errors='replace')
+                except Exception:
+                    note_html = '<p><em>Could not decode attached note.</em></p>'
+            else:
+                note_html = note_data
+            
+            # Strip <html>, <head>, <body> wrappers if present — just keep inner content
+            import re
+            # Remove doctype, html, head, body tags but keep content
+            note_html = re.sub(r'<!DOCTYPE[^>]*>', '', note_html, flags=re.IGNORECASE)
+            note_html = re.sub(r'</?html[^>]*>', '', note_html, flags=re.IGNORECASE)
+            note_html = re.sub(r'<head[^>]*>.*?</head>', '', note_html, flags=re.IGNORECASE | re.DOTALL)
+            note_html = re.sub(r'</?body[^>]*>', '', note_html, flags=re.IGNORECASE)
+            
+            html += f"""        <div class="note-page">
+            <h3>\ud83d\udcc4 {note_name}</h3>
+            {note_html}
+        </div>
+"""
+        html += "    </div>\n"
+    
+    # Non-HTML attached files — list them by name
+    other_files = [f for f in attached_files if f.get('name') and not f.get('name', '').lower().endswith(('.html', '.htm'))]
+    if other_files:
+        html += """    <div class="section">
+        <h2>Other Attachments</h2>
+        <ul>
+"""
+        for af in other_files:
+            size_kb = af.get('size', 0) / 1024
+            html += f'            <li>{af["name"]} ({size_kb:.1f} KB)</li>\n'
+        html += """        </ul>
+    </div>
+"""
+    
+    # Footer
+    html += f"""    <div class="footer">
         <p><strong>{org.get('name', 'Thermal Survey Services')}</strong></p>
         <p>{org.get('website', '')} | {org.get('contact', '')}</p>
         <p>Report generated on {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
