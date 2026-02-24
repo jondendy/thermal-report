@@ -35,6 +35,51 @@
         .btn-icon { background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px; opacity: 0.6; }
         .btn-icon:hover { opacity: 1; color: var(--color-danger); }
         
+        /* Shared Notes Button */
+        .shared-notes-box {
+            background: linear-gradient(135deg, #e3f2fd 0%, #f0f7ff 100%);
+            border: 2px solid #2196f3;
+            border-radius: 8px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 15px;
+        }
+        .shared-notes-info {
+            flex: 1;
+        }
+        .shared-notes-info h3 {
+            font-size: 14px;
+            color: #1565c0;
+            margin-bottom: 4px;
+        }
+        .shared-notes-info p {
+            font-size: 12px;
+            color: #666;
+            margin: 0;
+        }
+        .btn-shared-notes {
+            padding: 10px 20px;
+            font-size: 13px;
+            font-weight: 600;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            color: white;
+            background: #2196f3;
+            white-space: nowrap;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-shared-notes:hover { background: #1976d2; }
+        .btn-shared-notes.loading { background: #90a4ae; cursor: wait; }
+        .btn-shared-notes.added { background: #4caf50; cursor: default; }
+        .btn-shared-notes.error { background: #e53935; }
+        
         /* Grid Layout */
         .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(520px, 1fr)); gap: 20px; }
         .image-panel { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
@@ -102,12 +147,13 @@
         @media (max-width: 768px) {
             .grid-container { grid-template-columns: 1fr; }
             .link-item { grid-template-columns: 100px 1fr 30px; }
+            .shared-notes-box { flex-direction: column; text-align: center; }
         }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>🔥 Thermal Spot Editor</h1>
+        <h1>\ud83d\udd25 Thermal Spot Editor</h1>
         <p class="batch-info"><strong>Batch:</strong> {{ batch_id }}</p>
         <div class="stats">
             <div class="stat"><span class="stat-label">Images</span><span class="stat-value" id="imgCount">0</span></div>
@@ -118,7 +164,7 @@
 
     <!-- Survey Metadata Section -->
     <div class="links-section">
-        <h2>📋 Survey Information</h2>
+        <h2>\ud83d\udccb Survey Information</h2>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 10px;">
             <div>
                 <label style="display: block; font-size: 12px; font-weight: 600; color: #555; margin-bottom: 4px;">Property Address</label>
@@ -132,11 +178,23 @@
     </div>
 
     <div class="links-section">
-        <h2>📎 Documents & Links</h2>
+        <h2>\ud83d\udcce Documents & Links</h2>
+
+        <!-- Shared Notes Button -->
+        <div class="shared-notes-box">
+            <div class="shared-notes-info">
+                <h3>\ud83d\udcc4 Shared Recommendations Notes</h3>
+                <p>Include the standard recommendations and resources pages at the end of the report.</p>
+            </div>
+            <button class="btn-shared-notes" id="sharedNotesBtn" onclick="includeSharedNotes()">
+                \ud83d\udce5 Include Shared Notes
+            </button>
+        </div>
+
         <div class="link-list" id="linkList"></div>
         <button class="btn-small" onclick="addLink()" style="margin-bottom: 10px;">+ Add Link</button>
         
-        <h3 style="font-size: 14px; margin-top: 15px; margin-bottom: 10px; color: #333;">📄 Attached Notes</h3>
+        <h3 style="font-size: 14px; margin-top: 15px; margin-bottom: 10px; color: #333;">\ud83d\udcc4 Attached Notes</h3>
         <label class="file-input-label" for="fileInput">+ Attach Document</label>
         <input type="file" id="fileInput" onchange="handleFileUpload(event)">
         <div class="uploaded-files" id="uploadedFiles"></div>
@@ -146,12 +204,12 @@
 
     <div class="action-bar">
         <div class="action-left">
-            <button class="btn btn-back" onclick="goBack()">← Back</button>
+            <button class="btn btn-back" onclick="goBack()">\u2190 Back</button>
         </div>
         <div id="status" class="status"></div>
         <div class="action-right">
-            <button class="btn btn-save" onclick="saveEdits()">💾 Save</button>
-            <button class="btn btn-report" onclick="genReport()">📊 Report</button>
+            <button class="btn btn-save" onclick="saveEdits()">\ud83d\udcbe Save</button>
+            <button class="btn btn-report" onclick="genReport()">\ud83d\udcca Report</button>
         </div>
     </div>
 
@@ -167,7 +225,7 @@
                 </select>
             </div>
             <div class="form-group">
-                <label>Temperature (°C)</label>
+                <label>Temperature (\u00b0C)</label>
                 <input type="number" id="spotTemp" step="0.1" value="20.0">
             </div>
             <div class="form-group">
@@ -186,6 +244,7 @@
         const RAW_DATA = {{ analysis_data|tojson|default('{"images":[]}') }};
         const SAVED = {{ existing_labels|tojson|default('{}') }};
         const TYPES = {{ spot_types|tojson }};
+        const SHARED_NOTES_NAME = 'shared_recommendations.html';
 
         let state = {
             links: {{ saved_links|tojson|default('[]') }},
@@ -195,14 +254,12 @@
         };
 
         function init() {
-            // Merge server data with saved labels
             if (RAW_DATA.images) {
                 state.images = RAW_DATA.images.map((img, idx) => {
                     const saved = SAVED.labeled_spots || [];
                     const spots = (img.hot_spots || []).map((s, sidx) => {
                         const spotId = `${img.filename}_spot${sidx + 1}`;
                         const label = saved.find(l => l.spot_id === spotId);
-                        // Read temperature from hot_spots data
                         const temp = s.temperature || s.temp || 20;
                         return {
                             id: spotId,
@@ -215,26 +272,18 @@
                             num: label ? label.spot_number : ''
                         };
                     });
-                    
-                    // Use labeled_image if available, otherwise fall back to original filename
                     const imageUrl = img.labeled_image 
                         ? `/download/${BATCH}/${img.labeled_image}`
                         : `/download/${BATCH}/${img.filename}`;
-                    
-                    return {
-                        name: img.filename,
-                        url: imageUrl,
-                        spots: spots
-                    };
+                    return { name: img.filename, url: imageUrl, spots: spots };
                 });
             }
-            
-            // Load attached files from saved state
             if (SAVED.attached_files) {
                 state.attachedFiles = SAVED.attached_files;
                 renderUploadedFiles();
             }
-            
+            // Check if shared notes already included
+            updateSharedNotesButton();
             render();
         }
 
@@ -249,7 +298,7 @@
                 <div class="link-item">
                     <input type="text" placeholder="Title" value="${l.title || ''}" onchange="state.links[${i}].title=this.value">
                     <input type="text" placeholder="URL" value="${l.url || ''}" onchange="state.links[${i}].url=this.value">
-                    <button class="btn-icon" onclick="state.links.splice(${i},1);renderLinks()">✕</button>
+                    <button class="btn-icon" onclick="state.links.splice(${i},1);renderLinks()">\u2715</button>
                 </div>
             `).join('');
             document.getElementById('linkList').innerHTML = html;
@@ -260,35 +309,107 @@
             renderLinks();
         }
 
+        // --- Shared Notes ---
+        function hasSharedNotes() {
+            return state.attachedFiles.some(f => f.name === SHARED_NOTES_NAME);
+        }
+
+        function updateSharedNotesButton() {
+            const btn = document.getElementById('sharedNotesBtn');
+            if (hasSharedNotes()) {
+                btn.className = 'btn-shared-notes added';
+                btn.innerHTML = '\u2705 Shared Notes Included';
+            } else {
+                btn.className = 'btn-shared-notes';
+                btn.innerHTML = '\ud83d\udce5 Include Shared Notes';
+            }
+        }
+
+        async function includeSharedNotes() {
+            const btn = document.getElementById('sharedNotesBtn');
+            
+            // If already included, offer to remove
+            if (hasSharedNotes()) {
+                if (confirm('Shared notes are already included. Remove them?')) {
+                    state.attachedFiles = state.attachedFiles.filter(f => f.name !== SHARED_NOTES_NAME);
+                    renderUploadedFiles();
+                    updateSharedNotesButton();
+                    showStatus('Shared notes removed', 'info');
+                }
+                return;
+            }
+
+            btn.className = 'btn-shared-notes loading';
+            btn.innerHTML = '\u23f3 Fetching...';
+
+            try {
+                const resp = await fetch('/api/fetch_shared_notes', { method: 'POST' });
+                const data = await resp.json();
+
+                if (data.success && data.html) {
+                    // Add as attached file (same format as file upload)
+                    const htmlBlob = new Blob([data.html], { type: 'text/html' });
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        state.attachedFiles.push({
+                            name: SHARED_NOTES_NAME,
+                            size: data.html.length,
+                            data: e.target.result
+                        });
+                        renderUploadedFiles();
+                        updateSharedNotesButton();
+                        showStatus('\u2713 Shared notes added to report', 'success');
+                    };
+                    reader.readAsDataURL(htmlBlob);
+                } else {
+                    throw new Error(data.error || 'Failed to fetch shared notes');
+                }
+            } catch (err) {
+                btn.className = 'btn-shared-notes error';
+                btn.innerHTML = '\u274c Failed - Try Again';
+                showStatus('Error: ' + err.message, 'error');
+                setTimeout(() => updateSharedNotesButton(), 3000);
+            }
+        }
+
+        // --- File Upload ---
         function handleFileUpload(event) {
             const files = event.target.files;
             if (files.length === 0) return;
-            
             Array.from(files).forEach(file => {
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     state.attachedFiles.push({
                         name: file.name,
                         size: file.size,
-                        data: e.target.result  // base64 encoded
+                        data: e.target.result
                     });
                     renderUploadedFiles();
                 };
                 reader.readAsDataURL(file);
             });
-            
-            // Reset file input
             document.getElementById('fileInput').value = '';
         }
 
         function renderUploadedFiles() {
-            const html = state.attachedFiles.map((f, i) => `
-                <div class="file-item">
-                    <span>📎 ${f.name} (${(f.size / 1024).toFixed(1)}KB)</span>
-                    <button class="btn-icon" style="color: var(--color-danger);" onclick="state.attachedFiles.splice(${i},1);renderUploadedFiles()">✕</button>
-                </div>
-            `).join('');
+            const html = state.attachedFiles.map((f, i) => {
+                const isShared = f.name === SHARED_NOTES_NAME;
+                const icon = isShared ? '\ud83d\udcc4' : '\ud83d\udcce';
+                const label = isShared ? 'Shared Recommendations Notes' : f.name;
+                return `
+                    <div class="file-item" style="${isShared ? 'background:#e3f2fd; border:1px solid #90caf9;' : ''}">
+                        <span>${icon} ${label} (${(f.size / 1024).toFixed(1)}KB)</span>
+                        <button class="btn-icon" style="color: var(--color-danger);" onclick="removeFile(${i})">\u2715</button>
+                    </div>
+                `;
+            }).join('');
             document.getElementById('uploadedFiles').innerHTML = html;
+            updateSharedNotesButton();
+        }
+
+        function removeFile(idx) {
+            state.attachedFiles.splice(idx, 1);
+            renderUploadedFiles();
         }
 
         function renderGrid() {
@@ -299,7 +420,7 @@
                         <button class="btn-small" style="font-size:11px" onclick="startAdd(${imgIdx})">+ Add</button>
                     </div>
                     <div class="image-container" id="imgContainer${imgIdx}" data-idx="${imgIdx}">
-                        <img src="${img.url}" alt="${img.name}" onerror="this.parentElement.innerHTML='<div class=img-loading>⚠ Image loading failed. Try original: <a href=\'/download/${BATCH}/${img.name}\' style=\'color:#007bff;\'>${img.name}</a></div>'">
+                        <img src="${img.url}" alt="${img.name}" onerror="this.parentElement.innerHTML='<div class=img-loading>\u26a0 Image loading failed. Try original: <a href=\'/download/${BATCH}/${img.name}\' style=\'color:#007bff;\'>${img.name}</a></div>'">
                     </div>
                     <div class="spots-section">
                         ${renderSpots(imgIdx)}
@@ -321,25 +442,14 @@
                         ${TYPES.map(t => `<option value="${t}" ${s.type===t?'selected':''}>${t}</option>`).join('')}
                     </select>
                     <div style="display:flex; align-items:center; gap:4px;">
-                        <input
-                            type="number"
-                            class="spot-num-input"
-                            placeholder="#"
-                            min="1"
-                            max="99"
-                            value="${s.num || ''}"
-                            onchange="state.images[${imgIdx}].spots[${sIdx}].num=this.value;updateStats()"
-                        >
-                        <span style="font-size:11px;color:#555;white-space:nowrap;">
-                            ${s.temp.toFixed(1)}°C
-                        </span>
+                        <input type="number" class="spot-num-input" placeholder="#" min="1" max="99"
+                            value="${s.num || ''}" onchange="state.images[${imgIdx}].spots[${sIdx}].num=this.value;updateStats()">
+                        <span style="font-size:11px;color:#555;white-space:nowrap;">${s.temp.toFixed(1)}\u00b0C</span>
                     </div>
-                    <button class="btn-icon" style="font-size:14px" onclick="state.images[${imgIdx}].spots.splice(${sIdx},1);renderGrid()">🗑</button>
+                    <button class="btn-icon" style="font-size:14px" onclick="state.images[${imgIdx}].spots.splice(${sIdx},1);renderGrid()">\ud83d\uddd1</button>
                 </div>
             `).join('');
         }
-
-
 
         function attachMarkers() {
             state.images.forEach((img, imgIdx) => {
@@ -351,7 +461,7 @@
                     marker.style.left = s.x + 'px';
                     marker.style.top = s.y + 'px';
                     marker.textContent = s.num || (sIdx + 1);
-                    marker.title = `${s.temp.toFixed(1)}°C`;
+                    marker.title = `${s.temp.toFixed(1)}\u00b0C`;
                     marker.onclick = () => container.parentElement.querySelector('.spot-row').click?.();
                     container.appendChild(marker);
                 });
@@ -368,7 +478,6 @@
             const temp = parseFloat(document.getElementById('spotTemp').value);
             const num = document.getElementById('spotNum').value;
             if (!type || !state.pendingSpot) return;
-            
             const img = state.images[state.pendingSpot.imgIdx];
             img.spots.push({
                 id: `manual_${Date.now()}`,
@@ -425,7 +534,6 @@
                     }
                 });
             });
-            
             showStatus('Saving...', 'info');
             const res = await fetch(`/save_labels/${BATCH}`, {
                 method: 'POST',
@@ -439,7 +547,7 @@
                 })
             });
             const data = await res.json();
-            showStatus(data.success ? '✓ Saved' : '✗ Error', data.success ? 'success' : 'error');
+            showStatus(data.success ? '\u2713 Saved' : '\u2717 Error', data.success ? 'success' : 'error');
         }
 
         async function genReport() {
@@ -447,21 +555,14 @@
                 alert('Label at least one spot');
                 return;
             }
-            
             showStatus('Generating...', 'info');
-            
             const propertyAddress = document.getElementById('propertyAddress').value;
             const surveyorName = document.getElementById('surveyorName').value;
-            
             const formData = new FormData();
             formData.append('property_address', propertyAddress);
             formData.append('inspector_name', surveyorName);
-            formData.append('doc_mode', 'link');  // default to link mode
-            
-            fetch(`/generate_heat_loss_report/${BATCH}`, { 
-                method: 'POST',
-                body: formData
-            })
+            formData.append('doc_mode', 'link');
+            fetch(`/generate_heat_loss_report/${BATCH}`, { method: 'POST', body: formData })
                 .then(r => r.json())
                 .then(d => { 
                     if (d.success) {
@@ -477,7 +578,6 @@
             if (confirm('Unsaved changes will be lost. Continue?')) window.history.back();
         }
 
-        // Image click for adding spots
         document.addEventListener('click', (e) => {
             if (state.pendingSpot && e.target.tagName === 'IMG') {
                 const rect = e.target.getBoundingClientRect();

@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 
 import json
+import re
 import shutil
 import logging
 from typing import Any
@@ -55,19 +56,12 @@ def _get_tenant_id() -> str:
 
 @app.route("/", methods=["GET"])
 def index() -> str:
-    """Display batch list and upload interface."""
     batches = batchservice.get_all_batches(None)
-    return render_template(
-        "index.html",
-        batches=batches,
-        app_name=APP_NAME,
-        app_version=APP_VERSION
-    )
+    return render_template("index.html", batches=batches, app_name=APP_NAME, app_version=APP_VERSION)
 
 
 @app.route("/upload", methods=["POST"])
 def upload() -> Any:
-    """Process uploaded thermal images and create batch."""
     files = request.files.getlist("files")
     if not files or len(files) == 0:
         return jsonify({"error": "No files uploaded"}), 400
@@ -86,7 +80,6 @@ def upload() -> Any:
 
 @app.route("/list_folders")
 def list_folders():
-    """List all folders in the STORAGE_ADDRESS folder."""
     try:
         import services.drive_client as drive_client
         from settings import STORAGE_ADDRESS
@@ -96,7 +89,6 @@ def list_folders():
         folder_list = [f for f in folders if f.get('mimeType') == 'application/vnd.google-apps.folder']
         return render_template('list_folders.html', folders=folder_list, parent_id=STORAGE_ADDRESS)
     except Exception as e:
-        print(f"ERROR in list_folders: {e}")
         import traceback
         traceback.print_exc()
         logger.exception(f"Error listing folders: {str(e)}")
@@ -105,7 +97,6 @@ def list_folders():
 
 @app.route("/select_images/<folder_id>", methods=["GET"])
 def select_images(folder_id: str):
-    """Display Google Drive folder contents for image selection."""
     try:
         import services.drive_client as drive_client
         folder_metadata = drive_client.get_folder_metadata(folder_id)
@@ -113,19 +104,16 @@ def select_images(folder_id: str):
         service = drive_client.get_drive_service()
         query = f"'{folder_id}' in parents and trashed = false"
         results = service.files().list(
-            q=query,
-            fields="files(id, name, thumbnailLink, mimeType)",
-            orderBy="name"
+            q=query, fields="files(id, name, thumbnailLink, mimeType)", orderBy="name"
         ).execute()
         files = results.get('files', [])
         image_mimes = ['image/jpeg', 'image/png', 'image/tiff']
         image_files = [f for f in files if f.get('mimeType') in image_mimes]
         if not image_files:
-            return f'''
-            <!DOCTYPE html><html><head><title>No Images Found</title>
+            return f'''<!DOCTYPE html><html><head><title>No Images Found</title>
             <style>body {{ font-family: Arial; margin: 40px; text-align: center; }} h1 {{ color: #d32f2f; }} a {{ color: #1976d2; }}</style>
             </head><body><h1>No Image Files Found</h1>
-            <p>The folder "{folder_name}" does not contain any image files (JPEG, PNG, or TIFF).</p>
+            <p>The folder "{folder_name}" does not contain any image files.</p>
             <p><a href="/">&larr; Return to Home</a></p></body></html>'''
         return render_template("select_images.html", folder_id=folder_id, folder_name=folder_name, images=image_files)
     except Exception as e:
@@ -135,7 +123,6 @@ def select_images(folder_id: str):
 
 @app.route("/edit_spots/<batchid>", methods=["GET"])
 def editspots(batchid: str) -> str:
-    """Display thermal hotspot editing interface."""
     try:
         analysis_data = heatlossservice.get_thermal_analysis(batchid, None)
         existing_labels = heatlossservice.get_existing_labels(batchid, None)
@@ -146,12 +133,8 @@ def editspots(batchid: str) -> str:
             elif "images_data" in analysis_data:
                 analysis_data = {"images": analysis_data["images_data"]}
         return render_template(
-            "edit_spots.html",
-            batch_id=batchid,
-            analysis_data=analysis_data,
-            existing_labels=existing_labels,
-            saved_links=saved_links,
-            spot_types=SPOT_TYPES,
+            "edit_spots.html", batch_id=batchid, analysis_data=analysis_data,
+            existing_labels=existing_labels, saved_links=saved_links, spot_types=SPOT_TYPES,
         )
     except FileNotFoundError:
         logger.error(f"Batch {batchid} not found")
@@ -163,7 +146,6 @@ def editspots(batchid: str) -> str:
 
 @app.route("/save_labels/<batchid>", methods=["POST"])
 def save_labels(batchid: str) -> Any:
-    """Save operator hotspot labels and document links."""
     try:
         data = request.get_json()
         heatlossservice.save_labels(batchid, data, None)
@@ -175,27 +157,18 @@ def save_labels(batchid: str) -> Any:
 
 @app.route('/generate_heat_loss_report/<batch_id>', methods=['POST'])
 def generate_heat_loss_report_route(batch_id):
-    """
-    Generate professional heat loss report from labeled hot spots.
-    Also generates PDF and uploads to Drive if folder_id is provided.
-    """
     try:
         property_address = request.form.get('property_address', '')
         inspector_name = request.form.get('inspector_name', '')
         doc_mode = request.form.get('doc_mode', 'link')
         folder_id = request.form.get('folder_id')
         report_data = heatlossservice.generate_report(
-            batch_id,
-            property_address=property_address,
-            inspector_name=inspector_name,
-            doc_mode=doc_mode,
-            tenant_id=None
+            batch_id, property_address=property_address,
+            inspector_name=inspector_name, doc_mode=doc_mode, tenant_id=None
         )
         pdf_path = None
         try:
-            pdf_path = heatlossservice.generate_pdf_from_report_data(
-                batch_id, report_data, None
-            )
+            pdf_path = heatlossservice.generate_pdf_from_report_data(batch_id, report_data, None)
             if pdf_path and folder_id:
                 import services.drive_client as drive_client
                 drive_client.upload_file_to_folder(pdf_path, folder_id)
@@ -203,8 +176,7 @@ def generate_heat_loss_report_route(batch_id):
         except Exception as e:
             logger.warning(f"PDF generation/upload failed (non-fatal): {e}")
         return jsonify({
-            'success': True,
-            'message': 'Heat loss report generated successfully',
+            'success': True, 'message': 'Heat loss report generated successfully',
             'report_url': url_for('view_heat_loss_report', batch_id=batch_id),
             'pdf_generated': pdf_path is not None
         })
@@ -221,14 +193,9 @@ def generate_heat_loss_report_route(batch_id):
 
 @app.route("/view_heat_loss_report/<batch_id>", methods=["GET"])
 def view_heat_loss_report(batch_id: str) -> str:
-    """Display professional heat loss report."""
     try:
         report_data = heatlossservice.get_report(batch_id, None)
-        return render_template(
-            "heat_loss_report.html",
-            batch_id=batch_id,
-            report_data=report_data,
-        )
+        return render_template("heat_loss_report.html", batch_id=batch_id, report_data=report_data)
     except FileNotFoundError:
         logger.error(f"Report for batch {batch_id} not found")
         abort(404)
@@ -239,67 +206,134 @@ def view_heat_loss_report(batch_id: str) -> str:
 
 @app.route("/download_pdf/<batch_id>", methods=["GET"])
 def download_pdf(batch_id: str) -> Any:
-    """
-    Generate (if needed) and download the report for a batch.
-    Serves PDF if available, otherwise falls back to HTML download.
-    """
     try:
         batch_dir = safe_batch_path(settings.BASE_REPORT_DIR, batch_id, None)
         pdf_filename = f"thermal_report_{batch_id}.pdf"
         pdf_path = batch_dir / pdf_filename
-
-        # If PDF already exists, serve it
         if pdf_path.exists():
-            return send_file(
-                str(pdf_path),
-                as_attachment=True,
-                download_name=pdf_filename,
-                mimetype='application/pdf'
-            )
-
-        # Otherwise generate it
+            return send_file(str(pdf_path), as_attachment=True, download_name=pdf_filename, mimetype='application/pdf')
         report_data = heatlossservice.get_report(batch_id, None)
-        result_path = heatlossservice.generate_pdf_from_report_data(
-            batch_id, report_data, None
-        )
-
+        result_path = heatlossservice.generate_pdf_from_report_data(batch_id, report_data, None)
         if not result_path:
-            return jsonify({
-                "error": "PDF generation failed. Check server logs.",
-                "hint": "Install a PDF library: pip install xhtml2pdf"
-            }), 500
-
+            return jsonify({"error": "PDF generation failed. Check server logs.", "hint": "pip install xhtml2pdf"}), 500
         result_file = Path(result_path)
         if not result_file.exists():
             return jsonify({"error": "Generated file not found"}), 500
-
-        # Determine if we got a PDF or HTML fallback
         if result_file.suffix == '.pdf':
-            return send_file(
-                str(result_file),
-                as_attachment=True,
-                download_name=pdf_filename,
-                mimetype='application/pdf'
-            )
+            return send_file(str(result_file), as_attachment=True, download_name=pdf_filename, mimetype='application/pdf')
         else:
-            # HTML fallback — serve as downloadable HTML
-            return send_file(
-                str(result_file),
-                as_attachment=True,
-                download_name=f"thermal_report_{batch_id}.html",
-                mimetype='text/html'
-            )
+            return send_file(str(result_file), as_attachment=True,
+                download_name=f"thermal_report_{batch_id}.html", mimetype='text/html')
     except FileNotFoundError:
-        logger.error(f"Report for batch {batch_id} not found")
         abort(404)
     except Exception as e:
         logger.exception(f"Error downloading PDF for batch {batch_id}: {str(e)}")
         abort(500)
 
 
+@app.route("/api/fetch_shared_notes", methods=["POST"])
+def api_fetch_shared_notes() -> Any:
+    """
+    Fetch the shared recommendations HTML from Google Drive and return it.
+    The file ID is taken from RECOMMENDATIONS_DOCUMENT_URL in settings.
+    """
+    try:
+        from settings import RECOMMENDATIONS_DOCUMENT_URL
+        if not RECOMMENDATIONS_DOCUMENT_URL:
+            return jsonify({"error": "No shared notes URL configured"}), 400
+
+        # Extract Google Drive file ID from URL
+        file_id = _extract_drive_file_id(RECOMMENDATIONS_DOCUMENT_URL)
+        if not file_id:
+            return jsonify({"error": "Could not extract file ID from URL"}), 400
+
+        # Try fetching via Drive API first (uses service account credentials)
+        html_content = None
+        try:
+            import services.drive_client as drive_client
+            service = drive_client.get_drive_service()
+            # Export as HTML if it's a Google Doc, otherwise download raw
+            file_meta = service.files().get(fileId=file_id, fields='mimeType,name').execute()
+            mime = file_meta.get('mimeType', '')
+
+            if 'google-apps' in mime:
+                # It's a Google Doc/Sheet/etc — export as HTML
+                resp = service.files().export(fileId=file_id, mimeType='text/html').execute()
+                html_content = resp.decode('utf-8') if isinstance(resp, bytes) else resp
+            else:
+                # It's an uploaded file (HTML, PDF, etc) — download raw
+                import io
+                from googleapiclient.http import MediaIoBaseDownload
+                req = service.files().get_media(fileId=file_id)
+                fh = io.BytesIO()
+                downloader = MediaIoBaseDownload(fh, req)
+                done = False
+                while not done:
+                    _, done = downloader.next_chunk()
+                html_content = fh.getvalue().decode('utf-8', errors='replace')
+
+        except Exception as e:
+            logger.warning(f"Drive API fetch failed, trying direct HTTP: {e}")
+            # Fallback: direct HTTP fetch
+            html_content = _fetch_drive_html_direct(file_id)
+
+        if not html_content:
+            return jsonify({"error": "Failed to fetch shared notes content"}), 500
+
+        # Strip outer HTML wrappers
+        html_content = re.sub(r'<!DOCTYPE[^>]*>', '', html_content, flags=re.IGNORECASE)
+        html_content = re.sub(r'</?html[^>]*>', '', html_content, flags=re.IGNORECASE)
+        html_content = re.sub(r'<head[^>]*>.*?</head>', '', html_content, flags=re.IGNORECASE | re.DOTALL)
+        html_content = re.sub(r'</?body[^>]*>', '', html_content, flags=re.IGNORECASE)
+
+        return jsonify({"success": True, "html": html_content.strip()})
+
+    except Exception as e:
+        logger.exception(f"Error fetching shared notes: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+def _extract_drive_file_id(url: str) -> str | None:
+    """Extract Google Drive file ID from various URL formats."""
+    patterns = [
+        r'/file/d/([a-zA-Z0-9_-]+)',         # drive.google.com/file/d/ID/...
+        r'/document/d/([a-zA-Z0-9_-]+)',      # docs.google.com/document/d/ID/...
+        r'/spreadsheets/d/([a-zA-Z0-9_-]+)',  # docs.google.com/spreadsheets/d/ID/...
+        r'[?&]id=([a-zA-Z0-9_-]+)',           # drive.google.com/open?id=ID
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    return None
+
+
+def _fetch_drive_html_direct(file_id: str) -> str | None:
+    """Fetch Google Drive file content via direct export URL (no API key needed for public files)."""
+    import requests
+    # Try Google Docs export URL first
+    export_url = f"https://docs.google.com/document/d/{file_id}/export?format=html"
+    try:
+        resp = requests.get(export_url, timeout=15, allow_redirects=True)
+        if resp.status_code == 200 and '<' in resp.text[:100]:
+            return resp.text
+    except Exception:
+        pass
+
+    # Try Drive direct download
+    direct_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+    try:
+        resp = requests.get(direct_url, timeout=15, allow_redirects=True)
+        if resp.status_code == 200:
+            return resp.text
+    except Exception:
+        pass
+
+    return None
+
+
 @app.route("/delete/<batch_id>", methods=["DELETE"])
 def delete_batch(batch_id: str) -> Any:
-    """Delete batch and all associated files."""
     try:
         batch_path = safe_batch_path(settings.BASE_REPORT_DIR, batch_id, None)
         if batch_path.exists():
