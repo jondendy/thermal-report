@@ -21,16 +21,17 @@
         .header { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         h1 { color: #333; margin-bottom: 10px; font-size: 24px; }
         .batch-info { font-size: 13px; color: #666; }
-        .stats { display: flex; gap: 30px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; flex-wrap: wrap; align-items: center; justify-content: space-between; }
-        .stat-group { display: flex; gap: 30px; flex-wrap: wrap; }
+        .stats { display: flex; gap: 30px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; }
+        .stat-group { display: flex; gap: 30px; flex-wrap: wrap; flex-shrink: 0; }
         .stat { display: flex; flex-direction: column; }
         .stat-label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
         .stat-value { font-size: 22px; font-weight: bold; color: var(--color-primary); margin-top: 4px; }
         
+        .sensitivity-wrapper { display: flex; flex-direction: column; gap: 8px; }
         .sensitivity-control { display: flex; align-items: center; gap: 10px; background: #eef5ff; padding: 8px 12px; border-radius: 6px; border: 1px solid #c5d9ff; }
         .sensitivity-control label { font-size: 11px; font-weight: 600; color: #345; text-transform: uppercase; }
         .sensitivity-control select { padding: 4px 6px; font-size: 12px; border-radius: 4px; border: 1px solid #ced4da; background: white; }
-        .sensitivity-note { font-size: 11px; color: #666; margin-top: 4px; }
+        .sensitivity-note { font-size: 11px; color: #666; max-width: 300px; }
         
         /* Links Section */
         .links-section { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
@@ -154,7 +155,8 @@
             .grid-container { grid-template-columns: 1fr; }
             .link-item { grid-template-columns: 100px 1fr 30px; }
             .shared-notes-box { flex-direction: column; text-align: center; }
-            .stats { align-items: flex-start; }
+            .stats { flex-direction: column; align-items: stretch; }
+            .stat-group { justify-content: space-between; }
         }
     </style>
 </head>
@@ -168,7 +170,7 @@
                 <div class="stat"><span class="stat-label">Spots</span><span class="stat-value" id="spotCount">0</span></div>
                 <div class="stat"><span class="stat-label">Labeled</span><span class="stat-value" id="labeledCount">0</span></div>
             </div>
-            <div>
+            <div class="sensitivity-wrapper">
                 <div class="sensitivity-control">
                     <label for="sensitivitySelect">Detection Sensitivity</label>
                     <select id="sensitivitySelect">
@@ -304,6 +306,17 @@
                 state.attachedFiles = SAVED.attached_files;
                 renderUploadedFiles();
             }
+            
+            // Load saved property/surveyor from existing labels
+            const propertyInput = document.getElementById('propertyAddress');
+            const surveyorInput = document.getElementById('surveyorName');
+            if (SAVED.property_address) {
+                propertyInput.value = SAVED.property_address;
+            }
+            if (SAVED.surveyor_name) {
+                surveyorInput.value = SAVED.surveyor_name;
+            }
+            
             updateSharedNotesButton();
             render();
         }
