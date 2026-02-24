@@ -56,8 +56,7 @@ def _get_tenant_id() -> str:
 @app.route("/", methods=["GET"])
 def index() -> str:
     """Display batch list and upload interface."""
-    tenant_id = None  # No longer using tenant subdirectories
-    batches = batchservice.get_all_batches(None)  # Pass None instead of tenant_id
+    batches = batchservice.get_all_batches(None)
     
     return render_template(
         "index.html", 
@@ -70,7 +69,6 @@ def index() -> str:
 @app.route("/upload", methods=["POST"])
 def upload() -> Any:
     """Process uploaded thermal images and create batch."""
-    tenant_id = _get_tenant_id()
     files = request.files.getlist("files")
 
     if not files or len(files) == 0:
@@ -79,8 +77,8 @@ def upload() -> Any:
     try:
         # Generate batch_id from files
         batch_id = batchservice.get_batch_id(files)
-        # Process batch with correct argument order: batch_id, files, tenant_id
-        results = batchservice.process_batch(batch_id, files, tenant_id)
+        # Process batch with None tenant_id (tenants deprecated)
+        results = batchservice.process_batch(batch_id, files, None)
         summary = results.get('summary', {})
     except ValueError as e:
         logger.warning(f"Validation error during upload: {str(e)}")
@@ -207,10 +205,9 @@ def editspots(batchid: str) -> str:
 @app.route("/save_labels/<batchid>", methods=["POST"])
 def save_labels(batchid: str) -> Any:
     """Save operator hotspot labels and document links."""
-    tenant_id = _get_tenant_id()
     try:
         data = request.get_json()
-        heatlossservice.save_labels(batchid, data, tenant_id)
+        heatlossservice.save_labels(batchid, data, None)
         return jsonify({"success": True, "message": "Labels saved"})
     except Exception as e:
         logger.exception(f"Error saving labels for batch {batchid}: {str(e)}")
@@ -224,19 +221,18 @@ def generate_heat_loss_report_route(batch_id):
     Now also generates PDF and uploads to Drive if folder_id is provided.
     """
     try:
-        tenant_id = request.headers.get('X-Tenant-ID', settings.DEFAULT_TENANT)
         property_address = request.form.get('property_address', '')
         inspector_name = request.form.get('inspector_name', '')
         doc_mode = request.form.get('doc_mode', 'link')
         folder_id = request.form.get('folder_id')  # Optional: Drive folder ID
         
-        # Generate report data (HTML structure)
+        # Generate report data (HTML structure) — pass None for tenant_id
         report_data = heatlossservice.generate_report(
             batch_id,
             property_address=property_address,
             inspector_name=inspector_name,
             doc_mode=doc_mode,
-            tenant_id=tenant_id
+            tenant_id=None
         )
         
         # NEW: Generate PDF from the report data
@@ -245,7 +241,7 @@ def generate_heat_loss_report_route(batch_id):
             pdf_path = heatlossservice.generate_pdf_from_report_data(
                 batch_id, 
                 report_data, 
-                tenant_id
+                None  # tenant_id deprecated
             )
             
             # Upload to Drive if folder_id provided
@@ -279,9 +275,8 @@ def generate_heat_loss_report_route(batch_id):
 @app.route("/view_heat_loss_report/<batch_id>", methods=["GET"])
 def view_heat_loss_report(batch_id: str) -> str:
     """Display professional heat loss report."""
-    tenant_id = _get_tenant_id()
     try:
-        report_data = heatlossservice.get_report(batch_id, tenant_id)
+        report_data = heatlossservice.get_report(batch_id, None)
         return render_template(
             "heat_loss_report.html",
             batch_id=batch_id,
@@ -298,9 +293,8 @@ def view_heat_loss_report(batch_id: str) -> str:
 @app.route("/delete/<batch_id>", methods=["DELETE"])
 def delete_batch(batch_id: str) -> Any:
     """Delete batch and all associated files."""
-    tenant_id = _get_tenant_id()
     try:
-        batch_path = safe_batch_path(settings.REPORTS_DIR, batch_id, tenant_id)
+        batch_path = safe_batch_path(settings.BASE_REPORT_DIR, batch_id, None)
         if batch_path.exists():
             shutil.rmtree(batch_path)
             logger.info(f"Deleted batch {batch_id}")
@@ -313,9 +307,8 @@ def delete_batch(batch_id: str) -> Any:
 @app.route("/api/batches", methods=["GET"])
 def api_list_batches() -> Any:
     """List all batches as JSON."""
-    tenant_id = _get_tenant_id()
     try:
-        batches = batchservice.get_all_batches(tenant_id)
+        batches = batchservice.get_all_batches(None)
         return jsonify({"success": True, "batches": batches})
     except Exception as e:
         logger.exception(f"Error listing batches: {str(e)}")
@@ -325,9 +318,8 @@ def api_list_batches() -> Any:
 @app.route("/api/batch/<batch_id>", methods=["GET"])
 def api_batch_info(batch_id: str) -> Any:
     """Get batch summary as JSON."""
-    tenant_id = _get_tenant_id()
     try:
-        summary = batchservice.get_batch_summary(batch_id, tenant_id)
+        summary = batchservice.get_batch_summary(batch_id, None)
         return jsonify({"success": True, "batch": summary})
     except FileNotFoundError:
         return jsonify({"error": "Batch not found"}), 404
@@ -339,9 +331,8 @@ def api_batch_info(batch_id: str) -> Any:
 @app.route("/api/batch/<batch_id>/analysis", methods=["GET"])
 def api_thermal_analysis(batch_id: str) -> Any:
     """Get thermal analysis data as JSON."""
-    tenant_id = _get_tenant_id()
     try:
-        analysis = heatlossservice.get_thermal_analysis(batch_id, tenant_id)
+        analysis = heatlossservice.get_thermal_analysis(batch_id, None)
         return jsonify({"success": True, "analysis": analysis})
     except FileNotFoundError:
         return jsonify({"error": "Analysis not found"}), 404

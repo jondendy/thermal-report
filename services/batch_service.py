@@ -61,7 +61,7 @@ def process_batch(
     Args:
         batch_id (str): Unique batch identifier
         image_files: List of FileStorage objects from upload
-        tenant_id (str): Tenant ID (uses DEFAULT_TENANT if not provided)
+        tenant_id (str): Tenant ID (deprecated - pass None)
         
     Returns:
         dict: Processing results with summary and per-image analysis
@@ -69,22 +69,15 @@ def process_batch(
     Raises:
         ValueError: If batch_id or tenant_id invalid
     """
-    # 1. Normalise tenant_id
-    #     tenant_id = tenant_id or "NK"  # <- default when None/empty
-
-    # 2. Validate tenant_id
-    if not validate_tenant_id(tenant_id):
+    # Validate tenant_id only if one was explicitly provided
+    if tenant_id and not validate_tenant_id(tenant_id):
         raise ValueError(f"Invalid tenant_id: {tenant_id}")
 
-    # 3. Build upload path (per‑tenant folder)
-        # When tenant_id is None, don't create tenant subdirectory
-    if tenant_id:
-        upload_dir = BASE_UPLOAD_PATH / tenant_id / batch_id
-    else:
-        upload_dir = BASE_UPLOAD_PATH / batch_id
+    # Always use flat upload path (no tenant subdirectory)
+    upload_dir = BASE_UPLOAD_PATH / batch_id
     upload_dir.mkdir(parents=True, exist_ok=True)
 
-    # 4. Build report batch path
+    # Build report batch path (also flat — no tenant subdirectory)
     batch_dir = safe_batch_path(BASE_REPORT_DIR, batch_id, tenant_id)
     batch_dir.mkdir(parents=True, exist_ok=True)
     
@@ -191,10 +184,10 @@ def process_batch(
             'failed': len(saved_images) - len(all_temps)
         }
 
-    # ⭐ ADD THIS: Save the report data for PDF generation
+    # Save the report data for PDF generation
     from services.batch_io import save_heatloss_report
     save_heatloss_report(batch_id, results, tenant_id)
-        # Also save thermal analysis data for edit_spots page
+    # Also save thermal analysis data for edit_spots page
     batchio.save_thermal_analysis(batch_id, results, tenant_id)
 
     return results
@@ -202,15 +195,14 @@ def process_batch(
 
 def get_all_batches(tenant_id: str | None = None) -> List[Dict[str, Any]]:
     """
-    Get list of all processed batches for a tenant.
+    Get list of all processed batches.
     
     Args:
-        tenant_id (str): Tenant ID (uses DEFAULT_TENANT if not provided)
+        tenant_id (str): Tenant ID (deprecated - pass None)
         
     Returns:
         list: List of batch summaries, sorted by date (newest first)
     """
-    tenant_id = validate_tenant_id(tenant_id)
     return batchio.list_batches(None)
 
 
@@ -220,12 +212,11 @@ def get_batch_summary(batch_id: str, tenant_id: str | None = None) -> Dict[str, 
     
     Args:
         batch_id (str): Batch ID
-        tenant_id (str): Tenant ID
+        tenant_id (str): Tenant ID (deprecated - pass None)
         
     Returns:
         dict: Batch summary from results.json
     """
-    tenant_id = validate_tenant_id(tenant_id)
     data = batchio.load_batch_results(batch_id, tenant_id)
     if not data:
         raise FileNotFoundError(f"Batch {batch_id} not found")
