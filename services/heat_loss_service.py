@@ -1,420 +1,500 @@
+#!/usr/bin/env python3
 """
-Heat loss service.
-
-Connects stored thermal analysis and operator hotspot labels with the
-HeatLossReporter to generate homeowner-friendly HTML reports.
+Heat Loss Service
+Generates heat loss reports from labeled thermal data.
 """
-
-from __future__ import annotations
-
 import logging
-import re
-import base64
-from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from datetime import datetime
+from typing import Dict, List, Any, Optional
+import json
 
-from settings import ORG_NAME, ORG_WEBSITE, ORG_CONTACT, RECOMMENDATIONS_DOCUMENT_URL
-import services.batch_io as batchio
-from services.heat_loss_reporter import HeatLossReporter
+import settings
+from security_utils import safe_batch_path
+from services import batch_io as batchio
 
 logger = logging.getLogger(__name__)
 
 
-def get_thermal_analysis(batch_id: str, tenant_id: str | None = None) -> Dict[str, Any]:
-    analysis = batchio.load_thermal_analysis(batch_id, tenant_id)
-    if analysis is None:
-        raise FileNotFoundError(f"No thermal analysis found for batch {batch_id}")
-    return analysis
+def get_thermal_analysis(batch_id: str, tenant_id: Optional[str]) -> Dict[str, Any]:
+    """Load thermal analysis results for a batch."""
+    return batchio.load_thermal_analysis(batch_id, tenant_id)
 
 
-def get_existing_labels(batch_id: str, tenant_id: str | None = None) -> Dict[str, Any]:
-    labels = batchio.load_hotspot_labels(batch_id, tenant_id)
-    return labels or {"labeled_spots": []}
-
-
-def save_labels(batch_id: str, label_data: Dict[str, Any], tenant_id: str | None = None) -> None:
-    batchio.save_hotspot_labels(batch_id, label_data, tenant_id)
-
-
-def _combine_analysis_and_labels(
-    analysis: Dict[str, Any],
-    labels: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    reporter = HeatLossReporter(
-        org_name=ORG_NAME,
-        org_website=ORG_WEBSITE,
-        org_contact=ORG_CONTACT,
-    )
-    labeled_spots = labels.get('labeled_spots', [])
-    grouped = reporter.group_by_spot_number(labeled_spots)
-    findings = []
-    for spot_number, spot_group in grouped.items():
-        finding = reporter.generate_finding_narrative(spot_group, spot_number)
-        findings.append(finding)
-    severity_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
-    findings.sort(key=lambda f: (severity_order.get(f['severity'], 3), f['spot_number']))
-    return findings
-
-
-def _fetch_recommendations_html(url: str) -> str | None:
-    """
-    Fetch external recommendations document and return its HTML body content.
-    Returns None if fetch fails.
-    """
-    if not url:
-        return None
+def get_existing_labels(batch_id: str, tenant_id: Optional[str]) -> Dict[str, Any]:
+    """Load existing labels for a batch."""
     try:
-        import requests
-        resp = requests.get(url, timeout=15, allow_redirects=True)
-        resp.raise_for_status()
-        html = resp.text
-        # Strip outer <html>/<head>/<body> wrappers, keep inner content
-        html = re.sub(r'<!DOCTYPE[^>]*>', '', html, flags=re.IGNORECASE)
-        html = re.sub(r'</?html[^>]*>', '', html, flags=re.IGNORECASE)
-        html = re.sub(r'<head[^>]*>.*?</head>', '', html, flags=re.IGNORECASE | re.DOTALL)
-        html = re.sub(r'</?body[^>]*>', '', html, flags=re.IGNORECASE)
-        return html.strip()
-    except Exception as e:
-        logger.warning(f"Failed to fetch recommendations document from {url}: {e}")
-        return None
+        return batchio.load_labels(batch_id, tenant_id)
+    except FileNotFoundError:
+        logger.debug(f"No existing labels found for batch {batch_id}")
+        return {"spots": {}, "notes": []}
+
+
+def save_labels(batch_id: str, data: Dict[str, Any], tenant_id: Optional[str]) -> None:
+    """Save labels for a batch."""
+    batchio.save_labels(batch_id, data, tenant_id)
+    logger.info(f"Labels saved for batch {batch_id}")
 
 
 def generate_report(
     batch_id: str,
-    property_address: str | None,
-    inspector_name: str | None,
-    doc_mode: str = 'link',
-    tenant_id: str | None = None,
+    property_address: str = "",
+    inspector_name: str = "",
+    doc_mode: str = "link",
+    tenant_id: Optional[str] = None
 ) -> Dict[str, Any]:
-    analysis = get_thermal_analysis(batch_id, tenant_id)
-    labels = get_existing_labels(batch_id, tenant_id)
-    findings = _combine_analysis_and_labels(analysis, labels)
-
-    reporter = HeatLossReporter(
-        org_name=ORG_NAME,
-        org_website=ORG_WEBSITE,
-        org_contact=ORG_CONTACT,
-    )
-
-    summary = reporter.generate_executive_summary(findings)
-    recommendations = reporter.generate_recommendations(findings)
-
-    # Pull attached notes and links from saved labels
-    attached_files = labels.get('attached_files', [])
-    links = labels.get('links', [])
-
-    # Fetch recommendations document HTML for embedding
-    recommendations_html = None
-    recommendations_url = RECOMMENDATIONS_DOCUMENT_URL or None
-    if recommendations_url:
-        recommendations_html = _fetch_recommendations_html(recommendations_url)
-        if recommendations_html:
-            logger.info(f"Successfully fetched recommendations document ({len(recommendations_html)} chars)")
-        else:
-            logger.warning("Could not fetch recommendations doc; will fall back to link")
-
+    """
+    Generate a heat loss report from labeled thermal data.
+    
+    Args:
+        batch_id: Unique batch identifier
+        property_address: Address of surveyed property
+        inspector_name: Name of inspector
+        doc_mode: How to handle attached documents ('link', 'embed', or 'none')
+        tenant_id: Optional tenant identifier for multi-tenant setups
+    
+    Returns:
+        Dictionary containing structured report data
+    """
+    analysis_data = get_thermal_analysis(batch_id, tenant_id)
+    labels_data = get_existing_labels(batch_id, tenant_id)
+    
+    spots_by_location = labels_data.get("spots", {})
+    notes = labels_data.get("notes", [])
+    saved_links = labels_data.get("links", [])
+    
+    findings = _process_findings(analysis_data, spots_by_location)
+    summary = _generate_summary(findings)
+    
+    now = datetime.now()
     report_data = {
         "batch_id": batch_id,
         "property_address": property_address or "Not specified",
         "inspector_name": inspector_name or "Not specified",
-        "survey_date": datetime.now().strftime("%Y-%m-%d"),
-        "survey_time": datetime.now().strftime("%H:%M"),
+        "survey_date": now.strftime("%Y-%m-%d"),
+        "survey_time": now.strftime("%H:%M"),
         "summary": summary,
         "findings": findings,
-        "recommendations": recommendations,
-        "organisation": {
-            "name": ORG_NAME,
-            "website": ORG_WEBSITE,
-            "contact": ORG_CONTACT,
-        },
-        "recommendations_document_url": recommendations_url,
-        "recommendations_html": recommendations_html,
+        "notes": notes,
+        "links": saved_links,
         "doc_mode": doc_mode,
-        "attached_files": attached_files,
-        "links": links,
+    }
+    
+    batchio.save_report(batch_id, report_data, tenant_id)
+    logger.info(f"Heat loss report generated for batch {batch_id} with {len(findings)} findings")
+    return report_data
+
+
+def _process_findings(
+    analysis_data: Dict[str, Any],
+    spots_by_location: Dict[str, Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """
+    Process thermal analysis data and user labels into structured findings.
+    
+    Args:
+        analysis_data: Raw thermal analysis results
+        spots_by_location: User-provided labels keyed by "filename:spot_id"
+    
+    Returns:
+        List of finding dictionaries grouped by labeled spot type
+    """
+    findings_by_type = {}
+    images_data = analysis_data.get("images", [])
+    
+    for image_info in images_data:
+        filename = image_info.get("filename", "")
+        hot_spots = image_info.get("hot_spots", [])
+        
+        for spot_idx, spot in enumerate(hot_spots):
+            spot_id = f"{filename}:{spot_idx}"
+            label_info = spots_by_location.get(spot_id, {})
+            
+            if not label_info:
+                continue
+            
+            spot_type = label_info.get("type", "Other")
+            severity = label_info.get("severity", "low").lower()
+            description = label_info.get("description", "No description provided.")
+            
+            if spot_type not in findings_by_type:
+                findings_by_type[spot_type] = {
+                    "title": f"Heat Loss at {spot_type}",
+                    "type": spot_type,
+                    "severity": severity,
+                    "description": description,
+                    "spot_locations": [],
+                    "temperatures": [],
+                    "image_count": 0,
+                    "recommendations": _get_recommendations_for_type(spot_type, severity),
+                }
+            
+            finding = findings_by_type[spot_type]
+            finding["spot_locations"].append((filename, (spot.get("x", 0), spot.get("y", 0))))
+            finding["temperatures"].extend([
+                spot.get("max_temp", 0),
+                spot.get("avg_temp", 0),
+                spot.get("min_temp", 0)
+            ])
+            finding["image_count"] += 1
+            
+            if _severity_rank(severity) > _severity_rank(finding["severity"]):
+                finding["severity"] = severity
+                finding["description"] = description
+    
+    for finding in findings_by_type.values():
+        temps = finding["temperatures"]
+        if temps:
+            finding["max_temp"] = max(temps)
+            finding["avg_temp"] = sum(temps) / len(temps)
+            finding["min_temp"] = min(temps)
+        else:
+            finding["max_temp"] = finding["avg_temp"] = finding["min_temp"] = 0.0
+        del finding["temperatures"]
+    
+    return sorted(findings_by_type.values(), key=lambda f: _severity_rank(f["severity"]), reverse=True)
+
+
+def _severity_rank(severity: str) -> int:
+    """Return numeric rank for severity level."""
+    ranks = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+    return ranks.get(severity.lower(), 0)
+
+
+def _get_recommendations_for_type(spot_type: str, severity: str) -> str:
+    """Generate recommendations based on spot type and severity."""
+    recommendations = {
+        "Wall": "Consider additional wall insulation. Check for gaps or missing insulation.",
+        "Window": "Consider upgrading to double/triple glazing. Check seals and weatherstripping.",
+        "Door": "Install or replace weatherstripping. Consider adding a draft excluder.",
+        "Roof": "Add or upgrade loft insulation. Check for gaps around roof penetrations.",
+        "Floor": "Consider underfloor insulation. Check for drafts around skirting boards.",
+        "Vent": "Ensure proper sealing when not in use. Consider adjustable vents.",
+        "Other": "Investigate the source of heat loss and take appropriate action.",
+    }
+    base_rec = recommendations.get(spot_type, recommendations["Other"])
+    
+    if severity in ["critical", "high"]:
+        return f"⚠️ PRIORITY ACTION REQUIRED: {base_rec}"
+    return base_rec
+
+
+def _generate_summary(findings: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Generate summary statistics from findings."""
+    severity_breakdown = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    highest_severity = "low"
+    
+    for finding in findings:
+        severity = finding.get("severity", "low").lower()
+        severity_breakdown[severity] = severity_breakdown.get(severity, 0) + 1
+        if _severity_rank(severity) > _severity_rank(highest_severity):
+            highest_severity = severity
+    
+    return {
+        "total_findings": len(findings),
+        "highest_severity": highest_severity.capitalize(),
+        "severity_breakdown": severity_breakdown,
     }
 
-    batchio.save_heatloss_report(batch_id, report_data, tenant_id)
-    return report_data
+
+def get_report(batch_id: str, tenant_id: Optional[str]) -> Dict[str, Any]:
+    """Load a previously generated report."""
+    return batchio.load_report(batch_id, tenant_id)
+
+
+def _render_report_html(batch_id: str, report_data: Dict[str, Any], tenant_id: Optional[str]) -> str:
+    """
+    Render report data as standalone HTML with embedded/linked images.
+    
+    This version is optimized for PDF generation:
+    - Uses file:// URLs instead of base64 encoding to prevent PDF bloat
+    - xhtml2pdf supports local file paths
+    - Reduces PDF size from 65 pages to reasonable length
+    
+    Args:
+        batch_id: Unique batch identifier
+        report_data: Structured report data
+        tenant_id: Optional tenant identifier
+    
+    Returns:
+        Complete HTML string ready for PDF conversion
+    """
+    batch_dir = safe_batch_path(settings.BASE_REPORT_DIR, batch_id, tenant_id)
+    
+    html = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Building Heat Loss Survey Report</title>
+    <style>
+        body {{
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: white;
+        }}
+        .header {{
+            border-bottom: 4px solid #2c3e50;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }}
+        .header h1 {{
+            color: #2c3e50;
+            margin: 0;
+            font-size: 2em;
+        }}
+        .property-info {{
+            background: #ecf0f1;
+            padding: 15px;
+            border-left: 4px solid #3498db;
+            margin-bottom: 20px;
+        }}
+        .summary-box {{
+            background: #e8f4f8;
+            border: 2px solid #3498db;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }}
+        .severity-badge {{
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-weight: bold;
+            font-size: 0.85em;
+            margin: 3px;
+        }}
+        .severity-critical {{ background: #e74c3c; color: white; }}
+        .severity-high {{ background: #e67e22; color: white; }}
+        .severity-medium {{ background: #f39c12; color: white; }}
+        .severity-low {{ background: #f1c40f; color: #333; }}
+        .finding {{
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            page-break-inside: avoid;
+        }}
+        .finding h3 {{
+            color: #2c3e50;
+            margin-top: 0;
+        }}
+        .finding-images {{
+            margin: 15px 0;
+        }}
+        .finding-image {{
+            margin: 10px 0;
+            page-break-inside: avoid;
+        }}
+        .finding-image img {{
+            max-width: 100%;
+            height: auto;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+        }}
+        .finding-image .caption {{
+            background: #2c3e50;
+            color: white;
+            padding: 8px;
+            text-align: center;
+            font-size: 0.85em;
+            margin-top: -3px;
+        }}
+        .temperature-stats {{
+            background: #fff;
+            padding: 10px;
+            margin: 10px 0;
+            border-left: 4px solid #3498db;
+        }}
+        .recommendations {{
+            background: #d4edda;
+            border: 2px solid #28a745;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }}
+        .recommendations h4 {{
+            color: #155724;
+            margin-top: 0;
+        }}
+        .footer {{
+            margin-top: 40px;
+            padding-top: 15px;
+            border-top: 2px solid #ecf0f1;
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 0.85em;
+        }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Building Heat Loss Survey Report</h1>
+        <div style="color: #7f8c8d; font-size: 1.1em; margin-top: 8px;">Thermal Imaging Analysis</div>
+    </div>
+
+    <div class="property-info">
+        <h2 style="margin-top: 0; font-size: 1.3em;">Property Information</h2>
+        <p><strong>Address:</strong> {report_data.get('property_address', 'Not specified')}</p>
+        <p><strong>Survey Date:</strong> {report_data.get('survey_date', 'Not specified')}</p>
+        <p><strong>Survey Time:</strong> {report_data.get('survey_time', 'Not specified')}</p>
+        <p><strong>Inspector:</strong> {report_data.get('inspector_name', 'Not specified')}</p>
+        <p><strong>Batch ID:</strong> {batch_id}</p>
+    </div>
+
+    <div class="summary-box">
+        <h2 style="margin-top: 0; font-size: 1.3em;">Executive Summary</h2>
+        <p><strong>Total Heat Loss Points:</strong> {report_data['summary']['total_findings']}</p>
+        <p><strong>Highest Severity:</strong>
+            <span class="severity-badge severity-{report_data['summary']['highest_severity'].lower()}">
+                {report_data['summary']['highest_severity']}
+            </span>
+        </p>
+        <p><strong>Severity Breakdown:</strong></p>
+        <div>
+'''
+    
+    severity_breakdown = report_data['summary']['severity_breakdown']
+    for severity, count in severity_breakdown.items():
+        if count > 0:
+            html += f'            <span class="severity-badge severity-{severity}">{severity.capitalize()}: {count}</span>\n'
+    
+    html += '''        </div>
+    </div>
+
+    <h2 style="color: #2c3e50; margin-top: 40px; font-size: 1.5em;">Detailed Findings</h2>
+'''
+    
+    for finding in report_data.get('findings', []):
+        severity = finding.get('severity', 'low').lower()
+        html += f'''
+    <div class="finding">
+        <h3>{finding.get('title', 'Heat Loss Point')}</h3>
+        <div>
+            <span class="severity-badge severity-{severity}">{severity.upper()} PRIORITY</span>
+'''
+        if finding.get('image_count', 0) > 1:
+            html += f'            <span style="background: #95a5a6; color: white; padding: 4px 12px; border-radius: 15px; font-weight: bold; margin-left: 8px;">Visible in {finding["image_count"]} images</span>\n'
+        
+        html += f'''
+        </div>
+        <div class="temperature-stats">
+            <strong>Temperature Analysis:</strong><br>
+            Max: {finding.get('max_temp', 0):.1f}°C |
+            Avg: {finding.get('avg_temp', 0):.1f}°C |
+            Min: {finding.get('min_temp', 0):.1f}°C
+        </div>
+        <p>{finding.get('description', 'No description provided.')}</p>
+        <div class="finding-images">
+'''
+        
+        # Add images using file:// URLs (xhtml2pdf supports this)
+        for image_name, location in finding.get('spot_locations', []):
+            labeled_name = image_name.replace('.jpg', '_labeled.jpg')
+            labeled_path = batch_dir / labeled_name
+            
+            if labeled_path.exists():
+                # Use file:// URL for PDF generation (works with xhtml2pdf)
+                file_url = labeled_path.as_uri()
+                html += f'''
+            <div class="finding-image">
+                <img src="{file_url}" alt="Thermal image showing {finding.get('type', 'heat loss')}">
+                <div class="caption">{image_name} - Location: ({location[0]}, {location[1]})</div>
+            </div>
+'''
+        
+        html += '        </div>\n'
+        
+        # Add recommendations
+        recommendations = finding.get('recommendations', '')
+        if recommendations:
+            html += f'''
+        <div class="recommendations">
+            <h4 style="margin-top: 0;">🔧 Recommendations</h4>
+            <p>{recommendations}</p>
+        </div>
+'''
+        
+        html += '    </div>\n'
+    
+    # Add notes if present
+    notes = report_data.get('notes', [])
+    if notes:
+        html += '''
+    <div style="margin: 40px 0;">
+        <h2 style="color: #2c3e50; border-bottom: 3px solid #2c3e50; padding-bottom: 8px;">Additional Notes</h2>
+'''
+        for note_idx, note in enumerate(notes, 1):
+            html += f'''
+        <div style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background: #fafafa;">
+            <h3 style="margin-top: 0;">Note {note_idx}</h3>
+            <p>{note.get('content', 'No content')}</p>
+        </div>
+'''
+        html += '    </div>\n'
+    
+    # Add footer
+    html += f'''
+    <div class="footer">
+        <p>Report generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
+        <p>Thermal Report System v{settings.APP_VERSION}</p>
+    </div>
+</body>
+</html>
+'''
+    
+    return html
 
 
 def generate_pdf_from_report_data(
     batch_id: str,
     report_data: Dict[str, Any],
-    tenant_id: str | None = None
-) -> str | None:
+    tenant_id: Optional[str]
+) -> Optional[str]:
     """
-    Generate PDF from report data.
-    Tries weasyprint -> pdfkit -> falls back to serving the HTML.
-    Returns path to generated file (.pdf or .html fallback), or None on total failure.
+    Generate a PDF file from report data.
+    
+    Args:
+        batch_id: Unique batch identifier
+        report_data: Structured report data
+        tenant_id: Optional tenant identifier
+    
+    Returns:
+        Path to generated PDF file, or None if PDF generation unavailable
     """
-    from security_utils import safe_batch_path
-    from settings import BASE_REPORT_DIR
-
     try:
-        batch_dir = safe_batch_path(BASE_REPORT_DIR, batch_id, tenant_id)
-        html_content = _render_report_html(report_data, batch_dir=str(batch_dir))
-
-        html_path = batch_dir / f"final_report_{batch_id}.html"
-        with open(html_path, 'w', encoding='utf-8') as f:
-            f.write(html_content)
-
-        pdf_filename = f"thermal_report_{batch_id}.pdf"
-        pdf_path = batch_dir / pdf_filename
-
-        # ---- Attempt 1: weasyprint ----
-        try:
-            from weasyprint import HTML as WeasyHTML
-            WeasyHTML(string=html_content, base_url=str(batch_dir)).write_pdf(str(pdf_path))
-            logger.info(f"PDF generated via weasyprint: {pdf_path}")
-            return str(pdf_path)
-        except ImportError:
-            logger.warning("weasyprint not installed")
-        except Exception as e:
-            logger.warning(f"weasyprint failed at runtime: {e}")
-
-        # ---- Attempt 2: pdfkit / wkhtmltopdf ----
-        try:
-            import pdfkit
-            pdfkit.from_string(html_content, str(pdf_path))
-            logger.info(f"PDF generated via pdfkit: {pdf_path}")
-            return str(pdf_path)
-        except ImportError:
-            logger.warning("pdfkit not installed")
-        except Exception as e:
-            logger.warning(f"pdfkit failed at runtime: {e}")
-
-        # ---- Attempt 3: xhtml2pdf (pure Python, no system deps) ----
-        try:
-            from xhtml2pdf import pisa
-            with open(str(pdf_path), 'wb') as pdf_file:
-                result = pisa.CreatePDF(html_content, dest=pdf_file)
-                if not result.err:
-                    logger.info(f"PDF generated via xhtml2pdf: {pdf_path}")
-                    return str(pdf_path)
-                else:
-                    logger.warning(f"xhtml2pdf reported errors: {result.err}")
-        except ImportError:
-            logger.warning("xhtml2pdf not installed")
-        except Exception as e:
-            logger.warning(f"xhtml2pdf failed: {e}")
-
-        # ---- Fallback: serve HTML directly ----
-        logger.error(
-            "No PDF library could produce output. "
-            "Install one of: weasyprint, pdfkit (+ wkhtmltopdf), or xhtml2pdf.  "
-            "Falling back to HTML download."
-        )
+        from xhtml2pdf import pisa
+    except ImportError:
+        logger.warning("xhtml2pdf not installed. Falling back to HTML export.")
+        batch_dir = safe_batch_path(settings.BASE_REPORT_DIR, batch_id, tenant_id)
+        html_path = batch_dir / f"thermal_report_{batch_id}.html"
+        html_content = _render_report_html(batch_id, report_data, tenant_id)
+        html_path.write_text(html_content, encoding='utf-8')
         return str(html_path)
-
+    
+    batch_dir = safe_batch_path(settings.BASE_REPORT_DIR, batch_id, tenant_id)
+    pdf_filename = f"thermal_report_{batch_id}.pdf"
+    pdf_path = batch_dir / pdf_filename
+    
+    html_content = _render_report_html(batch_id, report_data, tenant_id)
+    
+    try:
+        with open(pdf_path, 'w+b') as pdf_file:
+            pisa_status = pisa.CreatePDF(
+                html_content,
+                dest=pdf_file,
+                encoding='utf-8'
+            )
+        
+        if pisa_status.err:
+            logger.error(f"PDF generation had errors for batch {batch_id}")
+            return None
+        
+        logger.info(f"PDF generated successfully: {pdf_path}")
+        return str(pdf_path)
+    
     except Exception as e:
-        logger.error(f"Failed to generate PDF: {e}", exc_info=True)
+        logger.exception(f"Error generating PDF for batch {batch_id}: {e}")
         return None
-
-
-def _render_report_html(
-    report_data: Dict[str, Any],
-    batch_dir: str | None = None,
-) -> str:
-    """
-    Render standalone HTML for PDF generation.
-    Embeds images as base64, appends recommendations doc content,
-    and appends attached HTML notes.
-    """
-    property_address = report_data.get('property_address', 'Not specified')
-    inspector_name = report_data.get('inspector_name', 'Not specified')
-    survey_date = report_data.get('survey_date', datetime.now().strftime('%Y-%m-%d'))
-    summary = report_data.get('summary', {})
-    findings = report_data.get('findings', [])
-    recommendations = report_data.get('recommendations', [])
-    org = report_data.get('organisation', {})
-    attached_files = report_data.get('attached_files', [])
-    links = report_data.get('links', [])
-    recommendations_html = report_data.get('recommendations_html', '')
-    rec_url = report_data.get('recommendations_document_url', '')
-
-    html = f"""<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Thermal Survey Report - {property_address}</title>
-    <style>
-        @page {{ size: A4; margin: 2cm; }}
-        body {{ font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; }}
-        .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; margin-bottom: 30px; border-radius: 8px; }}
-        .header h1 {{ margin: 0 0 10px 0; font-size: 28px; }}
-        .header p {{ margin: 5px 0; opacity: 0.9; }}
-        .section {{ margin-bottom: 30px; page-break-inside: avoid; }}
-        .section h2 {{ color: #667eea; border-bottom: 2px solid #667eea; padding-bottom: 10px; margin-bottom: 15px; }}
-        .finding {{ background: #f8f9fa; border-left: 4px solid #ffc107; padding: 15px; margin-bottom: 15px; border-radius: 4px; }}
-        .finding h3 {{ margin-top: 0; color: #495057; }}
-        .finding img {{ width: 100%; max-width: 600px; margin: 10px 0; border: 1px solid #dee2e6; border-radius: 4px; }}
-        .recommendation {{ background: #e7f3ff; border-left: 4px solid #2196F3; padding: 15px; margin-bottom: 15px; border-radius: 4px; }}
-        .stats {{ display: flex; gap: 15px; margin-bottom: 20px; }}
-        .stat-box {{ background: #fff; border: 1px solid #dee2e6; padding: 15px; border-radius: 4px; text-align: center; flex: 1; }}
-        .stat-value {{ font-size: 24px; font-weight: bold; color: #667eea; }}
-        .stat-label {{ font-size: 12px; color: #6c757d; text-transform: uppercase; }}
-        .links-section {{ background: #f0f7ff; border: 1px solid #b3d4fc; padding: 20px; margin: 30px 0; border-radius: 8px; }}
-        .links-section a {{ color: #1565c0; text-decoration: none; }}
-        .links-section a:hover {{ text-decoration: underline; }}
-        .embedded-doc {{ page-break-before: always; margin-top: 40px; padding: 25px; border: 2px solid #667eea; border-radius: 8px; background: #fefefe; }}
-        .embedded-doc h2 {{ color: #667eea; border-bottom: 2px solid #667eea; padding-bottom: 10px; margin-top: 0; }}
-        .attached-notes {{ page-break-before: always; margin-top: 40px; }}
-        .attached-notes h2 {{ color: #667eea; border-bottom: 2px solid #667eea; padding-bottom: 10px; margin-bottom: 20px; }}
-        .note-page {{ margin-bottom: 30px; padding: 20px; border: 1px solid #dee2e6; border-radius: 8px; background: #fafafa; page-break-inside: avoid; }}
-        .note-page h3 {{ color: #495057; margin-top: 0; padding-bottom: 8px; border-bottom: 1px solid #eee; }}
-        .footer {{ margin-top: 50px; padding-top: 20px; border-top: 1px solid #dee2e6; text-align: center; color: #6c757d; font-size: 12px; }}
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>Thermal Survey Report</h1>
-        <p><strong>Property:</strong> {property_address}</p>
-        <p><strong>Inspector:</strong> {inspector_name}</p>
-        <p><strong>Survey Date:</strong> {survey_date}</p>
-    </div>
-
-    <div class="section">
-        <h2>Executive Summary</h2>
-        <div class="stats">
-            <div class="stat-box">
-                <div class="stat-value">{summary.get('total_findings', 0)}</div>
-                <div class="stat-label">Total Findings</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-value">{summary.get('critical_count', 0)}</div>
-                <div class="stat-label">Critical Issues</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-value">{summary.get('high_count', 0)}</div>
-                <div class="stat-label">High Priority</div>
-            </div>
-        </div>
-    </div>
-
-    <div class="section">
-        <h2>Detailed Findings</h2>
-"""
-
-    for i, finding in enumerate(findings, 1):
-        spot_label = finding.get('title', f'Spot {i}')
-        description = finding.get('description', 'No description available')
-        severity = finding.get('severity', 'Unknown')
-        spot_type = finding.get('type', '')
-        max_temp = finding.get('max_temp', 0)
-        min_temp = finding.get('min_temp', 0)
-        avg_temp = finding.get('avg_temp', 0)
-
-        html += f"""        <div class="finding">
-            <h3>Finding {i}: {spot_label}</h3>
-            <p><strong>Severity:</strong> {severity.upper()} | <strong>Type:</strong> {spot_type}</p>
-            <p><strong>Temperature:</strong> Max {max_temp:.1f}\u00b0C / Avg {avg_temp:.1f}\u00b0C / Min {min_temp:.1f}\u00b0C</p>
-            <p>{description}</p>
-"""
-        spot_locations = finding.get('spot_locations', [])
-        if batch_dir and spot_locations:
-            for image_name, location in spot_locations:
-                if image_name:
-                    labeled_name = image_name.replace('.jpg', '_labeled.jpg').replace('.jpeg', '_labeled.jpeg')
-                    labeled_path = Path(batch_dir) / labeled_name
-                    if labeled_path.exists():
-                        img_data = base64.b64encode(labeled_path.read_bytes()).decode('utf-8')
-                        html += f'            <img src="data:image/jpeg;base64,{img_data}" alt="{labeled_name}">\n'
-        html += "        </div>\n"
-
-    html += """    </div>
-
-    <div class="section">
-        <h2>Recommendations</h2>
-"""
-
-    for i, rec in enumerate(recommendations, 1):
-        rec_type = rec.get('type', f'Item {i}')
-        spot_num = rec.get('spot_number', '')
-        advice_list = rec.get('advice', [])
-        savings = rec.get('savings', '')
-        priority = rec.get('priority', 'medium')
-        advice_items = ''.join(f'<li>{a}</li>' for a in advice_list)
-        html += f"""        <div class="recommendation">
-            <h3>{rec_type} #{spot_num} ({priority.upper()} priority)</h3>
-            <ul>{advice_items}</ul>
-            <p><strong>Estimated savings:</strong> {savings}</p>
-        </div>
-"""
-
-    html += "    </div>\n"
-
-    # --- Links section ---
-    valid_links = [l for l in links if l.get('title') and l.get('url')]
-    if valid_links:
-        html += '    <div class="links-section">\n        <h2>Documents &amp; Links</h2>\n        <ul>\n'
-        for link in valid_links:
-            html += f'            <li><a href="{link["url"]}">{link["title"]}</a></li>\n'
-        html += '        </ul>\n    </div>\n'
-
-    # --- Embedded recommendations document (fetched HTML) ---
-    if recommendations_html:
-        html += f"""    <div class="embedded-doc">
-        <h2>Recommendations &amp; Resources</h2>
-        {recommendations_html}
-    </div>
-"""
-    elif rec_url:
-        # Fallback: just show the link if fetching failed
-        html += f"""    <div class="links-section" style="text-align:center;">
-        <h2>Additional Resources</h2>
-        <p>For detailed improvement guidance, visit our recommendations document:</p>
-        <p><a href="{rec_url}" style="font-weight:bold; font-size:16px;">{rec_url}</a></p>
-    </div>
-"""
-
-    # --- Attached HTML notes ---
-    html_notes = [f for f in attached_files if f.get('data') and f.get('name', '').lower().endswith(('.html', '.htm'))]
-    if html_notes:
-        html += '    <div class="attached-notes">\n        <h2>Attached Notes</h2>\n'
-        for note in html_notes:
-            note_name = note.get('name', 'Untitled')
-            note_data = note.get('data', '')
-            note_html = ''
-            if ',' in note_data:
-                try:
-                    encoded = note_data.split(',', 1)[1]
-                    note_html = base64.b64decode(encoded).decode('utf-8', errors='replace')
-                except Exception:
-                    note_html = '<p><em>Could not decode attached note.</em></p>'
-            else:
-                note_html = note_data
-            note_html = re.sub(r'<!DOCTYPE[^>]*>', '', note_html, flags=re.IGNORECASE)
-            note_html = re.sub(r'</?html[^>]*>', '', note_html, flags=re.IGNORECASE)
-            note_html = re.sub(r'<head[^>]*>.*?</head>', '', note_html, flags=re.IGNORECASE | re.DOTALL)
-            note_html = re.sub(r'</?body[^>]*>', '', note_html, flags=re.IGNORECASE)
-            html += f'        <div class="note-page">\n            <h3>{note_name}</h3>\n            {note_html}\n        </div>\n'
-        html += '    </div>\n'
-
-    # --- Non-HTML attachments ---
-    other_files = [f for f in attached_files if f.get('name') and not f.get('name', '').lower().endswith(('.html', '.htm'))]
-    if other_files:
-        html += '    <div class="section">\n        <h2>Other Attachments</h2>\n        <ul>\n'
-        for af in other_files:
-            size_kb = af.get('size', 0) / 1024
-            html += f'            <li>{af["name"]} ({size_kb:.1f} KB)</li>\n'
-        html += '        </ul>\n    </div>\n'
-
-    # --- Footer ---
-    html += f"""    <div class="footer">
-        <p><strong>{org.get('name', 'Thermal Survey Services')}</strong></p>
-        <p>{org.get('website', '')} | {org.get('contact', '')}</p>
-        <p>Report generated on {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
-    </div>
-</body>
-</html>
-"""
-    return html
-
-
-def get_report(batch_id: str, tenant_id: str | None = None) -> Dict[str, Any]:
-    report_data = batchio.load_heatloss_report(batch_id, tenant_id)
-    if report_data is None:
-        raise FileNotFoundError(f"No report found for batch {batch_id}")
-    return report_data
