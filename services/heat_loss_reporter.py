@@ -5,6 +5,8 @@ Focuses on heat loss assessment and energy-saving recommendations
 """
 
 import json
+import base64
+import logging
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Optional
@@ -128,6 +130,42 @@ class HeatLossReporter:
             }
         }
     
+    def _encode_image_to_base64(self, image_path: Path) -> Optional[str]:
+        """
+        Encode image file to base64 string for embedding in HTML/PDF.
+        
+        This method reads an image file and converts it to a base64-encoded string
+        that can be embedded directly in HTML using data URIs. This approach:
+        - Avoids file path resolution issues in WeasyPrint
+        - Ensures images are properly embedded in generated PDFs
+        - Prevents the PDF bloat that occurs with certain file path formats
+        
+        Args:
+            image_path: Path to image file (Path object or string)
+            
+        Returns:
+            Base64-encoded string (without data URI prefix) or None if error
+            
+        Example usage:
+            b64_data = self._encode_image_to_base64(Path("thermal.jpg"))
+            html_img = f'<img src="data:image/jpeg;base64,{b64_data}">'
+        """
+        try:
+            image_path = Path(image_path)  # Ensure it's a Path object
+            
+            if not image_path.exists():
+                logging.warning(f"Image file not found: {image_path}")
+                return None
+            
+            with open(image_path, 'rb') as img_file:
+                img_data = img_file.read()
+                img_data_b64 = base64.b64encode(img_data).decode('utf-8')
+                return img_data_b64
+                
+        except Exception as e:
+            logging.error(f"Failed to encode image {image_path}: {e}")
+            return None
+    
     def group_by_spot_number(self, labeled_spots: List[Dict]) -> Dict[int, List[Dict]]:
         """
         Group hot spots by their assigned number for cross-image reporting.
@@ -154,25 +192,7 @@ class HeatLossReporter:
         Args:
             spot_group: List of hot spot occurrences with same number
             spot_number: The assigned spot number
-            # Assuming spot_group is a list of labeled spots with 'temperature' and 'image_name'
-            temps = [s.get("temperature") for s in spot_group 
-                if isinstance(s.get("temperature"), (int, float))]
-                
-            max_temp = max(temps) if temps else None
-            min_temp = min(temps) if temps else None
-            avg_temp = sum(temps) / len(temps) if temps else None
-
-        # Build a human-readable temperature summary
-        if temps:
-            temp_sentence = (
-                f"The recorded temperatures for this point range from "
-                f"{min_temp:.1f}°C to {max_temp:.1f}°C, with an average around {avg_temp:.1f}°C."
-            )
-        else:
-            temp_sentence = "Temperature readings were not available for this point."
-
-        description_parts.append(temp_sentence)    
-        
+            
         Returns:
             Dictionary with finding details
         """
@@ -180,7 +200,7 @@ class HeatLossReporter:
         spot_type = spot_group[0].get('type', 'Unknown')
         
         # Calculate statistics
-        temps = [spot.get('temperature', 0) for spot in spot_group]
+        temps = [spot.get('temperature', 0) for spot in spot_group if isinstance(spot.get('temperature'), (int, float))]
         max_temp = max(temps) if temps else 0
         min_temp = min(temps) if temps else 0
         avg_temp = sum(temps) / len(temps) if temps else 0
@@ -197,8 +217,11 @@ class HeatLossReporter:
             description = f"Heat loss detected at {spot_type.lower()} visible in {len(spot_group)} images."
         
         # Add temperature context
-        description += f" Temperature readings range from {min_temp:.1f}°C to {max_temp:.1f}°C, "
-        description += f"averaging {avg_temp:.1f}°C. "
+        if temps:
+            description += f" Temperature readings range from {min_temp:.1f}°C to {max_temp:.1f}°C, "
+            description += f"averaging {avg_temp:.1f}°C. "
+        else:
+            description += " Temperature readings were not available for this point. "
         
         # Add severity context
         if max_severity == 'critical':
@@ -226,21 +249,6 @@ class HeatLossReporter:
             'images': [spot.get('image_name', '') for spot in spot_group],
             'recommendations': recommendations,
             'spot_locations': [(spot.get('image_name', ''), spot.get('location', [])) for spot in spot_group]
-        }
-
-        finding = {
-            "spot_number": spot_number,
-            "title": title,
-            "severity": severity,
-            "type": spot_type,
-            "description": " ".join(description_parts),
-            "max_temp": max_temp,
-            "min_temp": min_temp,
-            "avg_temp": avg_temp,
-            #'image_count': len(spot_group),
-            #'images': [spot.get('image_name', '') for spot in spot_group],
-            #'recommendations': recommendations,
-            #'spot_locations': [(spot.get('image_name', ''), spot.get('location', [])) for spot in spot_group]
         }
     
     def generate_executive_summary(self, findings: List[Dict]) -> Dict:
