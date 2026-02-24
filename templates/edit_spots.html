@@ -21,10 +21,16 @@
         .header { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         h1 { color: #333; margin-bottom: 10px; font-size: 24px; }
         .batch-info { font-size: 13px; color: #666; }
-        .stats { display: flex; gap: 30px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; flex-wrap: wrap; }
+        .stats { display: flex; gap: 30px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+        .stat-group { display: flex; gap: 30px; flex-wrap: wrap; }
         .stat { display: flex; flex-direction: column; }
         .stat-label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
         .stat-value { font-size: 22px; font-weight: bold; color: var(--color-primary); margin-top: 4px; }
+        
+        .sensitivity-control { display: flex; align-items: center; gap: 10px; background: #eef5ff; padding: 8px 12px; border-radius: 6px; border: 1px solid #c5d9ff; }
+        .sensitivity-control label { font-size: 11px; font-weight: 600; color: #345; text-transform: uppercase; }
+        .sensitivity-control select { padding: 4px 6px; font-size: 12px; border-radius: 4px; border: 1px solid #ced4da; background: white; }
+        .sensitivity-note { font-size: 11px; color: #666; margin-top: 4px; }
         
         /* Links Section */
         .links-section { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
@@ -148,6 +154,7 @@
             .grid-container { grid-template-columns: 1fr; }
             .link-item { grid-template-columns: 100px 1fr 30px; }
             .shared-notes-box { flex-direction: column; text-align: center; }
+            .stats { align-items: flex-start; }
         }
     </style>
 </head>
@@ -156,9 +163,23 @@
         <h1>&#x1F525; Thermal Spot Editor</h1>
         <p class="batch-info"><strong>Batch:</strong> {{ batch_id }}</p>
         <div class="stats">
-            <div class="stat"><span class="stat-label">Images</span><span class="stat-value" id="imgCount">0</span></div>
-            <div class="stat"><span class="stat-label">Spots</span><span class="stat-value" id="spotCount">0</span></div>
-            <div class="stat"><span class="stat-label">Labeled</span><span class="stat-value" id="labeledCount">0</span></div>
+            <div class="stat-group">
+                <div class="stat"><span class="stat-label">Images</span><span class="stat-value" id="imgCount">0</span></div>
+                <div class="stat"><span class="stat-label">Spots</span><span class="stat-value" id="spotCount">0</span></div>
+                <div class="stat"><span class="stat-label">Labeled</span><span class="stat-value" id="labeledCount">0</span></div>
+            </div>
+            <div>
+                <div class="sensitivity-control">
+                    <label for="sensitivitySelect">Detection Sensitivity</label>
+                    <select id="sensitivitySelect">
+                        <option value="low" {% if current_sensitivity == 'low' %}selected{% endif %}>Low (fewest spots)</option>
+                        <option value="medium" {% if current_sensitivity == 'medium' %}selected{% endif %}>Medium</option>
+                        <option value="high" {% if current_sensitivity == 'high' %}selected{% endif %}>High (most spots)</option>
+                    </select>
+                    <button class="btn-small" type="button" onclick="reprocessBatch()">Re-run Detection</button>
+                </div>
+                <div class="sensitivity-note">Use low sensitivity for very warm surveys to keep only the strongest hotspots.</div>
+            </div>
         </div>
     </div>
 
@@ -245,6 +266,7 @@
         const SAVED = {{ existing_labels|tojson|default('{}') }};
         const TYPES = {{ spot_types|tojson }};
         const SHARED_NOTES_NAME = 'shared_recommendations.html';
+        const CURRENT_SENSITIVITY = "{{ current_sensitivity or 'medium' }}";
 
         let state = {
             links: {{ saved_links|tojson|default('[]') }},
@@ -511,7 +533,28 @@
             const el = document.getElementById('status');
             el.textContent = msg;
             el.className = `status ${type} show`;
-            if (type === 'success') setTimeout(() => el.classList.remove('show'), 3000);
+            if (type === 'success') setTimeout(() => el.classList.remove('show'), 4000);
+        }
+
+        async function reprocessBatch() {
+            const select = document.getElementById('sensitivitySelect');
+            const sens = select.value;
+            showStatus('Reprocessing with ' + sens + ' sensitivity...', 'info');
+            try {
+                const resp = await fetch(`/api/reprocess_batch/${BATCH}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sensitivity: sens })
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    throw new Error(data.error || 'Reprocess failed');
+                }
+                showStatus(data.message || 'Reprocess complete', 'success');
+                setTimeout(() => window.location.reload(), 800);
+            } catch (err) {
+                showStatus('Error: ' + err.message, 'error');
+            }
         }
 
         async function saveEdits() {
