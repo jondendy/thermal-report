@@ -153,7 +153,7 @@
 </head>
 <body>
     <div class="header">
-        <h1>\ud83d\udd25 Thermal Spot Editor</h1>
+        <h1>&#x1F525; Thermal Spot Editor</h1>
         <p class="batch-info"><strong>Batch:</strong> {{ batch_id }}</p>
         <div class="stats">
             <div class="stat"><span class="stat-label">Images</span><span class="stat-value" id="imgCount">0</span></div>
@@ -164,7 +164,7 @@
 
     <!-- Survey Metadata Section -->
     <div class="links-section">
-        <h2>\ud83d\udccb Survey Information</h2>
+        <h2>&#x1F4CB; Survey Information</h2>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 10px;">
             <div>
                 <label style="display: block; font-size: 12px; font-weight: 600; color: #555; margin-bottom: 4px;">Property Address</label>
@@ -178,23 +178,23 @@
     </div>
 
     <div class="links-section">
-        <h2>\ud83d\udcce Documents & Links</h2>
+        <h2>&#x1F4CE; Documents &amp; Links</h2>
 
         <!-- Shared Notes Button -->
         <div class="shared-notes-box">
             <div class="shared-notes-info">
-                <h3>\ud83d\udcc4 Shared Recommendations Notes</h3>
+                <h3>&#x1F4C4; Shared Recommendations Notes</h3>
                 <p>Include the standard recommendations and resources pages at the end of the report.</p>
             </div>
             <button class="btn-shared-notes" id="sharedNotesBtn" onclick="includeSharedNotes()">
-                \ud83d\udce5 Include Shared Notes
+                &#x1F4E5; Include Shared Notes
             </button>
         </div>
 
         <div class="link-list" id="linkList"></div>
         <button class="btn-small" onclick="addLink()" style="margin-bottom: 10px;">+ Add Link</button>
         
-        <h3 style="font-size: 14px; margin-top: 15px; margin-bottom: 10px; color: #333;">\ud83d\udcc4 Attached Notes</h3>
+        <h3 style="font-size: 14px; margin-top: 15px; margin-bottom: 10px; color: #333;">&#x1F4C4; Attached Notes</h3>
         <label class="file-input-label" for="fileInput">+ Attach Document</label>
         <input type="file" id="fileInput" onchange="handleFileUpload(event)">
         <div class="uploaded-files" id="uploadedFiles"></div>
@@ -204,12 +204,12 @@
 
     <div class="action-bar">
         <div class="action-left">
-            <button class="btn btn-back" onclick="goBack()">\u2190 Back</button>
+            <button class="btn btn-back" onclick="goBack()">&larr; Back</button>
         </div>
         <div id="status" class="status"></div>
         <div class="action-right">
-            <button class="btn btn-save" onclick="saveEdits()">\ud83d\udcbe Save</button>
-            <button class="btn btn-report" onclick="genReport()">\ud83d\udcca Report</button>
+            <button class="btn btn-save" onclick="saveEdits()">&#x1F4BE; Save</button>
+            <button class="btn btn-report" onclick="genReport()">&#x1F4CA; Report</button>
         </div>
     </div>
 
@@ -225,7 +225,7 @@
                 </select>
             </div>
             <div class="form-group">
-                <label>Temperature (\u00b0C)</label>
+                <label>Temperature (&deg;C)</label>
                 <input type="number" id="spotTemp" step="0.1" value="20.0">
             </div>
             <div class="form-group">
@@ -282,7 +282,6 @@
                 state.attachedFiles = SAVED.attached_files;
                 renderUploadedFiles();
             }
-            // Check if shared notes already included
             updateSharedNotesButton();
             render();
         }
@@ -298,7 +297,7 @@
                 <div class="link-item">
                     <input type="text" placeholder="Title" value="${l.title || ''}" onchange="state.links[${i}].title=this.value">
                     <input type="text" placeholder="URL" value="${l.url || ''}" onchange="state.links[${i}].url=this.value">
-                    <button class="btn-icon" onclick="state.links.splice(${i},1);renderLinks()">\u2715</button>
+                    <button class="btn-icon" onclick="state.links.splice(${i},1);renderLinks()">&times;</button>
                 </div>
             `).join('');
             document.getElementById('linkList').innerHTML = html;
@@ -318,17 +317,16 @@
             const btn = document.getElementById('sharedNotesBtn');
             if (hasSharedNotes()) {
                 btn.className = 'btn-shared-notes added';
-                btn.innerHTML = '\u2705 Shared Notes Included';
+                btn.innerHTML = '&#x2705; Shared Notes Included';
             } else {
                 btn.className = 'btn-shared-notes';
-                btn.innerHTML = '\ud83d\udce5 Include Shared Notes';
+                btn.innerHTML = '&#x1F4E5; Include Shared Notes';
             }
         }
 
         async function includeSharedNotes() {
             const btn = document.getElementById('sharedNotesBtn');
             
-            // If already included, offer to remove
             if (hasSharedNotes()) {
                 if (confirm('Shared notes are already included. Remove them?')) {
                     state.attachedFiles = state.attachedFiles.filter(f => f.name !== SHARED_NOTES_NAME);
@@ -340,14 +338,13 @@
             }
 
             btn.className = 'btn-shared-notes loading';
-            btn.innerHTML = '\u23f3 Fetching...';
+            btn.innerHTML = '&#x23F3; Fetching...';
 
             try {
                 const resp = await fetch('/api/fetch_shared_notes', { method: 'POST' });
                 const data = await resp.json();
 
                 if (data.success && data.html) {
-                    // Add as attached file (same format as file upload)
                     const htmlBlob = new Blob([data.html], { type: 'text/html' });
                     const reader = new FileReader();
                     reader.onload = (e) => {
@@ -358,7 +355,7 @@
                         });
                         renderUploadedFiles();
                         updateSharedNotesButton();
-                        showStatus('\u2713 Shared notes added to report', 'success');
+                        showStatus('Shared notes added to report', 'success');
                     };
                     reader.readAsDataURL(htmlBlob);
                 } else {
@@ -366,7 +363,7 @@
                 }
             } catch (err) {
                 btn.className = 'btn-shared-notes error';
-                btn.innerHTML = '\u274c Failed - Try Again';
+                btn.innerHTML = '&#x274C; Failed - Try Again';
                 showStatus('Error: ' + err.message, 'error');
                 setTimeout(() => updateSharedNotesButton(), 3000);
             }
@@ -394,12 +391,12 @@
         function renderUploadedFiles() {
             const html = state.attachedFiles.map((f, i) => {
                 const isShared = f.name === SHARED_NOTES_NAME;
-                const icon = isShared ? '\ud83d\udcc4' : '\ud83d\udcce';
+                const icon = isShared ? '&#x1F4C4;' : '&#x1F4CE;';
                 const label = isShared ? 'Shared Recommendations Notes' : f.name;
                 return `
                     <div class="file-item" style="${isShared ? 'background:#e3f2fd; border:1px solid #90caf9;' : ''}">
                         <span>${icon} ${label} (${(f.size / 1024).toFixed(1)}KB)</span>
-                        <button class="btn-icon" style="color: var(--color-danger);" onclick="removeFile(${i})">\u2715</button>
+                        <button class="btn-icon" style="color: var(--color-danger);" onclick="removeFile(${i})">&times;</button>
                     </div>
                 `;
             }).join('');
@@ -420,7 +417,7 @@
                         <button class="btn-small" style="font-size:11px" onclick="startAdd(${imgIdx})">+ Add</button>
                     </div>
                     <div class="image-container" id="imgContainer${imgIdx}" data-idx="${imgIdx}">
-                        <img src="${img.url}" alt="${img.name}" onerror="this.parentElement.innerHTML='<div class=img-loading>\u26a0 Image loading failed. Try original: <a href=\'/download/${BATCH}/${img.name}\' style=\'color:#007bff;\'>${img.name}</a></div>'">
+                        <img src="${img.url}" alt="${img.name}" onerror="this.parentElement.innerHTML='<div class=img-loading>Image loading failed. Try: <a href=\'/download/${BATCH}/${img.name}\' style=\'color:#007bff;\'>${img.name}</a></div>'">
                     </div>
                     <div class="spots-section">
                         ${renderSpots(imgIdx)}
@@ -444,9 +441,9 @@
                     <div style="display:flex; align-items:center; gap:4px;">
                         <input type="number" class="spot-num-input" placeholder="#" min="1" max="99"
                             value="${s.num || ''}" onchange="state.images[${imgIdx}].spots[${sIdx}].num=this.value;updateStats()">
-                        <span style="font-size:11px;color:#555;white-space:nowrap;">${s.temp.toFixed(1)}\u00b0C</span>
+                        <span style="font-size:11px;color:#555;white-space:nowrap;">${s.temp.toFixed(1)}&deg;C</span>
                     </div>
-                    <button class="btn-icon" style="font-size:14px" onclick="state.images[${imgIdx}].spots.splice(${sIdx},1);renderGrid()">\ud83d\uddd1</button>
+                    <button class="btn-icon" style="font-size:14px" onclick="state.images[${imgIdx}].spots.splice(${sIdx},1);renderGrid()">&#x1F5D1;</button>
                 </div>
             `).join('');
         }
@@ -547,7 +544,7 @@
                 })
             });
             const data = await res.json();
-            showStatus(data.success ? '\u2713 Saved' : '\u2717 Error', data.success ? 'success' : 'error');
+            showStatus(data.success ? 'Saved' : 'Error', data.success ? 'success' : 'error');
         }
 
         async function genReport() {
