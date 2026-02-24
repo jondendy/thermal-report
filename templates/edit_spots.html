@@ -161,6 +161,8 @@
     </style>
 </head>
 <body>
+    <input type="hidden" id="folderId" value="{{ folder_id or '' }}">
+    
     <div class="header">
         <h1>&#x1F525; Thermal Spot Editor</h1>
         <p class="batch-info"><strong>Batch:</strong> {{ batch_id }}</p>
@@ -611,10 +613,16 @@
             showStatus('Generating...', 'info');
             const propertyAddress = document.getElementById('propertyAddress').value;
             const surveyorName = document.getElementById('surveyorName').value;
+            const folderId = document.getElementById('folderId').value;
+            
             const formData = new FormData();
             formData.append('property_address', propertyAddress);
             formData.append('inspector_name', surveyorName);
             formData.append('doc_mode', 'link');
+            if (folderId) {
+                formData.append('folder_id', folderId);
+            }
+            
             fetch(`/generate_heat_loss_report/${BATCH}`, { method: 'POST', body: formData })
                 .then(r => r.json())
                 .then(d => { 
