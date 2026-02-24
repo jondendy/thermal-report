@@ -132,9 +132,14 @@ def editspots(batchid: str) -> str:
                 analysis_data = analysis_data["results"]
             elif "images_data" in analysis_data:
                 analysis_data = {"images": analysis_data["images_data"]}
+        
+        # Get current sensitivity from analysis metadata
+        current_sensitivity = analysis_data.get('sensitivity', 'medium')
+        
         return render_template(
             "edit_spots.html", batch_id=batchid, analysis_data=analysis_data,
             existing_labels=existing_labels, saved_links=saved_links, spot_types=SPOT_TYPES,
+            current_sensitivity=current_sensitivity,
         )
     except FileNotFoundError:
         logger.error(f"Batch {batchid} not found")
@@ -142,6 +147,97 @@ def editspots(batchid: str) -> str:
     except Exception as e:
         logger.exception(f"Error loading batch {batchid}: {str(e)}")
         abort(500)
+
+
+@app.route("/api/reprocess_batch/<batch_id>", methods=["POST"])
+def api_reprocess_batch(batch_id: str) -> Any:
+    """
+    Re-run thermal analysis on existing batch with new sensitivity settings.
+    Accepts JSON: {"sensitivity": "low"|"medium"|"high"}
+    """
+    try:
+        data = request.get_json() or {}
+        new_sensitivity = data.get('sensitivity', 'medium')
+        
+        if new_sensitivity not in ['low', 'medium', 'high']:
+            return jsonify({"error": "Invalid sensitivity. Use: low, medium, or high"}), 400
+        
+        # Get original uploaded images
+        upload_dir = settings.BASE_UPLOAD_PATH / batch_id
+        if not upload_dir.exists():
+            return jsonify({"error": "Batch images not found"}), 404
+        
+        image_files = list(upload_dir.glob('*.jpg')) + list(upload_dir.glob('*.jpeg'))
+        if not image_files:
+            return jsonify({"error": "No images in batch directory"}), 404
+        
+        # Reprocess with new sensitivity
+        from services.flir_processor_simple import SimpleFLIRProcessor
+        from services.thermal_analyzer import ThermalAnalyzer
+        from services.thermal_data_service import ThermalDataExtractor, save_thermal_data
+        
+        processor = SimpleFLIRProcessor()
+        analyzer = ThermalAnalyzer(sensitivity=new_sensitivity)
+        
+        batch_dir = safe_batch_path(settings.BASE_REPORT_DIR, batch_id, None)
+        max_spots = settings.MAX_HOTSPOTS_PER_IMAGE
+        
+        results = {
+            'batch_id': batch_id,
+            'sensitivity': new_sensitivity,
+            'max_spots_per_image': max_spots,
+            'images': [],
+        }
+        
+        for image_path in image_files:
+            temp_data, stats = processor.process_single_image(str(image_path), display=False)
+            
+            # Re-detect with new sensitivity
+            hot_spots = analyzer.detect_hot_spots(
+                temp_data, 
+                image_path=str(image_path),
+                max_spots=max_spots
+            )
+            
+            # Regenerate labeled image
+            labeled_filename = image_path.stem + '_labeled.jpg'
+            labeled_path = batch_dir / labeled_filename
+            try:
+                analyzer.label_hot_spots(str(image_path), hot_spots, str(labeled_path))
+            except Exception:
+                pass
+            
+            image_result = {
+                'filename': image_path.name,
+                'stats': {
+                    'min': float(stats['min']),
+                    'max': float(stats['max']),
+                    'mean': float(stats['mean']),
+                    'median': float(stats['median']),
+                    'std': float(stats['std'])
+                },
+                'hot_spots': [spot.to_dict() for spot in hot_spots],
+                'hot_spot_count': len(hot_spots),
+                'labeled_image': labeled_filename,
+            }
+            results['images'].append(image_result)
+        
+        # Save updated analysis
+        batchio.save_thermal_analysis(batch_id, results, None)
+        
+        total_spots = sum(img['hot_spot_count'] for img in results['images'])
+        
+        return jsonify({
+            'success': True,
+            'sensitivity': new_sensitivity,
+            'total_spots': total_spots,
+            'image_count': len(results['images']),
+            'message': f'Reprocessed with {new_sensitivity} sensitivity: {total_spots} spots detected'
+        })
+        
+    except Exception as e:
+        logger.exception(f"Error reprocessing batch {batch_id}: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/save_labels/<batchid>", methods=["POST"])
