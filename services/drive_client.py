@@ -1,11 +1,19 @@
+import os
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+import googleapiclient.http
 
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 
 def get_drive_service():
+    # Use environment variable or fallback to default
+    service_account_path = os.getenv(
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        "service-account-key.json"
+    )
+    
     creds = service_account.Credentials.from_service_account_file(
-        "service-account.json",
+        service_account_path,
         scopes=SCOPES,
     )
     return build("drive", "v3", credentials=creds)
