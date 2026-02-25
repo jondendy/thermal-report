@@ -1,11 +1,19 @@
+import os
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+import googleapiclient.http
 
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 
 def get_drive_service():
+    # Use environment variable or fallback to default
+    service_account_path = os.getenv(
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        "service-account-key.json"
+    )
+    
     creds = service_account.Credentials.from_service_account_file(
-        "service-account.json",
+        service_account_path,
         scopes=SCOPES,
     )
     return build("drive", "v3", credentials=creds)
@@ -13,7 +21,7 @@ def get_drive_service():
 def list_files_in_folder(folder_id):
     service = get_drive_service()
     q = f"'{folder_id}' in parents and trashed = false"
-    results = service.files().list(q=q, fields="files(id, name)").execute()
+    results = service.files().list(q=q, fields="files(id, name, mimeType)").execute()
     return results.get("files", [])
 
 def download_file(file_id, dest_path):
