@@ -28,7 +28,7 @@ import services.batch_service as batchservice
 import services.heat_loss_service as heatlossservice
 
 from security_utils import validate_tenant_id, safe_batch_path
-from logging_config import setup_logging
+from services.logging_service import setup_logging
 
 # Optional Drive ingest routes (guarded)
 try:
