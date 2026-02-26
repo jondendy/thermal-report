@@ -139,6 +139,7 @@ def select_images(folder_id: str):
 @app.route("/edit_spots/<batchid>", methods=["GET"])
 def editspots(batchid: str) -> str:
     try:
+        recommendations_url=getattr(settings, "RECOMMENDATIONS_DOCUMENT_URL", "") or "",
         analysis_data = heatlossservice.get_thermal_analysis(batchid, None)
         existing_labels = heatlossservice.get_existing_labels(batchid, None)
         saved_links = existing_labels.get("links", [])
