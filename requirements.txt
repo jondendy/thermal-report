@@ -14,3 +14,13 @@ matplotlib>=3.3.0
 
 # For web interface
 flask>=2.0.0
+
+# HTTP (recommendations/shared-notes fetching)
+requests>=2.31.0
+
+# PDF generation (preferred)
+weasyprint>=60.0
+
+# Alternative PDF backends (optional)
+# pdfkit>=1.0.0          # Requires wkhtmltopdf system package
+# xhtml2pdf>=0.2.15
