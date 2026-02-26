@@ -13,6 +13,7 @@
             --color-secondary: #6c757d;
             --color-light: #f8f9fa;
             --color-dark: #343a40;
+            --color-info: #17a2b8;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background: #f5f5f5; padding: 20px; padding-bottom: 120px; }
@@ -21,10 +22,19 @@
         .header { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         h1 { color: #333; margin-bottom: 10px; font-size: 24px; }
         .batch-info { font-size: 13px; color: #666; }
-        .stats { display: flex; gap: 30px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; flex-wrap: wrap; }
+        .stats { display: flex; gap: 30px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; flex-wrap: wrap; align-items: flex-end; }
         .stat { display: flex; flex-direction: column; }
         .stat-label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
         .stat-value { font-size: 22px; font-weight: bold; color: var(--color-primary); margin-top: 4px; }
+        
+        /* Sensitivity Controls */
+        .sensitivity-control { display: flex; flex-direction: column; gap: 8px; }
+        .sensitivity-control label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+        .sensitivity-row { display: flex; gap: 8px; align-items: center; }
+        .sensitivity-row select { padding: 6px 10px; border: 1px solid #ced4da; border-radius: 4px; font-size: 13px; background: white; cursor: pointer; }
+        .btn-reprocess { padding: 6px 12px; border: none; border-radius: 4px; font-size: 12px; font-weight: 600; cursor: pointer; color: white; background: var(--color-info); transition: background 0.2s; }
+        .btn-reprocess:hover { background: #138496; }
+        .btn-reprocess:disabled { background: #ccc; cursor: not-allowed; }
         
         /* Links Section */
         .links-section { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
@@ -70,6 +80,8 @@
         .btn-save:hover { background: #0056b3; }
         .btn-report { background: var(--color-success); }
         .btn-report:hover { background: #218838; }
+        .btn-recommendations { background: var(--color-info); }
+        .btn-recommendations:hover { background: #138496; }
         .btn-back { background: var(--color-secondary); }
         .btn-back:hover { background: #545b62; }
         
@@ -102,6 +114,7 @@
         @media (max-width: 768px) {
             .grid-container { grid-template-columns: 1fr; }
             .link-item { grid-template-columns: 100px 1fr 30px; }
+            .stats { flex-direction: column; gap: 15px; }
         }
     </style>
 </head>
@@ -113,6 +126,19 @@
             <div class="stat"><span class="stat-label">Images</span><span class="stat-value" id="imgCount">0</span></div>
             <div class="stat"><span class="stat-label">Spots</span><span class="stat-value" id="spotCount">0</span></div>
             <div class="stat"><span class="stat-label">Labeled</span><span class="stat-value" id="labeledCount">0</span></div>
+            
+            <!-- Sensitivity Controls -->
+            <div class="sensitivity-control">
+                <label>Detection Sensitivity</label>
+                <div class="sensitivity-row">
+                    <select id="sensitivitySelect">
+                        <option value="low" {{ 'selected' if current_sensitivity == 'low' else '' }}>Low (fewer spots)</option>
+                        <option value="medium" {{ 'selected' if current_sensitivity == 'medium' else '' }}>Medium</option>
+                        <option value="high" {{ 'selected' if current_sensitivity == 'high' else '' }}>High (more spots)</option>
+                    </select>
+                    <button class="btn-reprocess" id="reprocessBtn" onclick="reprocessBatch()">🔄 Reprocess</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -151,7 +177,8 @@
         <div id="status" class="status"></div>
         <div class="action-right">
             <button class="btn btn-save" onclick="saveEdits()">💾 Save</button>
-            <button class="btn btn-report" onclick="genReport()">📊 Report</button>
+            <button class="btn btn-report" onclick="genReport()">📊 Generate Report</button>
+            <button class="btn btn-recommendations" onclick="viewRecommendations()">📋 View Recommendations</button>
         </div>
     </div>
 
@@ -186,6 +213,7 @@
         const RAW_DATA = {{ analysis_data|tojson|default('{"images":[]}') }};
         const SAVED = {{ existing_labels|tojson|default('{}') }};
         const TYPES = {{ spot_types|tojson }};
+        const RECOMMENDATIONS_URL = "{{ recommendations_url|default('') }}";
 
         let state = {
             links: {{ saved_links|tojson|default('[]') }},
@@ -202,7 +230,6 @@
                     const spots = (img.hot_spots || []).map((s, sidx) => {
                         const spotId = `${img.filename}_spot${sidx + 1}`;
                         const label = saved.find(l => l.spot_id === spotId);
-                        // Read temperature from hot_spots data
                         const temp = s.temperature || s.temp || 20;
                         return {
                             id: spotId,
@@ -216,7 +243,6 @@
                         };
                     });
                     
-                    // Use labeled_image if available, otherwise fall back to original filename
                     const imageUrl = img.labeled_image 
                         ? `/download/${BATCH}/${img.labeled_image}`
                         : `/download/${BATCH}/${img.filename}`;
@@ -229,7 +255,6 @@
                 });
             }
             
-            // Load attached files from saved state
             if (SAVED.attached_files) {
                 state.attachedFiles = SAVED.attached_files;
                 renderUploadedFiles();
@@ -270,14 +295,13 @@
                     state.attachedFiles.push({
                         name: file.name,
                         size: file.size,
-                        data: e.target.result  // base64 encoded
+                        data: e.target.result
                     });
                     renderUploadedFiles();
                 };
                 reader.readAsDataURL(file);
             });
             
-            // Reset file input
             document.getElementById('fileInput').value = '';
         }
 
@@ -339,8 +363,6 @@
             `).join('');
         }
 
-
-
         function attachMarkers() {
             state.images.forEach((img, imgIdx) => {
                 const container = document.getElementById(`imgContainer${imgIdx}`);
@@ -366,26 +388,25 @@
         function addSpot() {
             const type = document.getElementById('spotType').value;
             const temp = parseFloat(document.getElementById('spotTemp').value);
-            const num = document.getElementById('spotNum').value;
-    // Validation: require at least type OR number
-    if ((!type && !num) || !state.pendingSpot) {
-        alert('Please provide either a spot type OR spot number');
-        return;
-    }
-    
-    // Auto-number: if type provided but no number, find next available for this type
-    if (type && !num) {
-        const existingNums = [];
-        state.images.forEach(img => {
-            img.spots.forEach(s => {
-                if (s.type === type && s.num) {
-                    existingNums.push(parseInt(s.num));
-                }
-            });
-        });
-        num = existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1;
-        num = String(num); // Convert to string to match expected format
-    }
+            let num = document.getElementById('spotNum').value;
+            
+            if ((!type && !num) || !state.pendingSpot) {
+                alert('Please provide either a spot type OR spot number');
+                return;
+            }
+            
+            if (type && !num) {
+                const existingNums = [];
+                state.images.forEach(img => {
+                    img.spots.forEach(s => {
+                        if (s.type === type && s.num) {
+                            existingNums.push(parseInt(s.num));
+                        }
+                    });
+                });
+                num = existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1;
+                num = String(num);
+            }
             
             const img = state.images[state.pendingSpot.imgIdx];
             img.spots.push({
@@ -426,6 +447,36 @@
             if (type === 'success') setTimeout(() => el.classList.remove('show'), 3000);
         }
 
+        async function reprocessBatch() {
+            const sensitivity = document.getElementById('sensitivitySelect').value;
+            const btn = document.getElementById('reprocessBtn');
+            
+            btn.disabled = true;
+            showStatus('Reprocessing with ' + sensitivity + ' sensitivity...', 'info');
+            
+            try {
+                const res = await fetch(`/api/reprocess_batch/${BATCH}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sensitivity: sensitivity })
+                });
+                
+                const data = await res.json();
+                
+                if (data.success) {
+                    showStatus(`✓ Reprocessed: ${data.total_spots} spots detected`, 'success');
+                    // Reload the page to show new spots
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    showStatus('✗ Error: ' + (data.error || 'Unknown'), 'error');
+                    btn.disabled = false;
+                }
+            } catch (e) {
+                showStatus('✗ Error: ' + e.message, 'error');
+                btn.disabled = false;
+            }
+        }
+
         async function saveEdits() {
             const spots = [];
             state.images.forEach(img => {
@@ -462,11 +513,11 @@
 
         async function genReport() {
             if (!state.images.some(img => img.spots.some(s => s.type && s.num))) {
-                alert('Label at least one spot');
+                alert('Label at least one spot before generating report');
                 return;
             }
             
-            showStatus('Generating...', 'info');
+            showStatus('Generating report...', 'info');
             
             const propertyAddress = document.getElementById('propertyAddress').value;
             const surveyorName = document.getElementById('surveyorName').value;
@@ -474,7 +525,7 @@
             const formData = new FormData();
             formData.append('property_address', propertyAddress);
             formData.append('inspector_name', surveyorName);
-            formData.append('doc_mode', 'link');  // default to link mode
+            formData.append('doc_mode', 'link');
             
             fetch(`/generate_heat_loss_report/${BATCH}`, { 
                 method: 'POST',
@@ -489,6 +540,14 @@
                     }
                 })
                 .catch(e => showStatus('Error: ' + e.message, 'error'));
+        }
+
+        function viewRecommendations() {
+            if (!RECOMMENDATIONS_URL) {
+                alert('No recommendations document configured. Please contact your administrator.');
+                return;
+            }
+            window.open(RECOMMENDATIONS_URL, '_blank', 'noopener,noreferrer');
         }
 
         function goBack() {
