@@ -1,8 +1,21 @@
-"""
-Batch IO utilities.
+"""Batch IO utilities.
 
 Single source of truth for how batch-related JSON data and analysis artifacts
 are stored and loaded on disk.
+
+Testbed layout (flat folders):
+  settings.BASE_REPORT_DIR/
+    {batch_id}/
+      batchresults.json
+      thermalanalysis.json
+      hotspotlabels.json
+      heatlossreportdata.json
+      final_report_{batch_id}.html
+      thermal_report_{batch_id}.pdf
+
+Tenant support is intentionally optional in this branch; tenant_id is accepted
+for forward-compatibility but does not affect paths unless a future branch
+reintroduces multi-tenant directory layouts.
 """
 
 from __future__ import annotations
@@ -11,8 +24,8 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from settings import BASE_REPORT_PATH
-from lib.security_utils import safe_batch_path
+import settings
+from security_utils import safe_batch_path
 
 
 # ---------------------------------------------------------------------------
@@ -37,21 +50,8 @@ def _write_json(path: Path, data: Dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 def ensure_batch_dir(batch_id: str, tenant_id: str | None = None) -> Path:
-    """
-    Ensure the batch directory exists and return its Path.
-
-    Layout:
-      BASE_REPORT_PATH/
-        batches/
-          {tenant_id}/
-            {batch_id}/
-              batchresults.json
-              thermalanalysis.json
-              hotspotlabels.json
-              heatlossreportdata.json
-              heatlossreport.html
-    """
-    return safe_batch_path(batch_id, tenant_id)
+    """Ensure the batch directory exists and return its Path (flat layout)."""
+    return safe_batch_path(settings.BASE_REPORT_DIR, batch_id, tenant_id)
 
 
 def load_batch_results(batch_id: str, tenant_id: str | None = None) -> Optional[Dict[str, Any]]:
@@ -104,19 +104,16 @@ def get_report_html_path(batch_id: str, tenant_id: str | None = None) -> Path:
 # ---------------------------------------------------------------------------
 
 def list_batches(tenant_id: str | None = None) -> list[Dict[str, Any]]:
-    """
-    Return a list of batch metadata for the index page.
+    """Return a list of batch metadata for the index page.
 
-    Each item contains:
-      - batchid
-      - timestamp (if present in batchresults.json)
-      - imagecount
-      - summary (optional: min/max/mean temps etc.)
+    Scans settings.BASE_REPORT_DIR for batch directories (flat layout).
     """
-    from lib.security_utils import validate_tenant_id  # avoid circular import
+    # tenant_id is ignored for now (flat layout), but validate if provided.
+    from security_utils import validate_tenant_id
 
-    tenant_id = validate_tenant_id(tenant_id)
-    base = BASE_REPORT_PATH.resolve() / "batches" / tenant_id
+    validate_tenant_id(tenant_id)
+
+    base = Path(settings.BASE_REPORT_DIR).resolve()
     if not base.exists():
         return []
 
@@ -124,13 +121,23 @@ def list_batches(tenant_id: str | None = None) -> list[Dict[str, Any]]:
     for batch_dir in sorted(base.iterdir()):
         if not batch_dir.is_dir():
             continue
+
         batch_id = batch_dir.name
-        meta = load_batch_results(batch_id, tenant_id)
+        # Skip directories that don't look like batch IDs
+        # (avoids issues if someone drops random folders in .reports)
+        try:
+            safe_batch_path(settings.BASE_REPORT_DIR, batch_id, None)
+        except Exception:
+            continue
+
+        meta = _read_json(batch_dir / "batchresults.json")
         if not meta:
             continue
+
         summary = meta.get("summary") or {}
         timestamp = meta.get("timestamp")
         imagecount = meta.get("image_count", len(meta.get("images", [])))
+
         items.append(
             {
                 "batchid": batch_id,
@@ -139,6 +146,6 @@ def list_batches(tenant_id: str | None = None) -> list[Dict[str, Any]]:
                 "summary": summary,
             }
         )
-    # Sort newest first by timestamp if available
+
     items.sort(key=lambda x: x.get("timestamp") or "", reverse=True)
     return items
