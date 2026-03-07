@@ -8,6 +8,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libimage-exiftool-perl \
     libxcb1 \
+    libgl1 \
   && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
