@@ -1,18 +1,13 @@
-import os
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-import googleapiclient.http
+from googleapiclient.http import MediaIoBaseDownload
+import os
 
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 
 def get_drive_service():
-    # Use environment variable, fallback to default path
-    key_path = os.environ.get('STORAGE_ACCESS_KEY') or os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
-    if not key_path:
-        raise ValueError("STORAGE_ACCESS_KEY or GOOGLE_APPLICATION_CREDENTIALS not set in environment")
-    
     creds = service_account.Credentials.from_service_account_file(
-        key_path,
+        os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'),
         scopes=SCOPES,
     )
     return build("drive", "v3", credentials=creds)
@@ -20,14 +15,42 @@ def get_drive_service():
 def list_files_in_folder(folder_id):
     service = get_drive_service()
     q = f"'{folder_id}' in parents and trashed = false"
-    results = service.files().list(q=q, fields="files(id, name)").execute()
+    results = service.files().list(q=q, fields="files(id, name, mimeType)").execute()
     return results.get("files", [])
 
 def download_file(file_id, dest_path):
     service = get_drive_service()
     request = service.files().get_media(fileId=file_id)
     with open(dest_path, "wb") as fh:
-        downloader = googleapiclient.http.MediaIoBaseDownload(fh, request)
+        downloader = MediaIoBaseDownload(fh, request)
         done = False
         while not done:
-            _, done = downloader.next_chunk()
+            status, done = downloader.next_chunk()
+
+def get_folder_metadata(folder_id):
+    service = get_drive_service()
+    folder = service.files().get(fileId=folder_id, fields='id, name').execute()
+    return folder
+
+def upload_file_to_folder(file_path, folder_id):
+    """Upload a file to a specific Google Drive folder."""
+    from googleapiclient.http import MediaFileUpload
+    import os
+
+    service = get_drive_service()
+    file_name = os.path.basename(file_path)
+
+    file_metadata = {
+        'name': file_name,
+        'parents': [folder_id]
+    }
+    media = MediaFileUpload(file_path, resumable=True)
+    file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+    return file.get('id')
+
+def rename_folder(folder_id, new_name):
+    """Rename a Google Drive folder."""
+    service = get_drive_service()
+    file_metadata = {'name': new_name}
+    updated_file = service.files().update(fileId=folder_id, body=file_metadata, fields='id, name').execute()
+    return updated_file
