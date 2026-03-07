@@ -1,0 +1,20 @@
+{
+  "labeled_spots": [
+    {
+      "spot_id": "manual_1772013647655",
+      "image_name": "FLIR1561.jpg",
+      "type": "Wall",
+      "spot_number": "1",
+      "temperature": 2,
+      "severity": "low",
+      "location": [
+        341,
+        125
+      ]
+    }
+  ],
+  "links": [],
+  "attached_files": [],
+  "property_address": "35 Lynton Road",
+  "surveyor_name": "Michila, Philip"
+}

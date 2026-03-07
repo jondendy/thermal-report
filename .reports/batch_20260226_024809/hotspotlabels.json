@@ -1,0 +1,20 @@
+{
+  "labeled_spots": [
+    {
+      "spot_id": "manual_1772074112558",
+      "image_name": "FLIR1561.jpg",
+      "type": "Window",
+      "spot_number": "7",
+      "temperature": 20,
+      "severity": "medium",
+      "location": [
+        415,
+        40
+      ]
+    }
+  ],
+  "links": [],
+  "attached_files": [],
+  "property_address": "",
+  "surveyor_name": ""
+}

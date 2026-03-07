@@ -5,6 +5,7 @@
 numpy>=1.19.0
 pillow>=8.0.0
 python-dotenv>=1.2.1
+gunicorn
 
 # For FLIR image extraction
 flirimageextractor>=1.0.0
