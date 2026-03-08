@@ -204,7 +204,7 @@ def api_reprocess_batch(batch_id: str) -> Any:
 
         for image_path in image_files:
             temp_data, stats = processor.process_single_image(str(image_path), display=False)
-            hot_spots = analyzer.detect_hot_spots(temp_data, image_path=str(image_path), max_spots=max_spots)
+            hot_spots = analyzer.detect_hot_spots(temp_data, image_path=str(image_path))[:max_spots]
 
             labeled_filename = image_path.stem + "_labeled.jpg"
             labeled_path = batch_dir / labeled_filename

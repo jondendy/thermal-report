@@ -99,3 +99,7 @@ def is_allowed_file(filename: str) -> bool:
         return False
     ext = filename.rsplit(".", 1)[-1].lower()
     return ext in ALLOWED_EXTENSIONS
+
+# Thermal analysis parameters
+MAX_HOTSPOTS_PER_IMAGE = 50  # Maximum hot spots to detect per image
+RECOMMENDATIONS_DOCUMENT_URL = ""  # Optional URL to recommendations document
