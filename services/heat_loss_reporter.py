@@ -225,7 +225,7 @@ class HeatLossReporter:
             'image_count': len(spot_group),
             'images': [spot.get('image_name', '') for spot in spot_group],
             'recommendations': recommendations,
-            'spot_locations': [(spot.get('image_name', ''), spot.get('location', [])) for spot in spot_group]
+            'spot_locations': [(img, [s.get('location', []) for s in spot_group if s.get('image_name') == img]) for img in sorted(set(s.get('image_name', '') for s in spot_group))]
         }
 
         finding = {

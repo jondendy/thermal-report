@@ -276,11 +276,11 @@
             <p>{{ finding.description }}</p>
 
             <div class="finding-images">
-                {% for image_name, location in finding.spot_locations %}
+                {% for image_name, locations in finding.spot_locations %}
                 <div class="finding-image">
                     <img src="/download/{{ report_data.batch_id }}/{{ image_name | replace('.jpg', '_labeled.jpg') }}" 
                          alt="Thermal image showing {{ finding.type }}">
-                    <div class="caption">{{ image_name }} - Location: ({{ location[0] }}, {{ location[1] }})</div>
+                    <div class="caption">{{ image_name }} - {{ locations|length }} spot(s) marked</div>
                 </div>
                 {% endfor %}
             </div>
@@ -307,7 +307,7 @@
             <h2 style="color: #2c3e50;">Survey Images</h2>
             <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 20px;">
                 {% for finding in report_data.findings %}
-                    {% for image_name, location in finding.spot_locations %}
+                    {% for image_name, locations in finding.spot_locations %}
                     <div style="border: 1px solid #ddd; border-radius: 5px; overflow: hidden;">
                         <img src="/download/{{ report_data.batch_id }}/{{ image_name | replace('.jpg', '_labeled.jpg') }}" 
                              alt="Thermal image" 
