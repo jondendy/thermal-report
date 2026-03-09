@@ -406,6 +406,65 @@ class ThermalAnalyzer:
 
         return '\n'.join(html)
 
+
+    def draw_manual_labels(self, image_path: str, labeled_spots: List[Dict], output_path: str = None) -> Image:
+        """
+        Draw user-labeled spots on thermal image with numbered markers
+        
+        Args:
+            image_path: Path to original thermal image
+            labeled_spots: List of labeled spots from hotspotlabels.json
+            output_path: Optional path to save labeled image
+        
+        Returns:
+            PIL Image with manual annotations
+        """
+        if Image is None:
+            raise ImportError("PIL not available for image labeling")
+        
+        # Load image
+        img = Image.open(image_path).convert('RGB')
+        draw = ImageDraw.Draw(img)
+        
+        # Load font
+        try:
+            font = ImageFont.truetype("arial.ttf", 20)
+        except:
+            font = ImageFont.load_default()
+        
+        # Filter spots for this image only
+        image_spots = [s for s in labeled_spots if s.get('image_name') == Path(image_path).name]
+        
+        # Draw each labeled spot
+        for spot in image_spots:
+            if not spot.get('spot_number'):
+                continue  # Skip unlabeled spots
+                
+            x, y = spot.get('location', [0, 0])
+            spot_num = spot.get('spot_number', '')
+            
+            # Draw red circle
+            radius = 25
+            draw.ellipse([(x-radius, y-radius), (x+radius, y+radius)], 
+                        outline='red', width=3)
+            
+            # Draw white number in center
+            text = str(spot_num)
+            bbox = draw.textbbox((x, y), text, font=font, anchor="mm")
+            # Draw white background circle for number
+            text_radius = max(bbox[2]-bbox[0], bbox[3]-bbox[1]) // 2 + 3
+            draw.ellipse([(x-text_radius, y-text_radius), (x+text_radius, y+text_radius)],
+                        fill='white')
+            # Draw number
+            draw.text((x, y), text, fill='red', font=font, anchor="mm")
+        
+        # Save if output path provided
+        if output_path:
+            img.save(output_path)
+            print(f"Labeled image with {len(image_spots)} manual spots saved to: {output_path}")
+        
+        return img
+
     def merge_labels_with_analysis(self, analysis: Dict[str, Any], labels: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
         Merge thermal analysis hot spots with operator labels.

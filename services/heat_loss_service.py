@@ -134,6 +134,54 @@ def generate_report(
     return report_data
 
 
+
+def _regenerate_labeled_images_with_manual_spots(batch_id: str, labels: Dict[str, Any], tenant_id: str | None = None) -> None:
+    """Regenerate labeled images with manual spot annotations before PDF generation."""
+    from security_utils import safe_batch_path
+    from settings import BASE_REPORT_DIR
+    from services.thermal_analyzer import ThermalAnalyzer
+    
+    try:
+        batch_dir = safe_batch_path(BASE_REPORT_DIR, batch_id, tenant_id)
+        labeled_spots = labels.get("labeled_spots", [])
+        
+        # Group spots by image
+        images_to_process = {}
+        for spot in labeled_spots:
+            if not spot.get('spot_number'):  # Skip unlabeled spots
+                continue
+            img_name = spot.get('image_name')
+            if img_name:
+                if img_name not in images_to_process:
+                    images_to_process[img_name] = []
+                images_to_process[img_name].append(spot)
+        
+        # Generate labeled images
+        analyzer = ThermalAnalyzer()
+        for image_name, spots in images_to_process.items():
+            # Try batch_dir first, then .Images folder
+            original_path = batch_dir / image_name
+            if not original_path.exists():
+                # Check .Images folder (where Google Drive images are stored)
+                images_dir = batch_dir.parent.parent / ".Images" / batch_id / image_name
+                if images_dir.exists():
+                    original_path = images_dir
+            if not original_path.exists():
+                logger.warning(f"Original image not found: {original_path}")
+                continue
+            
+            labeled_name = image_name.replace(".jpg", "_labeled.jpg").replace(".jpeg", "_labeled.jpeg")
+            labeled_path = batch_dir / labeled_name
+            
+            try:
+                analyzer.draw_manual_labels(str(original_path), spots, str(labeled_path))
+                logger.info(f"Generated labeled image: {labeled_name}")
+            except Exception as e:
+                logger.error(f"Failed to generate labeled image {labeled_name}: {e}")
+                
+    except Exception as e:
+        logger.error(f"Failed to regenerate labeled images: {e}", exc_info=True)
+
 def generate_pdf_from_report_data(
     batch_id: str,
     report_data: Dict[str, Any],
@@ -149,6 +197,11 @@ def generate_pdf_from_report_data(
 
     try:
         batch_dir = safe_batch_path(BASE_REPORT_DIR, batch_id, tenant_id)
+        
+        # Regenerate labeled images with manual annotations
+        labels = get_existing_labels(batch_id, tenant_id)
+        _regenerate_labeled_images_with_manual_spots(batch_id, labels, tenant_id)
+        
         html_content = _render_report_html(report_data, batch_dir=str(batch_dir))
 
         html_path = batch_dir / f"final_report_{batch_id}.html"
