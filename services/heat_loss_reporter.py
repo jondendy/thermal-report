@@ -128,26 +128,31 @@ class HeatLossReporter:
             }
         }
     
-    def group_by_spot_number(self, labeled_spots: List[Dict]) -> Dict[int, List[Dict]]:
+    def group_by_spot_number(self, labeled_spots: List[Dict]) -> Dict[str, List[Dict]]:
         """
-        Group hot spots by their assigned number for cross-image reporting.
+        Group hot spots by their assigned number AND type for cross-image reporting.
+        
+        This ensures Door #6, Window #6, and Wall #6 are treated as separate findings.
         
         Args:
             labeled_spots: List of labeled hot spot dictionaries
             
         Returns:
-            Dictionary mapping spot number to list of occurrences
+            Dictionary mapping (type, spot_number) tuple to list of occurrences
         """
         grouped = {}
         for spot in labeled_spots:
             spot_num = spot.get('spot_number')
-            if spot_num not in grouped:
-                grouped[spot_num] = []
-            grouped[spot_num].append(spot)
+            spot_type = spot.get('type', 'Unknown')
+            # Use tuple of (type, number) as key to separate different types with same number
+            key = f"{spot_type}_{spot_num}"
+            if key not in grouped:
+                grouped[key] = []
+            grouped[key].append(spot)
         
         return grouped
     
-    def generate_finding_narrative(self, spot_group: List[Dict], spot_number: int) -> Dict:
+    def generate_finding_narrative(self, spot_group: List[Dict], group_key: str) -> Dict:
         """
         Generate narrative description for a numbered heat loss finding.
         
@@ -176,8 +181,9 @@ class HeatLossReporter:
         Returns:
             Dictionary with finding details
         """
-        # Get common type (should be same for all in group)
+        # Extract spot number from group_key (format: "Type_Number")
         spot_type = spot_group[0].get('type', 'Unknown')
+        spot_number = spot_group[0].get('spot_number', '')
         
         # Calculate statistics
         temps = [spot.get('temperature', 0) for spot in spot_group]
@@ -191,10 +197,13 @@ class HeatLossReporter:
         max_severity = max(severities, key=lambda s: severity_order.get(s, 0))
         
         # Build description
+        unique_images = len(set(s.get('image_name', '') for s in spot_group))
         if len(spot_group) == 1:
             description = f"Heat loss detected at {spot_type.lower()} location."
+        elif unique_images == 1:
+            description = f"Heat loss detected at {spot_type.lower()}, with {len(spot_group)} marked points in the same image."
         else:
-            description = f"Heat loss detected at {spot_type.lower()} visible in {len(spot_group)} images."
+            description = f"Heat loss detected at {spot_type.lower()} location, visible across {unique_images} different images."
         
         # Add temperature context
         description += f" Temperature readings range from {min_temp:.1f}°C to {max_temp:.1f}°C, "

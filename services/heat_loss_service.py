@@ -54,8 +54,8 @@ def _combine_analysis_and_labels(
     labeled_spots = labels.get("labeled_spots", [])
     grouped = reporter.group_by_spot_number(labeled_spots)
     findings = []
-    for spot_number, spot_group in grouped.items():
-        finding = reporter.generate_finding_narrative(spot_group, spot_number)
+    for group_key, spot_group in grouped.items():
+        finding = reporter.generate_finding_narrative(spot_group, group_key)
         findings.append(finding)
     severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
     findings.sort(key=lambda f: (severity_order.get(f.get("severity"), 3), f.get("spot_number", 0)))
