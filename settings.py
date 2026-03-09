@@ -7,6 +7,10 @@ This module is intentionally dependency-free so it can be imported early.
 
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # ---------------------------------------------------------------------------
 # Environment / runtime mode
@@ -102,4 +106,3 @@ def is_allowed_file(filename: str) -> bool:
 
 # Thermal analysis parameters
 MAX_HOTSPOTS_PER_IMAGE = 50  # Maximum hot spots to detect per image
-RECOMMENDATIONS_DOCUMENT_URL = ""  # Optional URL to recommendations document

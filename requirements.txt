@@ -29,3 +29,4 @@ weasyprint>=60.0
 # Alternative PDF backends (optional)
 # pdfkit>=1.0.0          # Requires wkhtmltopdf system package
 # xhtml2pdf>=0.2.15
+pypdf>=3.0.0

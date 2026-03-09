@@ -81,6 +81,78 @@ def _fetch_recommendations_html(url: str) -> str | None:
         return None
 
 
+
+
+def _download_google_drive_pdf(url: str, output_path: Path) -> bool:
+    """Download PDF from Google Drive link and save locally."""
+    try:
+        import requests
+        
+        # Extract file ID from Google Drive URL
+        if "drive.google.com" in url:
+            if "/file/d/" in url:
+                file_id = url.split("/file/d/")[1].split("/")[0]
+            elif "id=" in url:
+                file_id = url.split("id=")[1].split("&")[0]
+            else:
+                logger.warning(f"Could not extract file ID from URL: {url}")
+                return False
+            
+            # Use direct download URL
+            download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+            
+            resp = requests.get(download_url, timeout=30, allow_redirects=True)
+            resp.raise_for_status()
+            
+            # Save PDF
+            output_path.write_bytes(resp.content)
+            logger.info(f"Downloaded recommendations PDF: {output_path}")
+            return True
+        else:
+            logger.warning(f"Not a Google Drive URL: {url}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Failed to download PDF from {url}: {e}")
+        return False
+
+
+def _merge_recommendations_pdf(report_pdf_path: Path, recommendations_url: str) -> bool:
+    """Download recommendations PDF and append it to the report PDF."""
+    try:
+        from pypdf import PdfReader, PdfWriter
+        
+        # Download recommendations PDF to temp location
+        temp_pdf = report_pdf_path.parent / "temp_recommendations.pdf"
+        if not _download_google_drive_pdf(recommendations_url, temp_pdf):
+            return False
+        
+        # Merge PDFs
+        writer = PdfWriter()
+        
+        # Add all pages from report
+        report_reader = PdfReader(str(report_pdf_path))
+        for page in report_reader.pages:
+            writer.add_page(page)
+        
+        # Add all pages from recommendations
+        rec_reader = PdfReader(str(temp_pdf))
+        for page in rec_reader.pages:
+            writer.add_page(page)
+        
+        # Write merged PDF
+        with open(str(report_pdf_path), 'wb') as output_file:
+            writer.write(output_file)
+        
+        # Cleanup temp file
+        temp_pdf.unlink()
+        logger.info(f"Merged recommendations PDF into report: {report_pdf_path}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to merge recommendations PDF: {e}")
+        return False
+
 def generate_report(
     batch_id: str,
     property_address: str | None,
@@ -214,6 +286,12 @@ def generate_pdf_from_report_data(
             from weasyprint import HTML as WeasyHTML
 
             WeasyHTML(string=html_content, base_url=str(batch_dir)).write_pdf(str(pdf_path))
+            
+            # Merge recommendations PDF if available
+            rec_url = report_data.get("recommendations_document_url")
+            if rec_url and report_data.get("doc_mode") == "embed":
+                _merge_recommendations_pdf(pdf_path, rec_url)
+            
             return str(pdf_path)
         except ImportError:
             logger.warning("weasyprint not installed")
@@ -224,6 +302,12 @@ def generate_pdf_from_report_data(
             import pdfkit
 
             pdfkit.from_string(html_content, str(pdf_path))
+            
+            # Merge recommendations PDF if available
+            rec_url = report_data.get("recommendations_document_url")
+            if rec_url and report_data.get("doc_mode") == "embed":
+                _merge_recommendations_pdf(pdf_path, rec_url)
+            
             return str(pdf_path)
         except ImportError:
             logger.warning("pdfkit not installed")
@@ -236,6 +320,10 @@ def generate_pdf_from_report_data(
             with open(str(pdf_path), "wb") as pdf_file:
                 result = pisa.CreatePDF(html_content, dest=pdf_file)
                 if not result.err:
+                    # Merge recommendations PDF if available
+                    rec_url = report_data.get("recommendations_document_url")
+                    if rec_url and report_data.get("doc_mode") == "embed":
+                        _merge_recommendations_pdf(pdf_path, rec_url)
                     return str(pdf_path)
                 logger.warning("xhtml2pdf reported errors: %s", result.err)
         except ImportError:
