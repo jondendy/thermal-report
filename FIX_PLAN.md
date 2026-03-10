@@ -117,6 +117,32 @@ Last updated: 2026-03-10
 
 ---
 
+### 10. ⬜ Review & Narrate step (new page in survey workflow)
+**Problem:** After labelling spots, the surveyor goes straight to PDF generation with no opportunity to review or annotate the auto-generated findings text. Surveyors need to be able to review each finding alongside its thermal image, edit the generated narrative, add their own notes, and adjust or soften wording before the report is finalised.
+
+**New workflow step:** `edit_spots` → **`review_report`** → `generate PDF`
+
+**Solution:**
+- Create new route `/review_report/<batch_id>` and template `templates/review_report.html`
+- Page layout: two-column per finding — thermal image (left) + editable narrative text (right)
+- Fields editable per finding:
+  - Description / narrative (pre-filled from `generate_finding_narrative()`)
+  - Surveyor note (free-text, appended below description in PDF)
+  - Severity override (dropdown — allow surveyor to downgrade if appropriate)
+- A global notes field at the top for general surveyor comments
+- "Generate PDF" button at the bottom submits all edits
+- Edited narratives and notes saved back to `hotspotlabels.json` under a `review` key
+- `_render_report_html()` uses reviewed text in preference to auto-generated text
+
+**Files to create/change:**
+- `templates/review_report.html` (new)
+- `app.py` — add `/review_report/<batch_id>` GET and POST routes
+- `services/heat_loss_service.py` — save/load reviewed narratives
+- `services/batch_io.py` — persist review data
+- `templates/edit_spots.html` — change "Generate Report" button to go to `/review_report/` instead
+
+---
+
 ## Remaining Work Summary
 
 | # | Item | Effort |
@@ -124,9 +150,10 @@ Last updated: 2026-03-10
 | 2 | Real temperature for manually placed spots | Medium |
 | 2.5 | Batch folder write permissions | Small |
 | 3 | New spot types (Eaves, Chimney, Sills, Utilities) | Small |
-| 4 | Surveyor notes field | Small |
+| 4 | Surveyor notes field | Small (absorbed into #10) |
 | 5 | EXIF photo timestamp for survey date | Small |
 | 6 | Org details in footer | Small |
+| 10 | Review & Narrate step | Medium |
 
 ---
 
