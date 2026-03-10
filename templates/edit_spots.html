@@ -532,42 +532,43 @@
                 alert('Label at least one spot before generating report');
                 return;
             }
-            
-            showStatus('Generating report...', 'info');
-            
-            const propertyAddress = document.getElementById('propertyAddress').value;
-            const surveyorName = document.getElementById('surveyorName').value;
-            
-            const formData = new FormData();
-            formData.append('property_address', propertyAddress);
-            formData.append('inspector_name', surveyorName);
-            
-            // Determine which PDFs to attach
-            const attachRec = document.getElementById('attachRecommendations').checked;
-            const attachTips = document.getElementById('attachTips').checked;
-            
-            if (attachRec || attachTips) {
-                formData.append('doc_mode', 'embed');
-                formData.append('attach_recommendations', attachRec ? 'true' : 'false');
-                formData.append('attach_tips', attachTips ? 'true' : 'false');
-            } else {
-                formData.append('doc_mode', 'link');
-            }
-            
-            fetch(`/generate_heat_loss_report/${BATCH}`, { 
-                method: 'POST',
-                body: formData
-            })
-                .then(r => r.json())
-                .then(d => { 
-                    if (d.success) {
-                        window.location.href = d.report_url;
-                    } else {
-                        showStatus('Error: ' + (d.error || 'Unknown'), 'error');
+            // Save first, then navigate to review step
+            showStatus('Saving...', 'info');
+            const spots = [];
+            state.images.forEach(img => {
+                img.spots.forEach(s => {
+                    if (s.type) {
+                        spots.push({
+                            spot_id: s.id,
+                            image_name: img.name,
+                            type: s.type,
+                            spot_number: s.num,
+                            temperature: s.temp,
+                            severity: s.sev,
+                            location: [s.x, s.y]
+                        });
                     }
+                });
+            });
+            const res = await fetch(`/save_labels/${BATCH}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    labeled_spots: spots,
+                    links: state.links.filter(l => l.title && l.url),
+                    attached_files: state.attachedFiles,
+                    property_address: document.getElementById('propertyAddress').value,
+                    surveyor_name: document.getElementById('surveyorName').value
                 })
-                .catch(e => showStatus('Error: ' + e.message, 'error'));
+            });
+            const data = await res.json();
+            if (data.success) {
+                window.location.href = `/review_report/${BATCH}`;
+            } else {
+                showStatus('✗ Save error: ' + (data.error || 'Unknown'), 'error');
+            }
         }
+
 
         function viewRecommendations() {
             if (!RECOMMENDATIONS_URL) {

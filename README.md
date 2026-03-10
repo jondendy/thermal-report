@@ -29,6 +29,20 @@ pip install flirimageextractor
 # For visualization (optional but recommended):
 pip install matplotlib
 ```
+## Environment Variables
+
+Copy `.env.example` to `.env` and fill in:
+
+| Variable | Description | Example |
+|---|---|---|
+| `ORGNAME` | Organisation name shown in report footer | `Acme Thermal` |
+| `ORGWEBSITE` | Website URL in footer | `https://acmethermal.co.uk` |
+| `ORGCONTACT` | Contact email/phone in footer | `info@acmethermal.co.uk` |
+| `RECOMMENDATIONS_DOCUMENT_URL` | Google Drive link to append | `https://drive.google.com/...` |
+| `REPORTS_FOLDER` | Where batch report dirs live | `.reports` |
+| `UPLOAD_FOLDER` | Where raw images are stored | `.Images` |
+
+
 
 ### Installing ExifTool
 

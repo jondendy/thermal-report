@@ -42,7 +42,7 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 app.config["SECRET_KEY"] = "change-me-in-production"
 
-SPOT_TYPES = ["Wall", "Window", "Door", "Roof", "Floor", "Vent", "Other"]
+SPOT_TYPES = ["Wall", "Window", "Door", "Roof", "Floor", "Vent", "Eaves", "Chimney", "Utilities", "Sills", "Other"]
 
 if register_ingest_routes:
     try:
@@ -256,6 +256,60 @@ def save_labels(batchid: str) -> Any:
     except Exception as e:
         logger.exception("Error saving labels for batch %s: %s", batchid, str(e))
         return jsonify({"error": "Failed to save labels"}), 500
+
+
+@app.route("/review_report/<batch_id>", methods=["GET"])
+def review_report(batch_id: str) -> str:
+    try:
+        labels = heatlossservice.get_existing_labels(batch_id, None)
+        analysis = heatlossservice.get_thermal_analysis(batch_id, None)
+        findings = heatlossservice._combine_analysis_and_labels(analysis, labels)
+        review_data = labels.get("review", {})
+        return render_template(
+            "review_report.html",
+            batch_id=batch_id,
+            findings=findings,
+            review_data=review_data,
+            labels=labels,
+        )
+    except FileNotFoundError:
+        abort(404)
+    except Exception as e:
+        logger.exception("Error loading review for batch %s: %s", batch_id, str(e))
+        abort(500)
+
+
+@app.route("/review_report/<batch_id>", methods=["POST"])
+def review_report_submit(batch_id: str) -> Any:
+    try:
+        data = request.get_json()
+        heatlossservice.save_review(batch_id, data, None)
+
+        property_address = data.get("property_address", "")
+        inspector_name = data.get("inspector_name", "")
+
+        report_data = heatlossservice.generate_report(
+            batch_id,
+            property_address=property_address,
+            inspector_name=inspector_name,
+            doc_mode="link",
+            tenant_id=None,
+        )
+
+        pdf_path = None
+        try:
+            pdf_path = heatlossservice.generate_pdf_from_report_data(batch_id, report_data, None)
+        except Exception as e:
+            logger.warning("PDF generation failed (non-fatal): %s", e)
+
+        return jsonify({
+            "success": True,
+            "report_url": url_for("view_heat_loss_report", batch_id=batch_id),
+            "pdf_generated": pdf_path is not None,
+        })
+    except Exception as e:
+        logger.exception("Error submitting review for batch %s: %s", batch_id, str(e))
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/fetch_shared_notes", methods=["POST"])

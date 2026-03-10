@@ -25,6 +25,49 @@ from services.heat_loss_reporter import HeatLossReporter
 
 logger = logging.getLogger(__name__)
 
+def _extract_survey_date(batch_id: str, tenant_id=None) -> str:
+    """Return earliest EXIF DateTimeOriginal from batch images, or today's date."""
+    from security_utils import safe_batch_path
+    from settings import BASE_REPORT_DIR, BASE_UPLOAD_PATH
+    import subprocess, shutil
+
+    candidates: list[str] = []
+    # Check both upload dir and report dir for original images
+    for search_dir in [
+        BASE_UPLOAD_PATH / batch_id,
+        safe_batch_path(BASE_REPORT_DIR, batch_id, tenant_id),
+    ]:
+        if not search_dir.exists():
+            continue
+        for img in list(search_dir.glob("*.jpg")) + list(search_dir.glob("*.jpeg")):
+            # Try exiftool first
+            if shutil.which("exiftool"):
+                try:
+                    result = subprocess.run(
+                        ["exiftool", "-DateTimeOriginal", "-s3", str(img)],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    raw = result.stdout.strip()  # e.g. "2024:11:15 09:32:44"
+                    if raw:
+                        candidates.append(raw[:10].replace(":", "-"))
+                        continue
+                except Exception:
+                    pass
+            # Fallback: Pillow
+            try:
+                from PIL import Image as PilImage
+                with PilImage.open(str(img)) as pil_img:
+                    exif = pil_img._getexif() or {}
+                    # Tag 36867 = DateTimeOriginal
+                    raw = exif.get(36867, "")
+                    if raw:
+                        candidates.append(raw[:10].replace(":", "-"))
+            except Exception:
+                pass
+
+    if candidates:
+        return min(candidates)  # earliest date
+    return datetime.now().strftime("%Y-%m-%d")
 
 def get_thermal_analysis(batch_id: str, tenant_id: str | None = None) -> Dict[str, Any]:
     analysis = batchio.load_thermal_analysis(batch_id, tenant_id)
@@ -187,6 +230,22 @@ def generate_report(
     labels = get_existing_labels(batch_id, tenant_id)
     findings = _combine_analysis_and_labels(analysis, labels)
 
+    # Apply surveyor review overrides
+    review = labels.get("review", {})
+    for finding in findings:
+        key = f"{finding['type']}_{finding['spot_number']}"
+        if key in review:
+            r = review[key]
+            if r.get("narrative"):
+                finding["description"] = r["narrative"]
+            if r.get("severity"):
+                finding["severity"] = r["severity"]
+            if r.get("note"):
+                finding["surveyor_note"] = r["note"]
+
+    property_address = property_address or labels.get("property_address") or "Not specified"
+    inspector_name = inspector_name or labels.get("surveyor_name") or "Not specified"
+
     reporter = HeatLossReporter(
         org_name=ORG_NAME,
         org_website=ORG_WEBSITE,
@@ -208,8 +267,9 @@ def generate_report(
         "batch_id": batch_id,
         "property_address": property_address or "Not specified",
         "inspector_name": inspector_name or "Not specified",
-        "survey_date": datetime.now().strftime("%Y-%m-%d"),
+        "survey_date": _extract_survey_date(batch_id, tenant_id),
         "survey_time": datetime.now().strftime("%H:%M"),
+
         "summary": summary,
         "findings": findings,
         "recommendations": recommendations,
@@ -348,6 +408,15 @@ def generate_pdf_from_report_data(
         return None
 
 
+def save_review(batch_id: str, review_data: dict, tenant_id=None) -> None:
+    """Persist surveyor review edits into hotspotlabels.json under 'review' key."""
+    labels = get_existing_labels(batch_id, tenant_id)
+    labels["review"] = review_data.get("review", {})
+    labels["property_address"] = review_data.get("property_address", labels.get("property_address", ""))
+    labels["surveyor_name"] = review_data.get("inspector_name", labels.get("surveyor_name", ""))
+    batchio.save_hotspot_labels(batch_id, labels, tenant_id)
+
+
 def _render_report_html(report_data: Dict[str, Any], batch_dir: str | None = None) -> str:
     """Render standalone HTML for PDF generation.
 
@@ -359,6 +428,12 @@ def _render_report_html(report_data: Dict[str, Any], batch_dir: str | None = Non
     survey_date = report_data.get("survey_date", datetime.now().strftime("%Y-%m-%d"))
     summary = report_data.get("summary", {})
     findings = report_data.get("findings", [])
+
+    surveyor_note = finding.get("surveyor_note", "")
+    # After the description paragraph:
+    if surveyor_note:
+        html += f'            <p class="surveyor-note"><em>📝 Surveyor note: {surveyor_note}</em></p>\n'
+
     recommendations = report_data.get("recommendations", [])
     org = report_data.get("organisation", {})
     attached_files = report_data.get("attached_files", [])
@@ -383,6 +458,7 @@ def _render_report_html(report_data: Dict[str, Any], batch_dir: str | None = Non
         .finding h3 {{ margin-top: 0; color: #495057; }}
         .finding img {{ width: 100%; max-width: 600px; margin: 10px 0; border: 1px solid #dee2e6; border-radius: 4px; }}
         .recommendation {{ background: #e7f3ff; border-left: 4px solid #2196F3; padding: 15px; margin-bottom: 15px; border-radius: 4px; }}
+        .surveyor-note { color: #555; font-style: italic; border-left: 3px solid #ffc107; padding-left: 8px; margin-top: 6px; }
         .stats {{ display: flex; gap: 15px; margin-bottom: 20px; }}
         .stat-box {{ background: #fff; border: 1px solid #dee2e6; padding: 15px; border-radius: 4px; text-align: center; flex: 1; }}
         .stat-value {{ font-size: 24px; font-weight: bold; color: #667eea; }}

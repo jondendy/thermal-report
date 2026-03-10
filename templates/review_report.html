@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Review Report — {{ batch_id }}</title>
+    <style>
+        body { font-family: -apple-system, 'Segoe UI', Arial, sans-serif; background: #f5f5f5; padding: 20px; padding-bottom: 100px; }
+        .header { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,.05); margin-bottom: 20px; }
+        h1 { color: #333; font-size: 22px; }
+        .global-notes { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,.05); margin-bottom: 20px; }
+        .finding-card { background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,.05); margin-bottom: 20px; overflow: hidden; }
+        .finding-title { background: #667eea; color: white; padding: 12px 20px; font-weight: 600; font-size: 15px; }
+        .finding-body { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 20px; }
+        .finding-image img { width: 100%; border-radius: 4px; border: 1px solid #ddd; }
+        .finding-image .no-img { background: #f0f0f0; height: 200px; display: flex; align-items: center; justify-content: center; color: #aaa; border-radius: 4px; }
+        .finding-fields label { display: block; font-size: 12px; font-weight: 600; color: #555; margin-bottom: 4px; margin-top: 12px; }
+        .finding-fields textarea, .finding-fields select, .finding-fields input[type=text] {
+            width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 13px; font-family: inherit;
+        }
+        .finding-fields textarea { min-height: 80px; resize: vertical; }
+        .severity-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+        .severity-critical { background:#f8d7da; color:#721c24; }
+        .severity-high { background:#ffe5d0; color:#7c3a00; }
+        .severity-medium { background:#fff3cd; color:#856404; }
+        .severity-low { background:#d4edda; color:#155724; }
+        .meta-section { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,.05); margin-bottom: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .meta-section label { display: block; font-size: 12px; font-weight: 600; color: #555; margin-bottom: 4px; }
+        .meta-section input { width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 13px; }
+        .action-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 12px 20px; box-shadow: 0 -2px 8px rgba(0,0,0,.1); display: flex; justify-content: space-between; align-items: center; z-index: 1000; }
+        .btn { padding: 10px 18px; border: none; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; color: white; }
+        .btn-back { background: #6c757d; }
+        .btn-generate { background: #28a745; }
+        .status { padding: 8px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; opacity: 0; transition: opacity .3s; }
+        .status.show { opacity: 1; }
+        .status.info { background: #d1ecf1; color: #0c5460; }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        @media(max-width:768px){ .finding-body, .meta-section { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📋 Review & Narrate — {{ batch_id }}</h1>
+        <p style="color:#666; font-size:13px; margin-top:6px;">Review each finding, edit the narrative, override severity if needed, and add surveyor notes before generating the PDF.</p>
+    </div>
+
+    <div class="meta-section">
+        <div>
+            <label>Property Address</label>
+            <input type="text" id="propertyAddress" value="{{ labels.get('property_address','') }}" placeholder="Enter property address">
+        </div>
+        <div>
+            <label>Surveyor Name</label>
+            <input type="text" id="surveyorName" value="{{ labels.get('surveyor_name','') }}" placeholder="Enter surveyor name">
+        </div>
+    </div>
+
+    <div class="global-notes">
+        <label style="font-size:13px; font-weight:600; color:#333;">📝 General Surveyor Notes (appears at top of report)</label>
+        <textarea id="globalNotes" style="width:100%; margin-top:8px; padding:10px; border:1px solid #ced4da; border-radius:4px; font-size:13px; min-height:80px;" placeholder="Optional general comments about this survey...">{{ review_data.get('_global_notes','') }}</textarea>
+    </div>
+
+    {% for finding in findings %}
+    {% set key = finding.type ~ '_' ~ finding.spot_number %}
+    {% set saved = review_data.get(key, {}) %}
+    <div class="finding-card" data-key="{{ key }}">
+        <div class="finding-title">
+            Finding {{ loop.index }}: {{ finding.title }}
+            <span class="severity-badge severity-{{ finding.severity }}" style="margin-left:10px;">{{ finding.severity }}</span>
+        </div>
+        <div class="finding-body">
+            <div class="finding-image">
+                {% if finding.spot_locations %}
+                    {% set img_name = finding.spot_locations[0][0] %}
+                    {% set labeled_name = img_name.replace('.jpg','_labeled.jpg').replace('.jpeg','_labeled.jpeg') %}
+                    <img src="/download/{{ batch_id }}/{{ labeled_name }}"
+                         onerror="this.src='/download/{{ batch_id }}/{{ img_name }}'"
+                         alt="{{ img_name }}">
+                {% else %}
+                    <div class="no-img">No image</div>
+                {% endif %}
+                <p style="font-size:11px; color:#888; margin-top:6px;">
+                    Max {{ "%.1f"|format(finding.max_temp) }}°C /
+                    Avg {{ "%.1f"|format(finding.avg_temp) }}°C /
+                    Min {{ "%.1f"|format(finding.min_temp) }}°C
+                </p>
+            </div>
+            <div class="finding-fields">
+                <label>Narrative (shown in PDF)</label>
+                <textarea class="narrative-field" data-key="{{ key }}">{{ saved.get('narrative', finding.description) }}</textarea>
+
+                <label>Surveyor Note (italicised below narrative)</label>
+                <textarea class="note-field" data-key="{{ key }}" style="min-height:55px;">{{ saved.get('note','') }}</textarea>
+
+                <label>Severity Override</label>
+                <select class="severity-field" data-key="{{ key }}">
+                    {% for sev in ['low','medium','high','critical'] %}
+                    <option value="{{ sev }}" {{ 'selected' if (saved.get('severity', finding.severity) == sev) else '' }}>{{ sev|capitalize }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <div class="action-bar">
+        <button class="btn btn-back" onclick="history.back()">← Back to Labels</button>
+        <span id="status" class="status"></span>
+        <button class="btn btn-generate" onclick="submitReview()">📄 Generate PDF Report</button>
+    </div>
+
+    <script>
+        const BATCH = "{{ batch_id }}";
+
+        function collectReview() {
+            const review = {};
+            review['_global_notes'] = document.getElementById('globalNotes').value;
+
+            document.querySelectorAll('.finding-card').forEach(card => {
+                const key = card.dataset.key;
+                review[key] = {
+                    narrative: card.querySelector('.narrative-field').value,
+                    note: card.querySelector('.note-field').value,
+                    severity: card.querySelector('.severity-field').value
+                };
+            });
+            return review;
+        }
+
+        function showStatus(msg, type) {
+            const el = document.getElementById('status');
+            el.textContent = msg;
+            el.className = `status ${type} show`;
+            if (type === 'success') setTimeout(() => el.classList.remove('show'), 3000);
+        }
+
+        async function submitReview() {
+            showStatus('Generating PDF…', 'info');
+            const payload = {
+                review: collectReview(),
+                property_address: document.getElementById('propertyAddress').value,
+                inspector_name: document.getElementById('surveyorName').value,
+            };
+            try {
+                const res = await fetch(`/review_report/${BATCH}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showStatus('✓ Report generated', 'success');
+                    setTimeout(() => { window.location.href = data.report_url; }, 800);
+                } else {
+                    showStatus('✗ ' + (data.error || 'Error'), 'error');
+                }
+            } catch(e) {
+                showStatus('✗ ' + e.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>

@@ -126,6 +126,26 @@ class HeatLossReporter:
                 "savings": "5-10% on heating costs",
                 "priority": "medium"
             }
+            "Utilities": {
+                "advice": [
+                    "Insulate hot water pipes in unheated spaces",
+                    "Check boiler flue for draught reversal",
+                    "Lag hot water cylinder if not already done",
+                    "Service boiler and check efficiency rating"
+                ],
+                "savings": "5-15% on heating costs",
+                "priority": "medium"
+            },
+            "Sills": {
+                "advice": [
+                    "Seal gap between sill and window frame with flexible sealant",
+                    "Check sill for cracks allowing cold air infiltration",
+                    "Consider insulating internal window board",
+                    "Inspect for water ingress causing cold bridging"
+                ],
+                "savings": "5-10% on heating costs",
+                "priority": "low"
+            ),
         }
     
     def group_by_spot_number(self, labeled_spots: List[Dict]) -> Dict[str, List[Dict]]:
