@@ -106,3 +106,9 @@ def is_allowed_file(filename: str) -> bool:
 
 # Thermal analysis parameters
 MAX_HOTSPOTS_PER_IMAGE = 50  # Maximum hot spots to detect per image
+
+# Energy saving tips document URL (e.g., Google Drive shareable link)
+TIPS_DOCUMENT_URL = os.getenv(
+    "TIPS_DOCUMENT_URL",
+    ""  # Leave empty to hide
+)

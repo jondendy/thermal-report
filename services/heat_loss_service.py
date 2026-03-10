@@ -153,6 +153,29 @@ def _merge_recommendations_pdf(report_pdf_path: Path, recommendations_url: str) 
         logger.error(f"Failed to merge recommendations PDF: {e}")
         return False
 
+
+def _merge_additional_pdfs(pdf_path: Path, report_data: Dict[str, Any]) -> None:
+    """Merge any selected additional PDFs (recommendations, tips) into the report."""
+    from settings import RECOMMENDATIONS_DOCUMENT_URL, TIPS_DOCUMENT_URL
+    
+    if report_data.get("doc_mode") != "embed":
+        return
+    
+    pdfs_to_merge = []
+    
+    if report_data.get("attach_recommendations", True):
+        url = report_data.get("recommendations_document_url") or RECOMMENDATIONS_DOCUMENT_URL
+        if url:
+            pdfs_to_merge.append(("recommendations", url))
+    
+    if report_data.get("attach_tips"):
+        if TIPS_DOCUMENT_URL:
+            pdfs_to_merge.append(("tips", TIPS_DOCUMENT_URL))
+    
+    for name, url in pdfs_to_merge:
+        _merge_recommendations_pdf(pdf_path, url)
+        logger.info(f"Merged {name} PDF into report")
+
 def generate_report(
     batch_id: str,
     property_address: str | None,
@@ -286,12 +309,7 @@ def generate_pdf_from_report_data(
             from weasyprint import HTML as WeasyHTML
 
             WeasyHTML(string=html_content, base_url=str(batch_dir)).write_pdf(str(pdf_path))
-            
-            # Merge recommendations PDF if available
-            rec_url = report_data.get("recommendations_document_url")
-            if rec_url and report_data.get("doc_mode") == "embed":
-                _merge_recommendations_pdf(pdf_path, rec_url)
-            
+            _merge_additional_pdfs(pdf_path, report_data)
             return str(pdf_path)
         except ImportError:
             logger.warning("weasyprint not installed")
@@ -302,12 +320,7 @@ def generate_pdf_from_report_data(
             import pdfkit
 
             pdfkit.from_string(html_content, str(pdf_path))
-            
-            # Merge recommendations PDF if available
-            rec_url = report_data.get("recommendations_document_url")
-            if rec_url and report_data.get("doc_mode") == "embed":
-                _merge_recommendations_pdf(pdf_path, rec_url)
-            
+            _merge_additional_pdfs(pdf_path, report_data)
             return str(pdf_path)
         except ImportError:
             logger.warning("pdfkit not installed")
@@ -320,10 +333,7 @@ def generate_pdf_from_report_data(
             with open(str(pdf_path), "wb") as pdf_file:
                 result = pisa.CreatePDF(html_content, dest=pdf_file)
                 if not result.err:
-                    # Merge recommendations PDF if available
-                    rec_url = report_data.get("recommendations_document_url")
-                    if rec_url and report_data.get("doc_mode") == "embed":
-                        _merge_recommendations_pdf(pdf_path, rec_url)
+                    _merge_additional_pdfs(pdf_path, report_data)
                     return str(pdf_path)
                 logger.warning("xhtml2pdf reported errors: %s", result.err)
         except ImportError:

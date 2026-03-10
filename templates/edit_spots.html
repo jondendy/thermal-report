@@ -157,8 +157,24 @@
         </div>
     </div>
 
+    <!-- PDF Attachments Section -->
     <div class="links-section">
-        <h2>📎 Documents & Links</h2>
+        <h2>📄 Attach PDFs to Report</h2>
+        <p style="font-size: 12px; color: #666; margin-bottom: 12px;">Select documents to embed as pages in the final PDF report:</p>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="attachRecommendations" checked style="width: 18px; height: 18px;">
+                <span style="font-size: 13px;">📋 Recommendations Chart (default)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="attachTips" style="width: 18px; height: 18px;">
+                <span style="font-size: 13px;">💡 Energy Saving Tips</span>
+            </label>
+        </div>
+    </div>
+
+    <div class="links-section">
+        <h2>📎 External Links</h2>
         <div class="link-list" id="linkList"></div>
         <button class="btn-small" onclick="addLink()" style="margin-bottom: 10px;">+ Add Link</button>
         
@@ -525,7 +541,18 @@
             const formData = new FormData();
             formData.append('property_address', propertyAddress);
             formData.append('inspector_name', surveyorName);
-            formData.append('doc_mode', 'link');
+            
+            // Determine which PDFs to attach
+            const attachRec = document.getElementById('attachRecommendations').checked;
+            const attachTips = document.getElementById('attachTips').checked;
+            
+            if (attachRec || attachTips) {
+                formData.append('doc_mode', 'embed');
+                formData.append('attach_recommendations', attachRec ? 'true' : 'false');
+                formData.append('attach_tips', attachTips ? 'true' : 'false');
+            } else {
+                formData.append('doc_mode', 'link');
+            }
             
             fetch(`/generate_heat_loss_report/${BATCH}`, { 
                 method: 'POST',

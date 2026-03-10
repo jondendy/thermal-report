@@ -355,6 +355,9 @@ def generate_heat_loss_report_route(batch_id: str):
         doc_mode = request.form.get("doc_mode", "link")
         folder_id = request.form.get("folder_id")
 
+        attach_recommendations = request.form.get("attach_recommendations", "false") == "true"
+        attach_tips = request.form.get("attach_tips", "false") == "true"
+
         report_data = heatlossservice.generate_report(
             batch_id,
             property_address=property_address,
@@ -362,6 +365,10 @@ def generate_heat_loss_report_route(batch_id: str):
             doc_mode=doc_mode,
             tenant_id=None,
         )
+        
+        # Pass which PDFs to attach
+        report_data["attach_recommendations"] = attach_recommendations
+        report_data["attach_tips"] = attach_tips
 
         pdf_path = None
         try:
