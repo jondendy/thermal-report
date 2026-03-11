@@ -30,6 +30,7 @@
         .btn { padding: 10px 18px; border: none; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; color: white; }
         .btn-back { background: #6c757d; }
         .btn-generate { background: #28a745; }
+        .btn-save {background #28a745; }
         .status { padding: 8px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; opacity: 0; transition: opacity .3s; }
         .status.show { opacity: 1; }
         .status.info { background: #d1ecf1; color: #0c5460; }
@@ -107,6 +108,7 @@
         <button class="btn btn-back" onclick="history.back()">← Back to Labels</button>
         <span id="status" class="status"></span>
         <button class="btn btn-generate" onclick="submitReview()">📄 Generate PDF Report</button>
+        <button class="btn btn-save" onclick="saveReport()"> 💾 Save report to output</button>
     </div>
 
     <script>
