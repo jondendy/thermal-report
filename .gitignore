@@ -15,6 +15,7 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
+*.pyc
 *$py.class
 *.so
 
@@ -194,4 +195,6 @@ target/
 # ==============================================================================
 backup_*/
 *.log
+service-account.json
 service-account-key.json
+*.json.key
