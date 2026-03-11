@@ -125,7 +125,7 @@ class HeatLossReporter:
                 ],
                 "savings": "5-10% on heating costs",
                 "priority": "medium"
-            }
+            },
             "Utilities": {
                 "advice": [
                     "Insulate hot water pipes in unheated spaces",
@@ -145,7 +145,7 @@ class HeatLossReporter:
                 ],
                 "savings": "5-10% on heating costs",
                 "priority": "low"
-            ),
+            },
         }
     
     def group_by_spot_number(self, labeled_spots: List[Dict]) -> Dict[str, List[Dict]]:

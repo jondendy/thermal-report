@@ -88,20 +88,33 @@ def upload() -> Any:
         return jsonify({"error": f"Processing error: {e}"}), 500
 
 
-# --- Optional Drive UI flows (keep mimeType fields) ---
 @app.route("/list_folders")
 def list_folders():
     try:
         import services.drive_client as drive_client
         from settings import STORAGE_ADDRESS
+
+        logger.info("DEBUG STORAGE_ADDRESS: %s", STORAGE_ADDRESS)
+
         if not STORAGE_ADDRESS:
             return "<h1>Error</h1><p>STORAGE_ADDRESS not configured</p>", 500
+
         folders = drive_client.list_files_in_folder(STORAGE_ADDRESS)
+        logger.info("DEBUG total items from Drive: %d", len(folders))
+        for f in folders:
+            logger.info(
+                "DEBUG item: name=%s mimeType=%s id=%s",
+                f.get("name"), f.get("mimeType"), f.get("id"),
+            )
+
         folder_list = [f for f in folders if f.get("mimeType") == "application/vnd.google-apps.folder"]
+        logger.info("DEBUG folders after filtering: %d", len(folder_list))
+
         return render_template("list_folders.html", folders=folder_list, parent_id=STORAGE_ADDRESS)
     except Exception as e:
         logger.exception("Error listing folders: %s", str(e))
         return f"<h1>Error</h1><p>Failed to list folders: {str(e)}</p>", 500
+
 
 
 @app.route("/select_images/<folder_id>", methods=["GET"])
@@ -134,6 +147,63 @@ def select_images(folder_id: str):
     except Exception as e:
         logger.exception("Error listing folder %s: %s", folder_id, str(e))
         abort(500)
+
+@app.route("/process_selected_images", methods=["POST"])
+def process_selected_images():
+    """Process only user-selected images from Drive folder."""
+    try:
+        import services.drive_client as drive_client
+        import tempfile
+        import shutil
+        from pathlib import Path
+        from werkzeug.datastructures import FileStorage
+
+        data = request.get_json()
+        folder_id = data.get("folder_id")
+        file_ids = data.get("file_ids", [])
+
+        if not folder_id or not file_ids:
+            return jsonify({"error": "Missing folder_id or file_ids"}), 400
+
+        # Generate batch ID
+        from datetime import datetime
+        batch_id = f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        temp_batch_dir = Path(tempfile.gettempdir()) / batch_id
+        temp_batch_dir.mkdir(parents=True, exist_ok=True)
+
+        # Download only selected files
+        downloaded_files = []
+        service = drive_client.get_drive_service()
+        for file_id in file_ids:
+            file_info = service.files().get(fileId=file_id, fields="name").execute()
+            dest_path = temp_batch_dir / file_info["name"]
+            drive_client.download_file(file_id, str(dest_path))
+            downloaded_files.append(dest_path)
+
+        # Convert to FileStorage objects for batch processing
+        file_objects = []
+        try:
+            for file_path in downloaded_files:
+                f = open(file_path, "rb")
+                file_obj = FileStorage(stream=f, filename=file_path.name, content_type="image/jpeg")
+                file_objects.append(file_obj)
+
+            # Use existing batch processing helper (tenant_id=None for flat layout)
+            results = batchservice.process_batch(batch_id, file_objects, None)
+        finally:
+            for f in file_objects:
+                f.stream.close()
+            shutil.rmtree(temp_batch_dir, ignore_errors=True)
+
+        return jsonify({
+            "status": "success",
+            "batch_id": batch_id,
+            "message": f"Processed {len(file_ids)} images"
+        }), 200
+
+    except Exception as e:
+        logger.exception("Error processing selected images: %s", str(e))
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/edit_spots/<batchid>", methods=["GET"])
