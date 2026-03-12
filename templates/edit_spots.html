@@ -386,8 +386,8 @@
                 img.spots.forEach((s, sIdx) => {
                     const marker = document.createElement('div');
                     marker.className = `spot-marker ${s.sev}`;
-                    marker.style.left = s.x + 'px';
-                    marker.style.top = s.y + 'px';
+                    marker.style.left = s.x + '%';
+                    marker.style.top  = s.y + '%';
                     marker.textContent = s.num || (sIdx + 1);
                     marker.title = `${s.temp.toFixed(1)}°C`;
                     marker.onclick = () => container.parentElement.querySelector('.spot-row').click?.();
@@ -425,11 +425,15 @@
             }
             
             const img = state.images[state.pendingSpot.imgIdx];
+            // Convert click pixel coords to percentage for consistent positioning
+            const container = document.getElementById(`imgContainer${state.pendingSpot.imgIdx}`);
+            const xPct = container ? Math.round((state.pendingSpot.x / container.offsetWidth) * 100) : state.pendingSpot.x;
+            const yPct = container ? Math.round((state.pendingSpot.y / container.offsetHeight) * 100) : state.pendingSpot.y;
             img.spots.push({
                 id: `manual_${Date.now()}`,
                 idx: img.spots.length,
-                x: state.pendingSpot.x,
-                y: state.pendingSpot.y,
+                x: xPct,
+                y: yPct,
                 temp: temp,
                 sev: temp > 25 ? 'critical' : temp > 22 ? 'high' : temp > 18 ? 'medium' : 'low',
                 type: type,
@@ -481,7 +485,6 @@
                 
                 if (data.success) {
                     showStatus(`✓ Reprocessed: ${data.total_spots} spots detected`, 'success');
-                    // Reload the page to show new spots
                     setTimeout(() => window.location.reload(), 1500);
                 } else {
                     showStatus('✗ Error: ' + (data.error || 'Unknown'), 'error');
@@ -532,7 +535,6 @@
                 alert('Label at least one spot before generating report');
                 return;
             }
-            // Save first, then navigate to review step
             showStatus('Saving...', 'info');
             const spots = [];
             state.images.forEach(img => {
@@ -569,7 +571,6 @@
             }
         }
 
-
         function viewRecommendations() {
             if (!RECOMMENDATIONS_URL) {
                 alert('No recommendations document configured. Please contact your administrator.');
@@ -582,12 +583,12 @@
             if (confirm('Unsaved changes will be lost. Continue?')) window.history.back();
         }
 
-        // Image click for adding spots
+        // Image click for adding spots — store as percentage coords
         document.addEventListener('click', (e) => {
             if (state.pendingSpot && e.target.tagName === 'IMG') {
                 const rect = e.target.getBoundingClientRect();
-                state.pendingSpot.x = Math.round(e.clientX - rect.left);
-                state.pendingSpot.y = Math.round(e.clientY - rect.top);
+                state.pendingSpot.x = Math.round(((e.clientX - rect.left) / rect.width) * 100);
+                state.pendingSpot.y = Math.round(((e.clientY - rect.top) / rect.height) * 100);
                 document.getElementById('modal').classList.add('active');
             }
         }, true);
