@@ -239,7 +239,6 @@
         };
 
         function init() {
-            // Merge server data with saved labels
             if (RAW_DATA.images) {
                 state.images = RAW_DATA.images.map((img, idx) => {
                     const saved = SAVED.labeled_spots || [];
@@ -398,6 +397,10 @@
 
         function startAdd(imgIdx) {
             state.pendingSpot = { imgIdx };
+            // Always reset modal fields to clean defaults before opening
+            document.getElementById('spotType').value = '';
+            document.getElementById('spotTemp').value = '20.0';
+            document.getElementById('spotNum').value = '';
             showStatus('Click image to place spot', 'info');
         }
 
@@ -425,7 +428,6 @@
             }
             
             const img = state.images[state.pendingSpot.imgIdx];
-            // Convert click pixel coords to percentage for consistent positioning
             const container = document.getElementById(`imgContainer${state.pendingSpot.imgIdx}`);
             const xPct = container ? Math.round((state.pendingSpot.x / container.offsetWidth) * 100) : state.pendingSpot.x;
             const yPct = container ? Math.round((state.pendingSpot.y / container.offsetHeight) * 100) : state.pendingSpot.y;
