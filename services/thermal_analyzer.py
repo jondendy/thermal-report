@@ -30,27 +30,32 @@ class HotSpot:
         self.image_shape = image_shape  # Shape of visual image (height, width)
     
     def to_dict(self) -> Dict:
-        """Convert to dictionary for JSON serialization with pixel coordinates"""
+        """Convert to dictionary for JSON serialization.
+        
+        x and y are stored as PERCENTAGES (0-100) of image dimensions so that
+        the front-end can position markers with CSS `left: x%` / `top: y%`
+        regardless of display size.
+        """
         row, col = self.location
         
-        # Convert thermal array coordinates to pixel coordinates
-        # Assume typical FLIR: 120x160 thermal -> 480x640 visual image (4x scaling)
-        if self.thermal_shape and self.image_shape:
-            scale_y = self.image_shape[0] / self.thermal_shape[0]
-            scale_x = self.image_shape[1] / self.thermal_shape[1]
-        else:
-            # Default scaling for typical FLIR images
-            scale_y = 4.0
-            scale_x = 4.0
+        # Use thermal array shape to derive percentage position.
+        # We do NOT use image_shape here because we want coordinates relative
+        # to the thermal grid, which maps 1:1 to the displayed image area.
+        th_h = self.thermal_shape[0] if self.thermal_shape else 120
+        th_w = self.thermal_shape[1] if self.thermal_shape else 160
         
-        x = int(col * scale_x)
-        y = int(row * scale_y)
+        x_pct = round((col / th_w) * 100, 2)
+        y_pct = round((row / th_h) * 100, 2)
+        
+        # Clamp to [0, 100]
+        x_pct = max(0.0, min(100.0, x_pct))
+        y_pct = max(0.0, min(100.0, y_pct))
         
         return {
-            'x': x,  # Pixel x coordinate
-            'y': y,  # Pixel y coordinate
-            'location': [x, y],  # For backward compatibility
-            'temperature': float(self.temperature),
+            'x': x_pct,          # Percentage x coordinate (0-100)
+            'y': y_pct,          # Percentage y coordinate (0-100)
+            'location': [x_pct, y_pct],  # For backward compatibility
+            'temperature': round(float(self.temperature), 2),
             'area_size': int(self.area_size),
             'severity': self.severity,
             'description': self.description,
@@ -202,8 +207,8 @@ class ThermalAnalyzer:
             if region_size < 3:
                 continue
             
-            # Find hottest point in region (centroid)
-            max_temp = np.max(region_temps)
+            # Find hottest point in region
+            max_temp = float(np.max(region_temps))
             max_loc = np.where((region) & (temp_data == max_temp))
             location = (int(max_loc[0][0]), int(max_loc[1][0]))
             
@@ -259,6 +264,7 @@ class ThermalAnalyzer:
         # Load image
         img = Image.open(image_path).convert('RGB')
         draw = ImageDraw.Draw(img)
+        img_w, img_h = img.size
         
         # Try to load a font, fallback to default
         try:
@@ -278,10 +284,10 @@ class ThermalAnalyzer:
         
         # Label each hot spot
         for idx, spot in enumerate(hot_spots, 1):
-            # Get pixel coordinates from the dict representation
             spot_dict = spot.to_dict()
-            col = spot_dict['x']
-            row = spot_dict['y']
+            # Convert percentage coords back to pixels for drawing on the actual image
+            col = int((spot_dict['x'] / 100.0) * img_w)
+            row = int((spot_dict['y'] / 100.0) * img_h)
             color = severity_colors.get(spot.severity, '#FF0000')
             
             # Draw crosshair marker
@@ -295,7 +301,6 @@ class ThermalAnalyzer:
             
             # Add temperature label
             label = f"#{idx}: {spot.temperature:.1f}°C"
-            # Position label above spot
             label_pos = (col + 15, row - 10)
             
             # Draw background for text
@@ -409,7 +414,8 @@ class ThermalAnalyzer:
 
     def draw_manual_labels(self, image_path: str, labeled_spots: List[Dict], output_path: str = None) -> Image:
         """
-        Draw user-labeled spots on thermal image with numbered markers
+        Draw user-labeled spots on thermal image with numbered markers.
+        Expects location as percentage coords [x_pct, y_pct].
         
         Args:
             image_path: Path to original thermal image
@@ -425,6 +431,7 @@ class ThermalAnalyzer:
         # Load image
         img = Image.open(image_path).convert('RGB')
         draw = ImageDraw.Draw(img)
+        img_w, img_h = img.size
         
         # Load font
         try:
@@ -439,8 +446,14 @@ class ThermalAnalyzer:
         for spot in image_spots:
             if not spot.get('spot_number'):
                 continue  # Skip unlabeled spots
-                
-            x, y = spot.get('location', [0, 0])
+            
+            loc = spot.get('location', [50, 50])
+            x_pct, y_pct = loc[0], loc[1]
+            
+            # Convert percentage to pixel
+            x = int((x_pct / 100.0) * img_w)
+            y = int((y_pct / 100.0) * img_h)
+            
             spot_num = spot.get('spot_number', '')
             
             # Draw red circle
@@ -451,11 +464,9 @@ class ThermalAnalyzer:
             # Draw white number in center
             text = str(spot_num)
             bbox = draw.textbbox((x, y), text, font=font, anchor="mm")
-            # Draw white background circle for number
             text_radius = max(bbox[2]-bbox[0], bbox[3]-bbox[1]) // 2 + 3
             draw.ellipse([(x-text_radius, y-text_radius), (x+text_radius, y+text_radius)],
                         fill='white')
-            # Draw number
             draw.text((x, y), text, fill='red', font=font, anchor="mm")
         
         # Save if output path provided
@@ -486,7 +497,7 @@ class ThermalAnalyzer:
                 'type': labeled.get('type'),
                 'temperature': labeled.get('temperature'),
                 'severity': labeled.get('severity', 'medium'),
-                'location': labeled.get('location', [0, 0]),
+                'location': labeled.get('location', [50, 50]),
                 'description': f"{labeled.get('type')} heat loss detected"
             })
         
