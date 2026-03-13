@@ -338,7 +338,7 @@
                         <button class="btn-small" style="font-size:11px" onclick="startAdd(${imgIdx})">+ Add</button>
                     </div>
                     <div class="image-container" id="imgContainer${imgIdx}" data-idx="${imgIdx}">
-                        <img src="${img.url}" alt="${img.name}" onerror="this.parentElement.innerHTML='<div class=img-loading>⚠ Image loading failed. Try original: <a href=\\'/download/${BATCH}/${img.name}\\' style=\\'color:#007bff;\\'>${img.name}</a></div>'">
+                        <img src="${img.url}" alt="${img.name}" onerror="this.parentElement.innerHTML='<div class=img-loading>⚠ Image loading failed. Try original: <a href=\'/download/${BATCH}/${img.name}\' style=\'color:#007bff;\'>${img.name}</a></div>'">
                     </div>
                     <div class="spots-section">
                         ${renderSpots(imgIdx)}
@@ -351,7 +351,7 @@
 
         function renderSpots(imgIdx) {
             const spots = state.images[imgIdx].spots;
-            if (!spots.length) return '<div class="no-spots">No hot spots</div>';
+            if (!spots.length) return '<div class="no-spots">No detected spots — click image to add a point</div>';
             return spots.map((s, sIdx) => `
                 <div class="spot-row" data-img="${imgIdx}" data-spot="${sIdx}">
                     <div class="spot-id">#${s.idx + 1}</div>
@@ -397,10 +397,10 @@
 
         function startAdd(imgIdx) {
             state.pendingSpot = { imgIdx };
-            // Reset type and number — temperature will be filled from nearest spot on image click
+            // Reset type and number — temperature will be filled from the thermal grid on click
             document.getElementById('spotType').value = '';
             document.getElementById('spotNum').value = '';
-            showStatus('Click image to place spot', 'info');
+            showStatus('Click anywhere on the image to place a spot', 'info');
         }
 
         function addSpot() {
@@ -581,34 +581,51 @@
             if (confirm('Unsaved changes will be lost. Continue?')) window.history.back();
         }
 
-        // Image click — capture percentage coords, find nearest detected spot,
-        // use its real sensor temperature to pre-fill the modal
-        document.addEventListener('click', (e) => {
-            if (state.pendingSpot && e.target.tagName === 'IMG') {
-                const rect = e.target.getBoundingClientRect();
-                const xPct = Math.round(((e.clientX - rect.left) / rect.width) * 100);
-                const yPct = Math.round(((e.clientY - rect.top) / rect.height) * 100);
-                state.pendingSpot.x = xPct;
-                state.pendingSpot.y = yPct;
+        // Image click — capture percentage coords, query the thermal grid via API,
+        // then open the modal with the real sensor temperature pre-filled.
+        // Falls back through: nearest detected spot → 20.0
+        document.addEventListener('click', async (e) => {
+            if (!state.pendingSpot || e.target.tagName !== 'IMG') return;
 
-                // Find the nearest auto-detected spot to where the user clicked
-                // and use its real sensor temperature as the default
-                const imgSpots = state.images[state.pendingSpot.imgIdx].spots;
-                let nearestTemp = 20.0;
-                if (imgSpots.length > 0) {
-                    let minDist = Infinity;
-                    imgSpots.forEach(s => {
-                        const dist = Math.hypot(s.x - xPct, s.y - yPct);
-                        if (dist < minDist) {
-                            minDist = dist;
-                            nearestTemp = s.temp;
-                        }
-                    });
-                }
-                document.getElementById('spotTemp').value = nearestTemp.toFixed(1);
+            const rect = e.target.getBoundingClientRect();
+            const xPct = Math.round(((e.clientX - rect.left) / rect.width) * 100);
+            const yPct = Math.round(((e.clientY - rect.top) / rect.height) * 100);
+            state.pendingSpot.x = xPct;
+            state.pendingSpot.y = yPct;
 
-                document.getElementById('modal').classList.add('active');
+            const imageName = state.images[state.pendingSpot.imgIdx].name;
+
+            // Default: nearest detected spot temp, or 20.0 if no spots
+            const imgSpots = state.images[state.pendingSpot.imgIdx].spots;
+            let fallbackTemp = 20.0;
+            if (imgSpots.length > 0) {
+                let minDist = Infinity;
+                imgSpots.forEach(s => {
+                    const dist = Math.hypot(s.x - xPct, s.y - yPct);
+                    if (dist < minDist) { minDist = dist; fallbackTemp = s.temp; }
+                });
             }
+
+            // Try to get the exact sensor temperature at the clicked point
+            let temperature = fallbackTemp;
+            try {
+                const res = await fetch(`/api/temperature_at_point/${BATCH}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image_name: imageName, x_pct: xPct, y_pct: yPct })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (typeof data.temperature === 'number') {
+                        temperature = data.temperature;
+                    }
+                }
+            } catch (err) {
+                // Network or parse error — use fallback silently
+            }
+
+            document.getElementById('spotTemp').value = temperature.toFixed(1);
+            document.getElementById('modal').classList.add('active');
         }, true);
 
         init();

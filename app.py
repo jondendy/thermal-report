@@ -239,6 +239,49 @@ def editspots(batchid: str) -> str:
         abort(500)
 
 
+@app.route("/api/temperature_at_point/<batch_id>", methods=["POST"])
+def api_temperature_at_point(batch_id: str) -> Any:
+    """
+    Return the real sensor temperature at a given percentage coordinate within a thermal image.
+
+    Expects JSON body:
+        { "image_name": "IMG_001.jpg", "x_pct": 42, "y_pct": 67 }
+
+    Returns:
+        { "temperature": 24.3 }
+    """
+    try:
+        data = request.get_json() or {}
+        image_name = data.get("image_name", "")
+        x_pct = float(data.get("x_pct", 50))
+        y_pct = float(data.get("y_pct", 50))
+
+        if not image_name:
+            return jsonify({"error": "image_name is required"}), 400
+
+        batch_dir = safe_batch_path(settings.BASE_REPORT_DIR, batch_id, None)
+
+        from services.thermal_data_service import load_thermal_data, ThermalDataExtractor
+        thermal_grid = load_thermal_data(batch_dir, image_name)
+
+        if thermal_grid is None:
+            return jsonify({"error": "Thermal data not found for this image"}), 404
+
+        # Convert percentage coords to pixel coords within the thermal grid
+        thermal_height, thermal_width = thermal_grid.shape
+        px = int(round(x_pct / 100.0 * thermal_width))
+        py = int(round(y_pct / 100.0 * thermal_height))
+        px = max(0, min(px, thermal_width - 1))
+        py = max(0, min(py, thermal_height - 1))
+
+        temperature = float(thermal_grid[py, px])
+        return jsonify({"temperature": round(temperature, 2)})
+
+    except Exception as e:
+        logger.exception("Error reading temperature at point for batch %s: %s", batch_id, str(e))
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/reprocess_batch/<batch_id>", methods=["POST"])
 def api_reprocess_batch(batch_id: str) -> Any:
     """Re-run thermal analysis on existing batch with new sensitivity settings."""
