@@ -44,6 +44,10 @@ app.config["SECRET_KEY"] = "change-me-in-production"
 
 SPOT_TYPES = ["Wall", "Window", "Door", "Roof", "Floor", "Vent", "Eaves", "Chimney", "Utilities", "Sills", "Other"]
 
+# Plausible temperature range — mirrors the clamp in thermal_data_service.py
+_TEMP_MIN = -40.0
+_TEMP_MAX = 200.0
+
 if register_ingest_routes:
     try:
         register_ingest_routes(app)
@@ -261,7 +265,7 @@ def api_temperature_at_point(batch_id: str) -> Any:
 
         batch_dir = safe_batch_path(settings.BASE_REPORT_DIR, batch_id, None)
 
-        from services.thermal_data_service import load_thermal_data, ThermalDataExtractor
+        from services.thermal_data_service import load_thermal_data
         thermal_grid = load_thermal_data(batch_dir, image_name)
 
         if thermal_grid is None:
@@ -275,6 +279,16 @@ def api_temperature_at_point(batch_id: str) -> Any:
         py = max(0, min(py, thermal_height - 1))
 
         temperature = float(thermal_grid[py, px])
+
+        # Reject implausible values — these indicate a calibration/conversion failure.
+        # The frontend will fall back to the nearest detected spot temperature.
+        if not (_TEMP_MIN <= temperature <= _TEMP_MAX):
+            logger.warning(
+                "Implausible temperature %.1f\u00b0C at (%d,%d) in %s/%s — rejecting",
+                temperature, px, py, batch_id, image_name,
+            )
+            return jsonify({"error": f"Implausible temperature value ({temperature:.1f}\u00b0C) — calibration may have failed"}), 422
+
         return jsonify({"temperature": round(temperature, 2)})
 
     except Exception as e:

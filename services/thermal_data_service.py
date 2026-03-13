@@ -14,6 +14,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Physically plausible temperature range for a building survey (°C)
+_TEMP_MIN = -40.0
+_TEMP_MAX = 200.0
+
 
 class ThermalDataExtractor:
     """
@@ -58,7 +62,7 @@ class ThermalDataExtractor:
             # Convert raw values to temperature
             temperatures = self._convert_to_temperature(raw_thermal, params)
             
-            logger.info(f"Extracted thermal data: {temperatures.shape}, range {temperatures.min():.1f}°C to {temperatures.max():.1f}°C")
+            logger.info(f"Extracted thermal data: {temperatures.shape}, range {temperatures.min():.1f}\u00b0C to {temperatures.max():.1f}\u00b0C")
             return temperatures
             
         except Exception as e:
@@ -140,26 +144,35 @@ class ThermalDataExtractor:
     def _convert_to_temperature(self, raw_data: np.ndarray, params: Dict) -> np.ndarray:
         """
         Convert raw thermal values to temperature in Celsius using Planck equation.
+
+        Guards against log(negative/zero) blow-up that produces physically impossible
+        values (e.g. 90000 °C) when raw pixel values are smaller than the offset O.
+        Results are clamped to a plausible building-survey range.
         """
-        # FLIR Planck equation for radiometric temperature conversion
-        # Based on FLIR documentation and reverse engineering
-        
         R1 = params['R1']
         R2 = params['R2']
-        B = params['B']
-        F = params['F']
-        O = params['O']
-        
-        # Convert raw values to radiance
+        B  = params['B']
+        F  = params['F']
+        O  = params['O']
+
         raw = raw_data.astype(np.float32)
-        
-        # Apply FLIR conversion formula
-        # T = B / ln(R1 / (R2 * (raw + O)) + F) - 273.15
-        
+
+        # FLIR Planck formula: T(K) = B / ln(R1 / (R2*(raw+O)) + F)
         radiance = (raw + O) / R2
-        temp_kelvin = B / np.log(R1 / radiance + F)
+
+        # Avoid log(<=0): replace non-positive radiance with a tiny positive value
+        safe_radiance = np.where(radiance > 0, radiance, 1e-10)
+        log_arg = R1 / safe_radiance + F
+
+        # log_arg must be > 1 for a positive Kelvin result; clamp to avoid NaN/inf
+        log_arg = np.clip(log_arg, 1.0 + 1e-10, None)
+
+        temp_kelvin  = B / np.log(log_arg)
         temp_celsius = temp_kelvin - 273.15
-        
+
+        # Clamp to a physically plausible range for a building survey
+        temp_celsius = np.clip(temp_celsius, _TEMP_MIN, _TEMP_MAX)
+
         return temp_celsius
     
     def _basic_temperature_conversion(self, raw_data: np.ndarray) -> np.ndarray:
@@ -167,10 +180,9 @@ class ThermalDataExtractor:
         Basic temperature conversion when calibration params are unavailable.
         Assumes raw data is in centi-Kelvin.
         """
-        # Convert from centi-Kelvin to Celsius
         temp_kelvin = raw_data.astype(np.float32) / 100.0
         temp_celsius = temp_kelvin - 273.15
-        return temp_celsius
+        return np.clip(temp_celsius, _TEMP_MIN, _TEMP_MAX)
     
     def get_temperature_at_point(
         self,
@@ -194,18 +206,14 @@ class ThermalDataExtractor:
             Temperature in Celsius, or None if coordinates are invalid
         """
         try:
-            # Default: use coordinates as-is
             scaled_x, scaled_y = x, y
 
-            # Get thermal data dimensions
             thermal_height, thermal_width = temperatures.shape
 
-            # Scale coordinates if visual dimensions are provided
             if visual_width is not None and visual_height is not None:
                 scaled_x = int(x * thermal_width / visual_width)
                 scaled_y = int(y * thermal_height / visual_height)
 
-            # Bounds check
             if 0 <= scaled_y < thermal_height and 0 <= scaled_x < thermal_width:
                 return float(temperatures[scaled_y, scaled_x])
 
@@ -233,7 +241,6 @@ def save_thermal_data(batch_path: Path, image_name: str, thermal_data: np.ndarra
         thermal_dir = batch_path / 'thermal_data'
         thermal_dir.mkdir(exist_ok=True)
         
-        # Save as compressed numpy file
         thermal_file = thermal_dir / f"{Path(image_name).stem}_thermal.npz"
         np.savez_compressed(thermal_file, temperatures=thermal_data)
         
