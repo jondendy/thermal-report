@@ -338,7 +338,7 @@
                         <button class="btn-small" style="font-size:11px" onclick="startAdd(${imgIdx})">+ Add</button>
                     </div>
                     <div class="image-container" id="imgContainer${imgIdx}" data-idx="${imgIdx}">
-                        <img src="${img.url}" alt="${img.name}" onerror="this.parentElement.innerHTML='<div class=img-loading>⚠ Image loading failed. Try original: <a href=\'/download/${BATCH}/${img.name}\' style=\'color:#007bff;\'>${img.name}</a></div>'">
+                        <img src="${img.url}" alt="${img.name}" onerror="this.parentElement.innerHTML='<div class=img-loading>⚠ Image loading failed. Try original: <a href=\\'/download/${BATCH}/${img.name}\\' style=\\'color:#007bff;\\'>${img.name}</a></div>'">
                     </div>
                     <div class="spots-section">
                         ${renderSpots(imgIdx)}
@@ -397,9 +397,8 @@
 
         function startAdd(imgIdx) {
             state.pendingSpot = { imgIdx };
-            // Always reset modal fields to clean defaults before opening
+            // Reset type and number — temperature will be filled from nearest spot on image click
             document.getElementById('spotType').value = '';
-            document.getElementById('spotTemp').value = '20.0';
             document.getElementById('spotNum').value = '';
             showStatus('Click image to place spot', 'info');
         }
@@ -428,14 +427,11 @@
             }
             
             const img = state.images[state.pendingSpot.imgIdx];
-            const container = document.getElementById(`imgContainer${state.pendingSpot.imgIdx}`);
-            const xPct = container ? Math.round((state.pendingSpot.x / container.offsetWidth) * 100) : state.pendingSpot.x;
-            const yPct = container ? Math.round((state.pendingSpot.y / container.offsetHeight) * 100) : state.pendingSpot.y;
             img.spots.push({
                 id: `manual_${Date.now()}`,
                 idx: img.spots.length,
-                x: xPct,
-                y: yPct,
+                x: state.pendingSpot.x,
+                y: state.pendingSpot.y,
                 temp: temp,
                 sev: temp > 25 ? 'critical' : temp > 22 ? 'high' : temp > 18 ? 'medium' : 'low',
                 type: type,
@@ -585,12 +581,32 @@
             if (confirm('Unsaved changes will be lost. Continue?')) window.history.back();
         }
 
-        // Image click for adding spots — store as percentage coords
+        // Image click — capture percentage coords, find nearest detected spot,
+        // use its real sensor temperature to pre-fill the modal
         document.addEventListener('click', (e) => {
             if (state.pendingSpot && e.target.tagName === 'IMG') {
                 const rect = e.target.getBoundingClientRect();
-                state.pendingSpot.x = Math.round(((e.clientX - rect.left) / rect.width) * 100);
-                state.pendingSpot.y = Math.round(((e.clientY - rect.top) / rect.height) * 100);
+                const xPct = Math.round(((e.clientX - rect.left) / rect.width) * 100);
+                const yPct = Math.round(((e.clientY - rect.top) / rect.height) * 100);
+                state.pendingSpot.x = xPct;
+                state.pendingSpot.y = yPct;
+
+                // Find the nearest auto-detected spot to where the user clicked
+                // and use its real sensor temperature as the default
+                const imgSpots = state.images[state.pendingSpot.imgIdx].spots;
+                let nearestTemp = 20.0;
+                if (imgSpots.length > 0) {
+                    let minDist = Infinity;
+                    imgSpots.forEach(s => {
+                        const dist = Math.hypot(s.x - xPct, s.y - yPct);
+                        if (dist < minDist) {
+                            minDist = dist;
+                            nearestTemp = s.temp;
+                        }
+                    });
+                }
+                document.getElementById('spotTemp').value = nearestTemp.toFixed(1);
+
                 document.getElementById('modal').classList.add('active');
             }
         }, true);
