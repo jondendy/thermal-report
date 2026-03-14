@@ -14,140 +14,116 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Physically plausible temperature range for a building survey (°C)
-_TEMP_MIN = -40.0
-_TEMP_MAX = 200.0
-
 
 class ThermalDataExtractor:
     """
     Extracts and manages temperature data from FLIR thermal images.
     """
-    
+
     def __init__(self, exiftool_path='exiftool'):
-        """
-        Initialize extractor.
-        
-        Args:
-            exiftool_path: Path to exiftool binary (default: 'exiftool' from PATH)
-        """
         self.exiftool_path = exiftool_path
-    
+
     def extract_thermal_data(self, image_path: Path) -> Optional[np.ndarray]:
         """
         Extract raw thermal data from FLIR image and convert to temperatures.
-        
-        Args:
-            image_path: Path to FLIR JPEG image
-        
+
         Returns:
             2D numpy array of temperature values in Celsius, or None if extraction fails
         """
         try:
-            # Extract raw thermal image data using exiftool
             raw_thermal = self._extract_raw_thermal(image_path)
-            
             if raw_thermal is None:
                 logger.warning(f"Failed to extract raw thermal data from {image_path}")
                 return None
-            
-            # Extract calibration parameters
+
             params = self._extract_calibration_params(image_path)
-            
             if params is None:
                 logger.warning(f"Failed to extract calibration params from {image_path}")
-                # Use basic conversion as fallback
                 return self._basic_temperature_conversion(raw_thermal)
-            
-            # Convert raw values to temperature
+
             temperatures = self._convert_to_temperature(raw_thermal, params)
-            
-            logger.info(f"Extracted thermal data: {temperatures.shape}, range {temperatures.min():.1f}\u00b0C to {temperatures.max():.1f}\u00b0C")
+            logger.info(
+                f"Extracted thermal data: {temperatures.shape}, "
+                f"range {temperatures.min():.1f}\u00b0C to {temperatures.max():.1f}\u00b0C"
+            )
             return temperatures
-            
+
         except Exception as e:
             logger.exception(f"Error extracting thermal data from {image_path}: {e}")
             return None
-    
+
     def _extract_raw_thermal(self, image_path: Path) -> Optional[np.ndarray]:
         """
         Extract raw thermal image data using exiftool.
         """
         try:
-            # Use exiftool to extract raw thermal image
             cmd = [self.exiftool_path, '-b', '-RawThermalImage', str(image_path)]
             result = subprocess.run(cmd, capture_output=True, check=True)
-            
+
             if not result.stdout:
                 return None
-            
-            # Try to decode as PNG (FLIR format)
+
             try:
                 from PIL import Image
                 import io
                 img = Image.open(io.BytesIO(result.stdout))
                 return np.array(img)
-            except:
-                # If PNG fails, try raw binary
+            except Exception:
                 return np.frombuffer(result.stdout, dtype=np.uint16)
-                
+
         except subprocess.CalledProcessError as e:
             logger.error(f"Exiftool failed: {e}")
             return None
         except Exception as e:
             logger.exception(f"Error extracting raw thermal: {e}")
             return None
-    
+
     def _extract_calibration_params(self, image_path: Path) -> Optional[Dict]:
         """
         Extract FLIR calibration parameters for temperature conversion.
         """
         try:
-            # Extract relevant FLIR metadata
             cmd = [
-                self.exiftool_path, 
+                self.exiftool_path,
                 '-json',
                 '-Planck*',
-                '-Atmospheric*', 
+                '-Atmospheric*',
                 '-Emissivity',
                 '-ObjectDistance',
                 '-ReflectedApparentTemperature',
                 str(image_path)
             ]
             result = subprocess.run(cmd, capture_output=True, check=True, text=True)
-            
+
             if not result.stdout:
                 return None
-            
+
             metadata = json.loads(result.stdout)[0]
-            
-            # Extract Planck constants (R1, R2, B, F, O)
+
             params = {
                 'R1': metadata.get('PlanckR1', 21106.77),
                 'R2': metadata.get('PlanckR2', 0.012545258),
-                'B': metadata.get('PlanckB', 1501),
-                'F': metadata.get('PlanckF', 1),
-                'O': metadata.get('PlanckO', -7340),
-                'emissivity': metadata.get('Emissivity', 0.95),
-                'distance': metadata.get('ObjectDistance', 1.0),
+                'B':  metadata.get('PlanckB', 1501),
+                'F':  metadata.get('PlanckF', 1),
+                'O':  metadata.get('PlanckO', -7340),
+                'emissivity':     metadata.get('Emissivity', 0.95),
+                'distance':       metadata.get('ObjectDistance', 1.0),
                 'reflected_temp': metadata.get('ReflectedApparentTemperature', 20.0),
-                'atm_temp': metadata.get('AtmosphericTemperature', 20.0),
-                'atm_trans': metadata.get('AtmosphericTransAlpha1', 0.006569) 
+                'atm_temp':       metadata.get('AtmosphericTemperature', 20.0),
+                'atm_trans':      metadata.get('AtmosphericTransAlpha1', 0.006569),
             }
-            
             return params
-            
+
         except Exception as e:
             logger.exception(f"Error extracting calibration params: {e}")
             return None
-    
+
     def _convert_to_temperature(self, raw_data: np.ndarray, params: Dict) -> np.ndarray:
         """
-        Convert raw thermal values to temperature in Celsius using Planck equation.
+        Convert raw thermal values to temperature in Celsius using the FLIR Planck equation.
 
-        Guards against log(negative/zero) blow-up that produces physically impossible
-        values (e.g. 90000 °C) when raw pixel values are smaller than the offset O.
-        Results are clamped to a plausible building-survey range.
+        Guards against log(negative/zero) producing NaN or inf, but does NOT clamp
+        the resulting Celsius values — the sensor range is left intact.
         """
         R1 = params['R1']
         R2 = params['R2']
@@ -164,26 +140,23 @@ class ThermalDataExtractor:
         safe_radiance = np.where(radiance > 0, radiance, 1e-10)
         log_arg = R1 / safe_radiance + F
 
-        # log_arg must be > 1 for a positive Kelvin result; clamp to avoid NaN/inf
+        # Keep log argument > 1 to avoid NaN / non-positive Kelvin result
         log_arg = np.clip(log_arg, 1.0 + 1e-10, None)
 
         temp_kelvin  = B / np.log(log_arg)
         temp_celsius = temp_kelvin - 273.15
 
-        # Clamp to a physically plausible range for a building survey
-        temp_celsius = np.clip(temp_celsius, _TEMP_MIN, _TEMP_MAX)
-
         return temp_celsius
-    
+
     def _basic_temperature_conversion(self, raw_data: np.ndarray) -> np.ndarray:
         """
         Basic temperature conversion when calibration params are unavailable.
         Assumes raw data is in centi-Kelvin.
         """
-        temp_kelvin = raw_data.astype(np.float32) / 100.0
+        temp_kelvin  = raw_data.astype(np.float32) / 100.0
         temp_celsius = temp_kelvin - 273.15
-        return np.clip(temp_celsius, _TEMP_MIN, _TEMP_MAX)
-    
+        return temp_celsius
+
     def get_temperature_at_point(
         self,
         temperatures: np.ndarray,
@@ -194,24 +167,13 @@ class ThermalDataExtractor:
     ) -> Optional[float]:
         """
         Get temperature value at specific coordinates.
-
-        Args:
-            temperatures: 2D array of temperature values
-            x: X coordinate (column)
-            y: Y coordinate (row)
-            visual_width: width of the visual image (if different from thermal)
-            visual_height: height of the visual image (if different from thermal)
-
-        Returns:
-            Temperature in Celsius, or None if coordinates are invalid
         """
         try:
             scaled_x, scaled_y = x, y
-
             thermal_height, thermal_width = temperatures.shape
 
             if visual_width is not None and visual_height is not None:
-                scaled_x = int(x * thermal_width / visual_width)
+                scaled_x = int(x * thermal_width  / visual_width)
                 scaled_y = int(y * thermal_height / visual_height)
 
             if 0 <= scaled_y < thermal_height and 0 <= scaled_x < thermal_width:
@@ -231,21 +193,15 @@ class ThermalDataExtractor:
 def save_thermal_data(batch_path: Path, image_name: str, thermal_data: np.ndarray):
     """
     Save extracted thermal data to disk for later retrieval.
-    
-    Args:
-        batch_path: Path to batch directory
-        image_name: Original image filename
-        thermal_data: 2D array of temperature values
     """
     try:
         thermal_dir = batch_path / 'thermal_data'
         thermal_dir.mkdir(exist_ok=True)
-        
+
         thermal_file = thermal_dir / f"{Path(image_name).stem}_thermal.npz"
         np.savez_compressed(thermal_file, temperatures=thermal_data)
-        
         logger.info(f"Saved thermal data for {image_name}")
-        
+
     except Exception as e:
         logger.exception(f"Error saving thermal data for {image_name}: {e}")
 
@@ -253,24 +209,20 @@ def save_thermal_data(batch_path: Path, image_name: str, thermal_data: np.ndarra
 def load_thermal_data(batch_path: Path, image_name: str) -> Optional[np.ndarray]:
     """
     Load previously extracted thermal data.
-    
-    Args:
-        batch_path: Path to batch directory
-        image_name: Original image filename
-    
+
     Returns:
         2D array of temperature values, or None if not found
     """
     try:
         thermal_file = batch_path / 'thermal_data' / f"{Path(image_name).stem}_thermal.npz"
-        
+
         if not thermal_file.exists():
             logger.warning(f"Thermal data file not found: {thermal_file}")
             return None
-        
+
         data = np.load(thermal_file)
         return data['temperatures']
-        
+
     except Exception as e:
         logger.exception(f"Error loading thermal data for {image_name}: {e}")
         return None

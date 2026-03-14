@@ -44,15 +44,10 @@ app.config["SECRET_KEY"] = "change-me-in-production"
 
 SPOT_TYPES = ["Wall", "Window", "Door", "Roof", "Floor", "Vent", "Eaves", "Chimney", "Utilities", "Sills", "Other"]
 
-# Plausible temperature range — mirrors the clamp in thermal_data_service.py
-_TEMP_MIN = -40.0
-_TEMP_MAX = 200.0
-
 if register_ingest_routes:
     try:
         register_ingest_routes(app)
     except Exception:
-        # Keep portable mode alive even if Drive deps are missing
         pass
 
 
@@ -120,7 +115,6 @@ def list_folders():
         return f"<h1>Error</h1><p>Failed to list folders: {str(e)}</p>", 500
 
 
-
 @app.route("/select_images/<folder_id>", methods=["GET"])
 def select_images(folder_id: str):
     try:
@@ -152,6 +146,7 @@ def select_images(folder_id: str):
         logger.exception("Error listing folder %s: %s", folder_id, str(e))
         abort(500)
 
+
 @app.route("/process_selected_images", methods=["POST"])
 def process_selected_images():
     """Process only user-selected images from Drive folder."""
@@ -169,13 +164,11 @@ def process_selected_images():
         if not folder_id or not file_ids:
             return jsonify({"error": "Missing folder_id or file_ids"}), 400
 
-        # Generate batch ID
         from datetime import datetime
         batch_id = f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         temp_batch_dir = Path(tempfile.gettempdir()) / batch_id
         temp_batch_dir.mkdir(parents=True, exist_ok=True)
 
-        # Download only selected files
         downloaded_files = []
         service = drive_client.get_drive_service()
         for file_id in file_ids:
@@ -184,15 +177,12 @@ def process_selected_images():
             drive_client.download_file(file_id, str(dest_path))
             downloaded_files.append(dest_path)
 
-        # Convert to FileStorage objects for batch processing
         file_objects = []
         try:
             for file_path in downloaded_files:
                 f = open(file_path, "rb")
                 file_obj = FileStorage(stream=f, filename=file_path.name, content_type="image/jpeg")
                 file_objects.append(file_obj)
-
-            # Use existing batch processing helper (tenant_id=None for flat layout)
             results = batchservice.process_batch(batch_id, file_objects, None)
         finally:
             for f in file_objects:
@@ -218,7 +208,6 @@ def editspots(batchid: str) -> str:
         existing_labels = heatlossservice.get_existing_labels(batchid, None)
         saved_links = existing_labels.get("links", [])
 
-        # Compatibility shim: some historical analyses nest images
         if "images" not in analysis_data:
             if "results" in analysis_data and "images" in analysis_data["results"]:
                 analysis_data = analysis_data["results"]
@@ -271,7 +260,6 @@ def api_temperature_at_point(batch_id: str) -> Any:
         if thermal_grid is None:
             return jsonify({"error": "Thermal data not found for this image"}), 404
 
-        # Convert percentage coords to pixel coords within the thermal grid
         thermal_height, thermal_width = thermal_grid.shape
         px = int(round(x_pct / 100.0 * thermal_width))
         py = int(round(y_pct / 100.0 * thermal_height))
@@ -279,16 +267,6 @@ def api_temperature_at_point(batch_id: str) -> Any:
         py = max(0, min(py, thermal_height - 1))
 
         temperature = float(thermal_grid[py, px])
-
-        # Reject implausible values — these indicate a calibration/conversion failure.
-        # The frontend will fall back to the nearest detected spot temperature.
-        if not (_TEMP_MIN <= temperature <= _TEMP_MAX):
-            logger.warning(
-                "Implausible temperature %.1f\u00b0C at (%d,%d) in %s/%s — rejecting",
-                temperature, px, py, batch_id, image_name,
-            )
-            return jsonify({"error": f"Implausible temperature value ({temperature:.1f}\u00b0C) — calibration may have failed"}), 422
-
         return jsonify({"temperature": round(temperature, 2)})
 
     except Exception as e:
@@ -479,7 +457,6 @@ def api_fetch_shared_notes() -> Any:
         if not html_content:
             return jsonify({"error": "Failed to fetch shared notes content"}), 500
 
-        # Strip wrappers
         html_content = re.sub(r"<!DOCTYPE[^>]*>", "", html_content, flags=re.IGNORECASE)
         html_content = re.sub(r"</?html[^>]*>", "", html_content, flags=re.IGNORECASE)
         html_content = re.sub(r"<head[^>]*>.*?</head>", "", html_content, flags=re.IGNORECASE | re.DOTALL)
@@ -546,8 +523,7 @@ def generate_heat_loss_report_route(batch_id: str):
             doc_mode=doc_mode,
             tenant_id=None,
         )
-        
-        # Pass which PDFs to attach
+
         report_data["attach_recommendations"] = attach_recommendations
         report_data["attach_tips"] = attach_tips
 
@@ -629,11 +605,9 @@ def download_pdf(batch_id: str) -> Any:
 @app.route("/download/<batch_id>/<filename>", methods=["GET"])
 def download_file(batch_id: str, filename: str) -> Any:
     try:
-        # Use the canonical safe_batch_path(BASE_REPORT_DIR, ...) base
         batch_dir = safe_batch_path(settings.BASE_REPORT_DIR, batch_id, None)
         file_path = (batch_dir / filename).resolve()
 
-        # Verify within batch
         if not str(file_path).startswith(str(batch_dir.resolve())):
             abort(403)
         if not file_path.exists():

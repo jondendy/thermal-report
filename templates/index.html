@@ -17,6 +17,8 @@
         .upload-btn:hover { background: #45a049; }
         .process-btn { background: #FF9800; }
         .process-btn:hover { background: #F57C00; }
+        .drive-btn { background: #1a73e8; color: white; padding: 12px 30px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; text-decoration: none; display: inline-block; }
+        .drive-btn:hover { background: #1558b0; }
         .file-list { margin-top: 20px; }
         .file-item { background: white; padding: 10px; margin: 5px 0; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; }
         .remove-file { color: #f44336; cursor: pointer; font-weight: bold; }
@@ -41,6 +43,8 @@
         .message { padding: 15px; border-radius: 4px; margin: 15px 0; }
         .error { background: #ffebee; color: #c62828; }
         .success { background: #e8f5e9; color: #2e7d32; }
+        .upload-divider { display: flex; align-items: center; gap: 15px; margin: 20px 0; color: #999; font-size: 14px; }
+        .upload-divider::before, .upload-divider::after { content: ''; flex: 1; border-top: 1px solid #ddd; }
     </style>
 </head>
 <body>
@@ -56,12 +60,16 @@
 
         <div class="upload-section" id="dropZone">
             <h2>Upload Images</h2>
-            <p>Drag & drop FLIR images here or click to select (Maximum 8 images per batch)</p>
+            <p>Drag &amp; drop FLIR images here or click to select (Maximum 8 images per batch)</p>
             <br>
             <input type="file" id="fileInput" multiple accept=".jpg,.jpeg" />
             <button class="upload-btn" onclick="document.getElementById('fileInput').click()">Select Images</button>
             <button class="upload-btn process-btn" onclick="uploadFiles()" style="margin-left:10px;">Process Batch</button>
-            
+
+            <div class="upload-divider">or</div>
+
+            <a href="/list_folders" class="drive-btn">📁 Choose from Google Drive</a>
+
             <div class="file-list" id="fileList"></div>
             <progress id="progress" max="100" value="0"></progress>
             <div id="message"></div>
@@ -85,7 +93,6 @@
                         <div class="stat-item">
                             <div class="stat-label">Avg Temperature</div>
                             <div class="stat-value">{{ "%.1f"|format(batch.summary.avg_temperature or batch.summary.avgtemperature) }}°C</div>
-
                         </div>
                         <div class="stat-item">
                             <div class="stat-label">Min Temperature</div>
