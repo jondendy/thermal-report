@@ -14,6 +14,19 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Plausible building-survey Celsius range used for sanity checks.
+# Values outside this range indicate a failed / incorrect extraction.
+_PLAUSIBLE_MIN = -60.0
+_PLAUSIBLE_MAX = 200.0
+
+
+def _is_plausible(arr: np.ndarray) -> bool:
+    """Return True only if the array median sits in a plausible building-survey range."""
+    if arr is None or arr.size == 0:
+        return False
+    median = float(np.median(arr))
+    return _PLAUSIBLE_MIN <= median <= _PLAUSIBLE_MAX
+
 
 class ThermalDataExtractor:
     """
@@ -28,7 +41,8 @@ class ThermalDataExtractor:
         Extract raw thermal data from FLIR image and convert to temperatures.
 
         Returns:
-            2D numpy array of temperature values in Celsius, or None if extraction fails
+            2D numpy array of temperature values in Celsius, or None if extraction
+            fails OR if the result is outside a plausible building-survey range.
         """
         try:
             raw_thermal = self._extract_raw_thermal(image_path)
@@ -38,13 +52,27 @@ class ThermalDataExtractor:
 
             params = self._extract_calibration_params(image_path)
             if params is None:
-                logger.warning(f"Failed to extract calibration params from {image_path}")
-                return self._basic_temperature_conversion(raw_thermal)
+                # No calibration params — we cannot trust any conversion, so
+                # return None rather than produce garbage via a fallback.
+                logger.warning(
+                    f"No calibration params for {image_path} — "
+                    "skipping thermal data extraction to avoid corrupt values."
+                )
+                return None
 
             temperatures = self._convert_to_temperature(raw_thermal, params)
+
+            if not _is_plausible(temperatures):
+                logger.warning(
+                    f"Planck result for {image_path} has median "
+                    f"{float(np.median(temperatures)):.1f}°C — outside plausible range, "
+                    "discarding."
+                )
+                return None
+
             logger.info(
                 f"Extracted thermal data: {temperatures.shape}, "
-                f"range {temperatures.min():.1f}\u00b0C to {temperatures.max():.1f}\u00b0C"
+                f"range {temperatures.min():.1f}°C to {temperatures.max():.1f}°C"
             )
             return temperatures
 
@@ -81,6 +109,7 @@ class ThermalDataExtractor:
     def _extract_calibration_params(self, image_path: Path) -> Optional[Dict]:
         """
         Extract FLIR calibration parameters for temperature conversion.
+        Returns None if any of the key Planck constants are missing from metadata.
         """
         try:
             cmd = [
@@ -100,17 +129,28 @@ class ThermalDataExtractor:
 
             metadata = json.loads(result.stdout)[0]
 
+            # Require the critical Planck constants to actually be present in EXIF.
+            # If they're missing, the image likely isn't a genuine FLIR radiometric JPEG.
+            required = ['PlanckR1', 'PlanckR2', 'PlanckB']
+            missing = [k for k in required if k not in metadata]
+            if missing:
+                logger.warning(
+                    f"{image_path}: missing Planck constants {missing} — "
+                    "cannot perform calibrated conversion."
+                )
+                return None
+
             params = {
-                'R1': metadata.get('PlanckR1', 21106.77),
-                'R2': metadata.get('PlanckR2', 0.012545258),
-                'B':  metadata.get('PlanckB', 1501),
-                'F':  metadata.get('PlanckF', 1),
-                'O':  metadata.get('PlanckO', -7340),
-                'emissivity':     metadata.get('Emissivity', 0.95),
-                'distance':       metadata.get('ObjectDistance', 1.0),
-                'reflected_temp': metadata.get('ReflectedApparentTemperature', 20.0),
-                'atm_temp':       metadata.get('AtmosphericTemperature', 20.0),
-                'atm_trans':      metadata.get('AtmosphericTransAlpha1', 0.006569),
+                'R1': float(metadata['PlanckR1']),
+                'R2': float(metadata['PlanckR2']),
+                'B':  float(metadata['PlanckB']),
+                'F':  float(metadata.get('PlanckF', 1)),
+                'O':  float(metadata.get('PlanckO', -7340)),
+                'emissivity':     float(metadata.get('Emissivity', 0.95)),
+                'distance':       float(metadata.get('ObjectDistance', 1.0)),
+                'reflected_temp': float(metadata.get('ReflectedApparentTemperature', 20.0)),
+                'atm_temp':       float(metadata.get('AtmosphericTemperature', 20.0)),
+                'atm_trans':      float(metadata.get('AtmosphericTransAlpha1', 0.006569)),
             }
             return params
 
@@ -122,8 +162,7 @@ class ThermalDataExtractor:
         """
         Convert raw thermal values to temperature in Celsius using the FLIR Planck equation.
 
-        Guards against log(negative/zero) producing NaN or inf, but does NOT clamp
-        the resulting Celsius values — the sensor range is left intact.
+        Guards against log(negative/zero) producing NaN or inf.
         """
         R1 = params['R1']
         R2 = params['R2']
@@ -136,25 +175,14 @@ class ThermalDataExtractor:
         # FLIR Planck formula: T(K) = B / ln(R1 / (R2*(raw+O)) + F)
         radiance = (raw + O) / R2
 
-        # Avoid log(<=0): replace non-positive radiance with a tiny positive value
+        # Avoid log(<=0)
         safe_radiance = np.where(radiance > 0, radiance, 1e-10)
         log_arg = R1 / safe_radiance + F
-
-        # Keep log argument > 1 to avoid NaN / non-positive Kelvin result
         log_arg = np.clip(log_arg, 1.0 + 1e-10, None)
 
         temp_kelvin  = B / np.log(log_arg)
         temp_celsius = temp_kelvin - 273.15
 
-        return temp_celsius
-
-    def _basic_temperature_conversion(self, raw_data: np.ndarray) -> np.ndarray:
-        """
-        Basic temperature conversion when calibration params are unavailable.
-        Assumes raw data is in centi-Kelvin.
-        """
-        temp_kelvin  = raw_data.astype(np.float32) / 100.0
-        temp_celsius = temp_kelvin - 273.15
         return temp_celsius
 
     def get_temperature_at_point(
@@ -192,9 +220,17 @@ class ThermalDataExtractor:
 
 def save_thermal_data(batch_path: Path, image_name: str, thermal_data: np.ndarray):
     """
-    Save extracted thermal data to disk for later retrieval.
+    Save extracted thermal data to disk.
+    Refuses to save if the data looks implausible (corrupt extraction).
     """
     try:
+        if not _is_plausible(thermal_data):
+            logger.warning(
+                f"Refusing to save thermal data for {image_name}: "
+                f"median {float(np.median(thermal_data)):.1f}°C is outside plausible range."
+            )
+            return
+
         thermal_dir = batch_path / 'thermal_data'
         thermal_dir.mkdir(exist_ok=True)
 
@@ -211,7 +247,7 @@ def load_thermal_data(batch_path: Path, image_name: str) -> Optional[np.ndarray]
     Load previously extracted thermal data.
 
     Returns:
-        2D array of temperature values, or None if not found
+        2D array of temperature values, or None if not found or implausible.
     """
     try:
         thermal_file = batch_path / 'thermal_data' / f"{Path(image_name).stem}_thermal.npz"
@@ -221,7 +257,16 @@ def load_thermal_data(batch_path: Path, image_name: str) -> Optional[np.ndarray]
             return None
 
         data = np.load(thermal_file)
-        return data['temperatures']
+        arr = data['temperatures']
+
+        if not _is_plausible(arr):
+            logger.warning(
+                f"Loaded thermal data for {image_name} has median "
+                f"{float(np.median(arr)):.1f}°C — discarding as implausible."
+            )
+            return None
+
+        return arr
 
     except Exception as e:
         logger.exception(f"Error loading thermal data for {image_name}: {e}")

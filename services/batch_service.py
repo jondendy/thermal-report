@@ -3,7 +3,7 @@
 Testbed goals (flat layout + tenant optional):
 - Batch artifacts live in settings.BASE_REPORT_DIR/{batch_id}
 - Uploads live in settings.BASE_UPLOAD_PATH/{batch_id}
-- tenant_id is optional and defaults to None (validated only if provided)
+- tenant_id is optional and defaults to None (validated only if present)
 
 This keeps the "services" style while retaining safe path protections.
 """
@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Dict, Any, List
 
+import numpy as np
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
@@ -29,6 +30,18 @@ import services.batch_io as batchio
 from services.flir_processor_simple import SimpleFLIRProcessor
 from services.thermal_analyzer import ThermalAnalyzer
 from services.thermal_data_service import ThermalDataExtractor, save_thermal_data
+
+# Plausible Celsius range for a building survey.
+_TEMP_MIN = -60.0
+_TEMP_MAX = 200.0
+
+
+def _temp_data_is_plausible(temp_data: np.ndarray) -> bool:
+    """True if the temperature array median is within a plausible building-survey range."""
+    if temp_data is None or temp_data.size == 0:
+        return False
+    median = float(np.median(temp_data[np.isfinite(temp_data)]))
+    return _TEMP_MIN <= median <= _TEMP_MAX
 
 
 def get_batch_id(files: Iterable[FileStorage]) -> str:
@@ -46,15 +59,12 @@ def process_batch(
 
     tenant_id = validate_tenant_id(tenant_id)
 
-    # Create batch directory (flat under BASE_REPORT_DIR)
     batch_dir = safe_batch_path(settings.BASE_REPORT_DIR, batch_id, tenant_id)
-
-    # Create upload directory (flat under BASE_UPLOAD_PATH)
     upload_dir = (BASE_UPLOAD_PATH / batch_id)
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     processor = SimpleFLIRProcessor()
-    analyzer = ThermalAnalyzer(sensitivity="high")  # detect more hotspots for operator review
+    analyzer = ThermalAnalyzer(sensitivity="high")
 
     results: Dict[str, Any] = {
         "batch_id": batch_id,
@@ -79,12 +89,49 @@ def process_batch(
     all_temps = []
     for image_path in saved_images:
         try:
+            # ── Primary extraction via flirimageextractor ──────────────────────
             temp_data, stats = processor.process_single_image(image_path, display=False)
 
+            # Sanity-check: flirimageextractor sometimes returns raw ADC counts
+            # instead of Celsius when it can't parse the FLIR metadata.
+            # If the result is implausible, fall through to the Planck extractor.
+            if not _temp_data_is_plausible(temp_data):
+                import logging
+                logging.getLogger(__name__).warning(
+                    f"{Path(image_path).name}: flirimageextractor returned implausible "
+                    f"median {float(np.median(temp_data)):.1f} — trying ThermalDataExtractor."
+                )
+                temp_data = None
+                stats = None
+
+            # ── Secondary extraction via our own Planck code ───────────────────
             thermal_extractor = ThermalDataExtractor()
             thermal_data = thermal_extractor.extract_thermal_data(Path(image_path))
+
+            # Prefer the primary result; use Planck grid as fallback for temp_data
+            if temp_data is None and thermal_data is not None:
+                temp_data = thermal_data
+                valid = temp_data[np.isfinite(temp_data)]
+                stats = {
+                    "min":    float(np.min(valid)),
+                    "max":    float(np.max(valid)),
+                    "mean":   float(np.mean(valid)),
+                    "median": float(np.median(valid)),
+                    "std":    float(np.std(valid)),
+                }
+
+            if temp_data is None:
+                raise ValueError(
+                    f"Could not extract plausible temperature data from {Path(image_path).name}. "
+                    "Check that exiftool is installed and the file is a genuine FLIR radiometric JPEG."
+                )
+
+            # Save the Planck grid (.npz) for per-pixel API queries
             if thermal_data is not None:
                 save_thermal_data(batch_dir, Path(image_path).name, thermal_data)
+            else:
+                # Use temp_data from flirimageextractor as the grid
+                save_thermal_data(batch_dir, Path(image_path).name, temp_data)
 
             hot_spots = analyzer.detect_hot_spots(temp_data, image_path=image_path)
 
@@ -107,13 +154,13 @@ def process_batch(
             image_result = {
                 "filename": Path(image_path).name,
                 "stats": {
-                    "min": float(stats["min"]),
-                    "max": float(stats["max"]),
-                    "mean": float(stats["mean"]),
+                    "min":    float(stats["min"]),
+                    "max":    float(stats["max"]),
+                    "mean":   float(stats["mean"]),
                     "median": float(stats["median"]),
-                    "std": float(stats["std"]),
+                    "std":    float(stats["std"]),
                 },
-                "shape": temp_data.shape,
+                "shape": list(temp_data.shape),
                 "hot_spots": [spot.to_dict() for spot in hot_spots],
                 "hot_spot_count": len(hot_spots),
                 "thermal_report": report_filename,
@@ -124,19 +171,22 @@ def process_batch(
             all_temps.append(stats)
 
         except Exception as e:
+            import logging
+            logging.getLogger(__name__).exception(
+                "Error processing %s: %s", Path(image_path).name, e
+            )
             results["images"].append({"filename": Path(image_path).name, "error": str(e)})
 
     if all_temps:
         temps = [t["mean"] for t in all_temps]
         results["summary"] = {
-            "total_images": len(all_temps),
+            "total_images":      len(all_temps),
             "successful_images": len(all_temps),
-            "avg_temperature": sum(temps) / len(temps),
-            "min_temperature": min([t["min"] for t in all_temps]),
-            "max_temperature": max([t["max"] for t in all_temps]),
+            "avg_temperature":   sum(temps) / len(temps),
+            "min_temperature":   min(t["min"] for t in all_temps),
+            "max_temperature":   max(t["max"] for t in all_temps),
         }
 
-    # Persist results
     batchio.save_batch_results(batch_id, results, tenant_id=tenant_id)
 
     thermal_analysis = {
@@ -145,8 +195,8 @@ def process_batch(
         "timestamp": datetime.now().isoformat(),
         "images": [
             {
-                "filename": img["filename"],
-                "hot_spots": img.get("hot_spots", []),
+                "filename":     img["filename"],
+                "hot_spots":    img.get("hot_spots", []),
                 "labeled_image": img.get("labeled_image", ""),
             }
             for img in results["images"]
@@ -159,7 +209,6 @@ def process_batch(
 
 
 def get_all_batches(tenant_id: str | None = None) -> List[Dict[str, Any]]:
-    # tenant_id ignored for now (flat layout), but validate if present
     validate_tenant_id(tenant_id)
     return batchio.list_batches(tenant_id)
 
