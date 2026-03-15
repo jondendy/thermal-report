@@ -234,15 +234,6 @@ def editspots(batchid: str) -> str:
 
 @app.route("/api/temperature_at_point/<batch_id>", methods=["POST"])
 def api_temperature_at_point(batch_id: str) -> Any:
-    """
-    Return the real sensor temperature at a given percentage coordinate within a thermal image.
-
-    Expects JSON body:
-        { "image_name": "IMG_001.jpg", "x_pct": 42, "y_pct": 67 }
-
-    Returns:
-        { "temperature": 24.3 }
-    """
     try:
         data = request.get_json() or {}
         image_name = data.get("image_name", "")
@@ -420,10 +411,9 @@ def review_report_submit(batch_id: str) -> Any:
 @app.route("/save_heatloss_report/<batch_id>", methods=["POST"])
 def save_heatloss_report(batch_id: str) -> Any:
     """
-    Save the current heat loss report data to the batch output directory and
-    (optionally) trigger a PDF re-generation so the file is up to date.
-
-    Called by the 'Save report to output' button on review_report.html.
+    Re-generate the PDF and upload it to the Google Drive folder defined by
+    PDF_STORAGE_ADDRESS in .env.  Falls back to local-only save if that var
+    is not set or if the upload fails.
     """
     try:
         labels = heatlossservice.get_existing_labels(batch_id, None)
@@ -437,11 +427,7 @@ def save_heatloss_report(batch_id: str) -> Any:
             doc_mode="link",
             tenant_id=None,
         )
-
-        # Stamp with the real current time
-        now = datetime.now()
-        report_data["generated_at"] = now.strftime("%Y-%m-%d %H:%M")
-
+        report_data["generated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
         heatlossservice.save_report(batch_id, report_data, None)
 
         pdf_path = None
@@ -450,12 +436,44 @@ def save_heatloss_report(batch_id: str) -> Any:
         except Exception as e:
             logger.warning("PDF generation failed (non-fatal): %s", e)
 
+        # Upload to Drive output folder if configured
+        drive_upload_result = None
+        output_folder_id = getattr(settings, "PDF_STORAGE_ADDRESS", "") or ""
+        if pdf_path and output_folder_id:
+            try:
+                import services.drive_client as drive_client
+                drive_upload_result = drive_client.upload_file_to_folder(
+                    pdf_path, output_folder_id
+                )
+                logger.info(
+                    "Uploaded PDF for batch %s to Drive folder %s",
+                    batch_id, output_folder_id,
+                )
+            except Exception as e:
+                logger.warning(
+                    "Drive upload failed for batch %s (non-fatal): %s", batch_id, e
+                )
+                drive_upload_result = {"error": str(e)}
+        elif pdf_path and not output_folder_id:
+            logger.info(
+                "PDF_STORAGE_ADDRESS not set — PDF saved locally only for batch %s", batch_id
+            )
+
         batch_dir = safe_batch_path(settings.BASE_REPORT_DIR, batch_id, None)
-        return jsonify({
+        response = {
             "success": True,
             "saved_to": str(batch_dir),
             "pdf_generated": pdf_path is not None,
-        })
+        }
+        if drive_upload_result and not isinstance(drive_upload_result, dict):
+            response["drive_file_id"] = drive_upload_result.get("id", "")
+            response["drive_message"] = "Uploaded to Google Drive output folder"
+        elif output_folder_id and isinstance(drive_upload_result, dict) and "error" in drive_upload_result:
+            response["drive_warning"] = (
+                f"Local save OK but Drive upload failed: {drive_upload_result['error']}"
+            )
+
+        return jsonify(response)
 
     except FileNotFoundError:
         return jsonify({"error": "Report data not found. Generate the report first."}), 404

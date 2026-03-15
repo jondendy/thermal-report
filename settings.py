@@ -36,8 +36,12 @@ BASE_REPORT_PATH.mkdir(parents=True, exist_ok=True)
 
 # Storage abstraction (currently only "local" implemented, but env-ready)
 STORAGE_TYPE = os.getenv("STORAGETYPE", "local")  # local, googledrive, s3
-STORAGE_ADDRESS = os.getenv("STORAGEADDRESS", "")  # URL or base path for cloud
+STORAGE_ADDRESS = os.getenv("STORAGEADDRESS", "")  # Source Drive folder ID / URL
 STORAGE_ACCESS_KEY = os.getenv("STORAGEACCESSKEY", "")  # API key / service JSON
+
+# Google Drive folder ID for finished report output.
+# The saved PDF is uploaded here when "Save report to output" is clicked.
+PDF_STORAGE_ADDRESS = os.getenv("PDF_STORAGE_ADDRESS", "")
 
 # ---------------------------------------------------------------------------
 # Multi-tenant setup (single-tenant by default)
