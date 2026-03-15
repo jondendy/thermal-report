@@ -26,6 +26,15 @@
         .meta-section { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,.05); margin-bottom: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
         .meta-section label { display: block; font-size: 12px; font-weight: 600; color: #555; margin-bottom: 4px; }
         .meta-section input { width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 13px; }
+        /* Recommendations editor */
+        .rec-section { margin-top: 14px; border-top: 1px solid #eee; padding-top: 12px; }
+        .rec-section-title { font-size: 12px; font-weight: 600; color: #555; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+        .rec-line { display: flex; align-items: flex-start; gap: 8px; padding: 5px 0; border-bottom: 1px solid #f5f5f5; }
+        .rec-line:last-child { border-bottom: none; }
+        .rec-line input[type=checkbox] { margin-top: 3px; flex-shrink: 0; width: 16px; height: 16px; cursor: pointer; }
+        .rec-line span { font-size: 13px; color: #333; line-height: 1.4; }
+        .rec-line.disabled span { text-decoration: line-through; color: #aaa; }
+        .rec-savings { font-size: 11px; color: #888; margin-top: 4px; font-style: italic; }
         .action-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 12px 20px; box-shadow: 0 -2px 8px rgba(0,0,0,.1); display: flex; justify-content: space-between; align-items: center; z-index: 1000; }
         .btn { padding: 10px 18px; border: none; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; color: white; }
         .btn-back { background: #6c757d; }
@@ -41,8 +50,8 @@
 </head>
 <body>
     <div class="header">
-        <h1>📋 Review & Narrate — {{ batch_id }}</h1>
-        <p style="color:#666; font-size:13px; margin-top:6px;">Review each finding, edit the narrative, override severity if needed, and add surveyor notes before generating the PDF.</p>
+        <h1>📋 Review &amp; Narrate — {{ batch_id }}</h1>
+        <p style="color:#666; font-size:13px; margin-top:6px;">Review each finding, edit the narrative, override severity, and toggle off any recommendations that don’t apply before generating the PDF.</p>
     </div>
 
     <div class="meta-section">
@@ -99,6 +108,30 @@
                     <option value="{{ sev }}" {{ 'selected' if (saved.get('severity', finding.severity) == sev) else '' }}>{{ sev|capitalize }}</option>
                     {% endfor %}
                 </select>
+
+                {% if finding.recommendations %}
+                <div class="rec-section">
+                    <div class="rec-section-title">
+                        🔧 Recommendations
+                        <span style="font-size:11px; font-weight:400; color:#888;">(uncheck any line to remove it from the report)</span>
+                    </div>
+                    {% set disabled_lines = saved.get('disabled_rec_lines', []) %}
+                    {% for advice_line in finding.recommendations.advice %}
+                    {% set line_idx = loop.index0 %}
+                    {% set is_disabled = line_idx in disabled_lines %}
+                    <div class="rec-line {{ 'disabled' if is_disabled else '' }}" data-key="{{ key }}" data-line="{{ line_idx }}">
+                        <input type="checkbox"
+                               class="rec-toggle"
+                               data-key="{{ key }}"
+                               data-line="{{ line_idx }}"
+                               {{ '' if is_disabled else 'checked' }}
+                               onchange="toggleRecLine(this)">
+                        <span>{{ advice_line }}</span>
+                    </div>
+                    {% endfor %}
+                    <div class="rec-savings">£ Est. savings: {{ finding.recommendations.savings }}</div>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -114,6 +147,33 @@
     <script>
         const BATCH = "{{ batch_id }}";
 
+        // Track disabled rec lines per finding key: { "Wall_1": [0, 2], ... }
+        const disabledLines = {};
+
+        // Initialise from server-saved state
+        document.querySelectorAll('.rec-toggle').forEach(cb => {
+            const key = cb.dataset.key;
+            const line = parseInt(cb.dataset.line);
+            if (!cb.checked) {
+                if (!disabledLines[key]) disabledLines[key] = [];
+                if (!disabledLines[key].includes(line)) disabledLines[key].push(line);
+            }
+        });
+
+        function toggleRecLine(cb) {
+            const key = cb.dataset.key;
+            const line = parseInt(cb.dataset.line);
+            const row = cb.closest('.rec-line');
+            if (!disabledLines[key]) disabledLines[key] = [];
+            if (!cb.checked) {
+                row.classList.add('disabled');
+                if (!disabledLines[key].includes(line)) disabledLines[key].push(line);
+            } else {
+                row.classList.remove('disabled');
+                disabledLines[key] = disabledLines[key].filter(l => l !== line);
+            }
+        }
+
         function collectReview() {
             const review = {};
             review['_global_notes'] = document.getElementById('globalNotes').value;
@@ -123,7 +183,8 @@
                 review[key] = {
                     narrative: card.querySelector('.narrative-field').value,
                     note: card.querySelector('.note-field').value,
-                    severity: card.querySelector('.severity-field').value
+                    severity: card.querySelector('.severity-field').value,
+                    disabled_rec_lines: disabledLines[key] || []
                 };
             });
             return review;

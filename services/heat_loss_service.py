@@ -219,6 +219,36 @@ def _merge_additional_pdfs(pdf_path: Path, report_data: Dict[str, Any]) -> None:
         _merge_recommendations_pdf(pdf_path, url)
         logger.info(f"Merged {name} PDF into report")
 
+
+def _apply_rec_overrides(
+    recommendations: List[Dict[str, Any]],
+    review: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """
+    Remove any advice lines the surveyor has disabled.
+    A finding key looks like "Wall_1"; review[key]["disabled_rec_lines"] is a list
+    of 0-based indices into that finding's recommendations.advice list.
+    Recommendations with all lines removed are dropped entirely.
+    """
+    result = []
+    for rec in recommendations:
+        key = f"{rec.get('type', '')}_{rec.get('spot_number', '')}"
+        disabled = review.get(key, {}).get("disabled_rec_lines", [])
+        if not disabled:
+            result.append(rec)
+            continue
+        filtered_advice = [
+            line for idx, line in enumerate(rec.get("advice", []))
+            if idx not in disabled
+        ]
+        if filtered_advice:
+            updated = dict(rec)
+            updated["advice"] = filtered_advice
+            result.append(updated)
+        # If all lines removed, omit the whole recommendation block
+    return result
+
+
 def generate_report(
     batch_id: str,
     property_address: str | None,
@@ -230,7 +260,7 @@ def generate_report(
     labels = get_existing_labels(batch_id, tenant_id)
     findings = _combine_analysis_and_labels(analysis, labels)
 
-    # Apply surveyor review overrides
+    # Apply surveyor review overrides (narrative, severity, note)
     review = labels.get("review", {})
     for finding in findings:
         key = f"{finding['type']}_{finding['spot_number']}"
@@ -254,6 +284,9 @@ def generate_report(
 
     summary = reporter.generate_executive_summary(findings)
     recommendations = reporter.generate_recommendations(findings)
+
+    # Apply per-line recommendation toggles from review
+    recommendations = _apply_rec_overrides(recommendations, review)
 
     attached_files = labels.get("attached_files", [])
     links = labels.get("links", [])
@@ -417,6 +450,11 @@ def save_review(batch_id: str, review_data: dict, tenant_id=None) -> None:
     batchio.save_hotspot_labels(batch_id, labels, tenant_id)
 
 
+def save_report(batch_id: str, report_data: Dict[str, Any], tenant_id: str | None = None) -> None:
+    """Persist report data to disk."""
+    batchio.save_heatloss_report(batch_id, report_data, tenant_id)
+
+
 def _render_report_html(report_data: Dict[str, Any], batch_dir: str | None = None) -> str:
     """Render standalone HTML for PDF generation.
 
@@ -428,18 +466,13 @@ def _render_report_html(report_data: Dict[str, Any], batch_dir: str | None = Non
     survey_date = report_data.get("survey_date", datetime.now().strftime("%Y-%m-%d"))
     summary = report_data.get("summary", {})
     findings = report_data.get("findings", [])
-
-    surveyor_note = finding.get("surveyor_note", "")
-    # After the description paragraph:
-    if surveyor_note:
-        html += f'            <p class="surveyor-note"><em>📝 Surveyor note: {surveyor_note}</em></p>\n'
-
     recommendations = report_data.get("recommendations", [])
     org = report_data.get("organisation", {})
     attached_files = report_data.get("attached_files", [])
     links = report_data.get("links", [])
     recommendations_html = report_data.get("recommendations_html", "")
     rec_url = report_data.get("recommendations_document_url", "")
+    generated_at = report_data.get("generated_at") or datetime.now().strftime("%Y-%m-%d %H:%M")
 
     html = f"""<!DOCTYPE html>
 <html>
@@ -457,8 +490,8 @@ def _render_report_html(report_data: Dict[str, Any], batch_dir: str | None = Non
         .finding {{ background: #f8f9fa; border-left: 4px solid #ffc107; padding: 15px; margin-bottom: 15px; border-radius: 4px; }}
         .finding h3 {{ margin-top: 0; color: #495057; }}
         .finding img {{ width: 100%; max-width: 600px; margin: 10px 0; border: 1px solid #dee2e6; border-radius: 4px; }}
+        .surveyor-note {{ color: #555; font-style: italic; border-left: 3px solid #ffc107; padding-left: 8px; margin-top: 6px; }}
         .recommendation {{ background: #e7f3ff; border-left: 4px solid #2196F3; padding: 15px; margin-bottom: 15px; border-radius: 4px; }}
-        .surveyor-note { color: #555; font-style: italic; border-left: 3px solid #ffc107; padding-left: 8px; margin-top: 6px; }
         .stats {{ display: flex; gap: 15px; margin-bottom: 20px; }}
         .stat-box {{ background: #fff; border: 1px solid #dee2e6; padding: 15px; border-radius: 4px; text-align: center; flex: 1; }}
         .stat-value {{ font-size: 24px; font-weight: bold; color: #667eea; }}
@@ -513,13 +546,16 @@ def _render_report_html(report_data: Dict[str, Any], batch_dir: str | None = Non
         max_temp = finding.get("max_temp", 0)
         min_temp = finding.get("min_temp", 0)
         avg_temp = finding.get("avg_temp", 0)
+        surveyor_note = finding.get("surveyor_note", "")
 
         html += f"""        <div class=\"finding\">
             <h3>Finding {i}: {spot_label}</h3>
             <p><strong>Severity:</strong> {str(severity).upper()} | <strong>Type:</strong> {spot_type}</p>
-            <p><strong>Temperature:</strong> Max {float(max_temp):.1f}°C / Avg {float(avg_temp):.1f}°C / Min {float(min_temp):.1f}°C</p>
+            <p><strong>Temperature:</strong> Max {float(max_temp):.1f}\u00b0C / Avg {float(avg_temp):.1f}\u00b0C / Min {float(min_temp):.1f}\u00b0C</p>
             <p>{description}</p>
 """
+        if surveyor_note:
+            html += f'            <p class=\"surveyor-note\"><em>\ud83d\udcdd Surveyor note: {surveyor_note}</em></p>\n'
 
         spot_locations = finding.get("spot_locations", [])
         if batch_dir and spot_locations:
@@ -622,7 +658,7 @@ def _render_report_html(report_data: Dict[str, Any], batch_dir: str | None = Non
     html += f"""    <div class=\"footer\">
         <p><strong>{org.get('name', 'Thermal Survey Services')}</strong></p>
         <p>{org.get('website', '')} | {org.get('contact', '')}</p>
-        <p>Report generated on {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
+        <p>Report generated on {generated_at}</p>
     </div>
 </body>
 </html>
