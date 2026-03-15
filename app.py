@@ -16,6 +16,7 @@ load_dotenv()  # call this before `import settings`
 
 import re
 import shutil
+from datetime import datetime
 from typing import Any
 from pathlib import Path
 
@@ -164,7 +165,6 @@ def process_selected_images():
         if not folder_id or not file_ids:
             return jsonify({"error": "Missing folder_id or file_ids"}), 400
 
-        from datetime import datetime
         batch_id = f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         temp_batch_dir = Path(tempfile.gettempdir()) / batch_id
         temp_batch_dir.mkdir(parents=True, exist_ok=True)
@@ -414,6 +414,53 @@ def review_report_submit(batch_id: str) -> Any:
         })
     except Exception as e:
         logger.exception("Error submitting review for batch %s: %s", batch_id, str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/save_heatloss_report/<batch_id>", methods=["POST"])
+def save_heatloss_report(batch_id: str) -> Any:
+    """
+    Save the current heat loss report data to the batch output directory and
+    (optionally) trigger a PDF re-generation so the file is up to date.
+
+    Called by the 'Save report to output' button on review_report.html.
+    """
+    try:
+        labels = heatlossservice.get_existing_labels(batch_id, None)
+        property_address = labels.get("property_address", "")
+        inspector_name = labels.get("surveyor_name", "")
+
+        report_data = heatlossservice.generate_report(
+            batch_id,
+            property_address=property_address,
+            inspector_name=inspector_name,
+            doc_mode="link",
+            tenant_id=None,
+        )
+
+        # Stamp with the real current time
+        now = datetime.now()
+        report_data["generated_at"] = now.strftime("%Y-%m-%d %H:%M")
+
+        heatlossservice.save_report(batch_id, report_data, None)
+
+        pdf_path = None
+        try:
+            pdf_path = heatlossservice.generate_pdf_from_report_data(batch_id, report_data, None)
+        except Exception as e:
+            logger.warning("PDF generation failed (non-fatal): %s", e)
+
+        batch_dir = safe_batch_path(settings.BASE_REPORT_DIR, batch_id, None)
+        return jsonify({
+            "success": True,
+            "saved_to": str(batch_dir),
+            "pdf_generated": pdf_path is not None,
+        })
+
+    except FileNotFoundError:
+        return jsonify({"error": "Report data not found. Generate the report first."}), 404
+    except Exception as e:
+        logger.exception("Error saving heat loss report for batch %s: %s", batch_id, str(e))
         return jsonify({"error": str(e)}), 500
 
 

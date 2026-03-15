@@ -370,7 +370,7 @@
         <div class="footer">
             <p>This report was generated using thermal imaging analysis technology.</p>
             <p>For questions or additional analysis, please contact your energy assessor.</p>
-            <p><em>Report generated: {{ report_data.survey_date }} {{ report_data.survey_time }}</em></p>
+            <p><em>Report generated: {{ report_data.generated_at if report_data.generated_at else report_data.survey_date ~ ' ' ~ report_data.survey_time }}</em></p>
         </div>
     </div>
 </body>
