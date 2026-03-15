@@ -198,3 +198,5 @@ backup_*/
 service-account.json
 service-account-key.json
 *.json.key
+.Images/
+.reports/
