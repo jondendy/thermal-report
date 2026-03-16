@@ -51,7 +51,7 @@
 <body>
     <div class="header">
         <h1>📋 Review &amp; Narrate — {{ batch_id }}</h1>
-        <p style="color:#666; font-size:13px; margin-top:6px;">Review each finding, edit the narrative, override severity, and toggle off any recommendations that don’t apply before generating the PDF.</p>
+        <p style="color:#666; font-size:13px; margin-top:6px;">Review each finding, edit the narrative, override severity, and toggle off any recommendations that don't apply before generating the PDF.</p>
     </div>
 
     <div class="meta-section">
@@ -224,11 +224,23 @@
 
         async function saveReport() {
             showStatus('Saving report…', 'info');
+            const payload = {
+                review: collectReview(),
+                property_address: document.getElementById('propertyAddress').value,
+                inspector_name: document.getElementById('surveyorName').value,
+            };
             try {
-                const res = await fetch(`/save_heatloss_report/${BATCH}`, { method: 'POST' });
+                const res = await fetch(`/save_heatloss_report/${BATCH}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
                 const data = await res.json();
                 if (data.success) {
-                    showStatus('✓ Saved to: ' + data.saved_to, 'success');
+                    let msg = '✓ Saved to: ' + data.saved_to;
+                    if (data.drive_message) msg += ' | ' + data.drive_message;
+                    if (data.drive_warning) msg += ' | ⚠ ' + data.drive_warning;
+                    showStatus(msg, 'success');
                 } else {
                     showStatus('✗ ' + (data.error || 'Error'), 'error');
                 }
