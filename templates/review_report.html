@@ -26,7 +26,6 @@
         .meta-section { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,.05); margin-bottom: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
         .meta-section label { display: block; font-size: 12px; font-weight: 600; color: #555; margin-bottom: 4px; }
         .meta-section input { width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 13px; }
-        /* Recommendations editor */
         .rec-section { margin-top: 14px; border-top: 1px solid #eee; padding-top: 12px; }
         .rec-section-title { font-size: 12px; font-weight: 600; color: #555; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
         .rec-line { display: flex; align-items: flex-start; gap: 8px; padding: 5px 0; border-bottom: 1px solid #f5f5f5; }
@@ -115,20 +114,25 @@
                         🔧 Recommendations
                         <span style="font-size:11px; font-weight:400; color:#888;">(uncheck any line to remove it from the report)</span>
                     </div>
+                    {# Emit the server-saved disabled list as a JSON array in a data attribute on the section #}
                     {% set disabled_lines = saved.get('disabled_rec_lines', []) %}
-                    {% for advice_line in finding.recommendations.advice %}
-                    {% set line_idx = loop.index0 %}
-                    {% set is_disabled = line_idx in disabled_lines %}
-                    <div class="rec-line {{ 'disabled' if is_disabled else '' }}" data-key="{{ key }}" data-line="{{ line_idx }}">
-                        <input type="checkbox"
-                               class="rec-toggle"
-                               data-key="{{ key }}"
-                               data-line="{{ line_idx }}"
-                               {{ '' if is_disabled else 'checked' }}
-                               onchange="toggleRecLine(this)">
-                        <span>{{ advice_line }}</span>
+                    <div class="rec-lines-container"
+                         data-key="{{ key }}"
+                         data-disabled="{{ disabled_lines | tojson }}">
+                        {% for advice_line in finding.recommendations.advice %}
+                        {% set line_idx = loop.index0 %}
+                        {# Render all checkboxes checked — JS will uncheck the disabled ones on load #}
+                        <div class="rec-line" data-key="{{ key }}" data-line="{{ line_idx }}">
+                            <input type="checkbox"
+                                   class="rec-toggle"
+                                   data-key="{{ key }}"
+                                   data-line="{{ line_idx }}"
+                                   checked
+                                   onchange="toggleRecLine(this)">
+                            <span>{{ advice_line }}</span>
+                        </div>
+                        {% endfor %}
                     </div>
-                    {% endfor %}
                     <div class="rec-savings">£ Est. savings: {{ finding.recommendations.savings }}</div>
                 </div>
                 {% endif %}
@@ -147,24 +151,44 @@
     <script>
         const BATCH = "{{ batch_id }}";
 
-        // Track disabled rec lines per finding key: { "Wall_1": [0, 2], ... }
+        // ── Initialise disabledLines from server-saved state ──────────────────
+        // disabledLines is the single source of truth for the whole session.
+        // It is seeded from data-disabled on each rec-lines-container, then
+        // kept in sync by toggleRecLine(). collectReview() always reads from
+        // here — never from checkbox.checked — so unsaved panels are included.
         const disabledLines = {};
 
-        // Initialise from server-saved state
-        document.querySelectorAll('.rec-toggle').forEach(cb => {
-            const key = cb.dataset.key;
-            const line = parseInt(cb.dataset.line);
-            if (!cb.checked) {
-                if (!disabledLines[key]) disabledLines[key] = [];
-                if (!disabledLines[key].includes(line)) disabledLines[key].push(line);
+        document.querySelectorAll('.rec-lines-container').forEach(container => {
+            const key = container.dataset.key;
+            let savedDisabled = [];
+            try {
+                savedDisabled = JSON.parse(container.dataset.disabled || '[]');
+            } catch(e) {
+                savedDisabled = [];
             }
+            // Ensure every key exists in disabledLines, even if empty
+            disabledLines[key] = savedDisabled.map(Number);
+
+            // Apply saved disabled state to checkboxes and row styling
+            disabledLines[key].forEach(lineIdx => {
+                const cb = container.querySelector(
+                    `input.rec-toggle[data-key="${key}"][data-line="${lineIdx}"]`
+                );
+                if (cb) {
+                    cb.checked = false;
+                    cb.closest('.rec-line').classList.add('disabled');
+                }
+            });
         });
 
+        // ── Toggle handler ────────────────────────────────────────────────────
         function toggleRecLine(cb) {
             const key = cb.dataset.key;
-            const line = parseInt(cb.dataset.line);
+            const line = parseInt(cb.dataset.line, 10);
             const row = cb.closest('.rec-line');
+
             if (!disabledLines[key]) disabledLines[key] = [];
+
             if (!cb.checked) {
                 row.classList.add('disabled');
                 if (!disabledLines[key].includes(line)) disabledLines[key].push(line);
@@ -174,6 +198,9 @@
             }
         }
 
+        // ── Collect full review state ─────────────────────────────────────────
+        // Reads disabledLines (not checkbox.checked) so every panel's state is
+        // captured even if the user never interacted with it in this session.
         function collectReview() {
             const review = {};
             review['_global_notes'] = document.getElementById('globalNotes').value;
@@ -182,14 +209,19 @@
                 const key = card.dataset.key;
                 review[key] = {
                     narrative: card.querySelector('.narrative-field').value,
-                    note: card.querySelector('.note-field').value,
-                    severity: card.querySelector('.severity-field').value,
-                    disabled_rec_lines: disabledLines[key] || []
+                    note:      card.querySelector('.note-field').value,
+                    severity:  card.querySelector('.severity-field').value,
+                    // Use disabledLines as source of truth; default to [] if
+                    // the finding has no rec-lines-container (no recommendations)
+                    disabled_rec_lines: disabledLines[key] !== undefined
+                        ? disabledLines[key]
+                        : []
                 };
             });
             return review;
         }
 
+        // ── Status helper ─────────────────────────────────────────────────────
         function showStatus(msg, type) {
             const el = document.getElementById('status');
             el.textContent = msg;
@@ -197,12 +229,13 @@
             if (type === 'success') setTimeout(() => el.classList.remove('show'), 3000);
         }
 
+        // ── Generate PDF ──────────────────────────────────────────────────────
         async function submitReview() {
             showStatus('Generating PDF…', 'info');
             const payload = {
-                review: collectReview(),
+                review:           collectReview(),
                 property_address: document.getElementById('propertyAddress').value,
-                inspector_name: document.getElementById('surveyorName').value,
+                inspector_name:   document.getElementById('surveyorName').value,
             };
             try {
                 const res = await fetch(`/review_report/${BATCH}`, {
@@ -222,12 +255,13 @@
             }
         }
 
+        // ── Save to output ────────────────────────────────────────────────────
         async function saveReport() {
             showStatus('Saving report…', 'info');
             const payload = {
-                review: collectReview(),
+                review:           collectReview(),
                 property_address: document.getElementById('propertyAddress').value,
-                inspector_name: document.getElementById('surveyorName').value,
+                inspector_name:   document.getElementById('surveyorName').value,
             };
             try {
                 const res = await fetch(`/save_heatloss_report/${BATCH}`, {
