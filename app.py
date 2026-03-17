@@ -416,9 +416,14 @@ def save_heatloss_report(batch_id: str) -> Any:
     is not set or if the upload fails.
     """
     try:
+        # Accept review payload from the review page and persist it first
+        posted = request.get_json(silent=True) or {}
+        if posted:
+            heatlossservice.save_review(batch_id, posted, None)
+
         labels = heatlossservice.get_existing_labels(batch_id, None)
-        property_address = labels.get("property_address", "")
-        inspector_name = labels.get("surveyor_name", "")
+        property_address = posted.get("property_address") or labels.get("property_address", "")
+        inspector_name = posted.get("inspector_name") or labels.get("surveyor_name", "")
 
         report_data = heatlossservice.generate_report(
             batch_id,

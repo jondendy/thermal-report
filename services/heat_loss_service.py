@@ -159,7 +159,6 @@ def _merge_recommendations_pdf(report_pdf_path: Path, recommendations_url: str) 
             return False
 
         writer = PdfWriter()
-
         report_reader = PdfReader(str(report_pdf_path))
         for page in report_reader.pages:
             writer.add_page(page)
@@ -209,6 +208,9 @@ def _apply_rec_overrides(
 ) -> List[Dict[str, Any]]:
     """
     Remove any advice lines the surveyor has disabled.
+    A finding key looks like "Wall_1"; review[key]["disabled_rec_lines"] is a list
+    of 0-based indices into that finding's recommendations.advice list.
+    Recommendations with all lines removed are dropped entirely.
     """
     result = []
     for rec in recommendations:
@@ -252,7 +254,7 @@ def generate_report(
             if r.get("note"):
                 finding["surveyor_note"] = r["note"]
 
-    # Pull general surveyor notes written at the top of the review page
+    # Carry general surveyor notes through to the PDF
     general_notes = review.get("_global_notes", "")
 
     property_address = property_address or labels.get("property_address") or "Not specified"
@@ -284,11 +286,10 @@ def generate_report(
         "inspector_name": inspector_name or "Not specified",
         "survey_date": _extract_survey_date(batch_id, tenant_id),
         "survey_time": datetime.now().strftime("%H:%M"),
-
+        "general_notes": general_notes,
         "summary": summary,
         "findings": findings,
         "recommendations": recommendations,
-        "general_notes": general_notes,
         "organisation": {
             "name": ORG_NAME,
             "website": ORG_WEBSITE,
@@ -348,6 +349,7 @@ def _regenerate_labeled_images_with_manual_spots(batch_id: str, labels: Dict[str
     except Exception as e:
         logger.error(f"Failed to regenerate labeled images: {e}", exc_info=True)
 
+
 def generate_pdf_from_report_data(
     batch_id: str,
     report_data: Dict[str, Any],
@@ -364,12 +366,14 @@ def generate_pdf_from_report_data(
     try:
         batch_dir = safe_batch_path(BASE_REPORT_DIR, batch_id, tenant_id)
 
+        # Regenerate labeled images with manual annotations
         labels = get_existing_labels(batch_id, tenant_id)
         _regenerate_labeled_images_with_manual_spots(batch_id, labels, tenant_id)
 
         html_content = _render_report_html(report_data, batch_dir=str(batch_dir))
 
-        # Scrub surrogate characters introduced by FLIR EXIF metadata
+        # Scrub surrogate characters that FLIR EXIF data can introduce,
+        # preventing UnicodeEncodeError when writing UTF-8 or feeding PDF engines.
         html_content = html_content.encode("utf-8", errors="replace").decode("utf-8")
 
         html_path = batch_dir / f"final_report_{batch_id}.html"
@@ -436,7 +440,11 @@ def save_report(batch_id: str, report_data: Dict[str, Any], tenant_id: str | Non
 
 
 def _render_report_html(report_data: Dict[str, Any], batch_dir: str | None = None) -> str:
-    """Render standalone HTML for PDF generation."""
+    """Render standalone HTML for PDF generation.
+
+    Embeds labeled images as base64, appends recommendations content,
+    and appends attached HTML notes.
+    """
     property_address = report_data.get("property_address", "Not specified")
     inspector_name = report_data.get("inspector_name", "Not specified")
     survey_date = report_data.get("survey_date", datetime.now().strftime("%Y-%m-%d"))
@@ -454,7 +462,7 @@ def _render_report_html(report_data: Dict[str, Any], batch_dir: str | None = Non
     html = f"""<!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
+    <meta charset=\"UTF-8\">
     <title>Thermal Survey Report - {property_address}</title>
     <style>
         @page {{ size: A4; margin: 2cm; }}
@@ -464,7 +472,7 @@ def _render_report_html(report_data: Dict[str, Any], batch_dir: str | None = Non
         .header p {{ margin: 5px 0; opacity: 0.9; }}
         .section {{ margin-bottom: 30px; page-break-inside: avoid; }}
         .section h2 {{ color: #667eea; border-bottom: 2px solid #667eea; padding-bottom: 10px; margin-bottom: 15px; }}
-        .general-notes {{ background: #fffbea; border-left: 4px solid #ffc107; padding: 15px 20px; margin-bottom: 30px; border-radius: 4px; font-style: italic; color: #555; }}
+        .surveyor-notes {{ background: #f8f9fa; border-left: 4px solid #667eea; padding: 15px 20px; margin-bottom: 30px; border-radius: 4px; font-style: italic; color: #555; }}
         .finding {{ background: #f8f9fa; border-left: 4px solid #ffc107; padding: 15px; margin-bottom: 15px; border-radius: 4px; }}
         .finding h3 {{ margin-top: 0; color: #495057; }}
         .finding img {{ width: 100%; max-width: 600px; margin: 10px 0; border: 1px solid #dee2e6; border-radius: 4px; }}
@@ -487,39 +495,44 @@ def _render_report_html(report_data: Dict[str, Any], batch_dir: str | None = Non
     </style>
 </head>
 <body>
-    <div class="header">
+    <div class=\"header\">
         <h1>Thermal Survey Report</h1>
         <p><strong>Property:</strong> {property_address}</p>
         <p><strong>Inspector:</strong> {inspector_name}</p>
         <p><strong>Survey Date:</strong> {survey_date}</p>
     </div>
+"""
 
-    <div class="section">
+    # Render general surveyor notes immediately after header if present
+    if general_notes:
+        html += f"""    <div class=\"surveyor-notes\">
+        <strong>\ud83d\udcdd Surveyor Notes:</strong> {general_notes}
+    </div>\n"""
+
+    html += """    <div class=\"section\">
         <h2>Executive Summary</h2>
-        <div class="stats">
-            <div class="stat-box">
-                <div class="stat-value">{summary.get('total_findings', 0)}</div>
-                <div class="stat-label">Total Findings</div>
+        <div class=\"stats\">
+            <div class=\"stat-box\">
+                <div class=\"stat-value\">{total}</div>
+                <div class=\"stat-label\">Total Findings</div>
             </div>
-            <div class="stat-box">
-                <div class="stat-value">{summary.get('critical_count', 0)}</div>
-                <div class="stat-label">Critical Issues</div>
+            <div class=\"stat-box\">
+                <div class=\"stat-value\">{critical}</div>
+                <div class=\"stat-label\">Critical Issues</div>
             </div>
-            <div class="stat-box">
-                <div class="stat-value">{summary.get('high_count', 0)}</div>
-                <div class="stat-label">High Priority</div>
+            <div class=\"stat-box\">
+                <div class=\"stat-value\">{high}</div>
+                <div class=\"stat-label\">High Priority</div>
             </div>
         </div>
     </div>
-"""
+""".format(
+        total=summary.get('total_findings', 0),
+        critical=summary.get('critical_count', 0),
+        high=summary.get('high_count', 0),
+    )
 
-    if general_notes:
-        html += f"""    <div class="general-notes">
-        <strong>Surveyor Notes:</strong><br>{general_notes}
-    </div>
-"""
-
-    html += """    <div class="section">
+    html += """    <div class=\"section\">
         <h2>Detailed Findings</h2>
 """
 
@@ -533,14 +546,14 @@ def _render_report_html(report_data: Dict[str, Any], batch_dir: str | None = Non
         avg_temp = finding.get("avg_temp", 0)
         surveyor_note = finding.get("surveyor_note", "")
 
-        html += f"""        <div class="finding">
+        html += f"""        <div class=\"finding\">
             <h3>Finding {i}: {spot_label}</h3>
             <p><strong>Severity:</strong> {str(severity).upper()} | <strong>Type:</strong> {spot_type}</p>
             <p><strong>Temperature:</strong> Max {float(max_temp):.1f}\u00b0C / Avg {float(avg_temp):.1f}\u00b0C / Min {float(min_temp):.1f}\u00b0C</p>
             <p>{description}</p>
 """
         if surveyor_note:
-            html += f'            <p class="surveyor-note"><em>\U0001f4dd Surveyor note: {surveyor_note}</em></p>\n'
+            html += f'            <p class=\"surveyor-note\"><em>\ud83d\udcdd Surveyor note: {surveyor_note}</em></p>\n'
 
         spot_locations = finding.get("spot_locations", [])
         if batch_dir and spot_locations:
@@ -554,13 +567,13 @@ def _render_report_html(report_data: Dict[str, Any], batch_dir: str | None = Non
                     labeled_path = Path(batch_dir) / labeled_name
                     if labeled_path.exists():
                         img_data = base64.b64encode(labeled_path.read_bytes()).decode("utf-8")
-                        html += f'            <img src="data:image/jpeg;base64,{img_data}" alt="{labeled_name}">\n'
+                        html += f"            <img src=\"data:image/jpeg;base64,{img_data}\" alt=\"{labeled_name}\">\n"
 
         html += "        </div>\n"
 
     html += """    </div>
 
-    <div class="section">
+    <div class=\"section\">
         <h2>Recommendations</h2>
 """
 
@@ -571,7 +584,7 @@ def _render_report_html(report_data: Dict[str, Any], batch_dir: str | None = Non
         savings = rec.get("savings", "")
         priority = rec.get("priority", "medium")
         advice_items = "".join(f"<li>{a}</li>" for a in advice_list)
-        html += f"""        <div class="recommendation">
+        html += f"""        <div class=\"recommendation\">
             <h3>{rec_type} #{spot_num} ({str(priority).upper()} priority)</h3>
             <ul>{advice_items}</ul>
             <p><strong>Estimated savings:</strong> {savings}</p>
@@ -582,22 +595,22 @@ def _render_report_html(report_data: Dict[str, Any], batch_dir: str | None = Non
 
     valid_links = [l for l in links if l.get("title") and l.get("url")]
     if valid_links:
-        html += '    <div class="links-section">\n        <h2>Documents &amp; Links</h2>\n        <ul>\n'
+        html += "    <div class=\"links-section\">\n        <h2>Documents &amp; Links</h2>\n        <ul>\n"
         for link in valid_links:
-            html += f'            <li><a href="{link["url"]}">{link["title"]}</a></li>\n'
+            html += f"            <li><a href=\"{link['url']}\">{link['title']}</a></li>\n"
         html += "        </ul>\n    </div>\n"
 
     if recommendations_html:
-        html += f"""    <div class="embedded-doc">
+        html += f"""    <div class=\"embedded-doc\">
         <h2>Recommendations &amp; Resources</h2>
         {recommendations_html}
     </div>
 """
     elif rec_url:
-        html += f"""    <div class="links-section" style="text-align:center;">
+        html += f"""    <div class=\"links-section\" style=\"text-align:center;\">
         <h2>Additional Resources</h2>
         <p>For detailed improvement guidance, visit our recommendations document:</p>
-        <p><a href="{rec_url}" style="font-weight:bold; font-size:16px;">{rec_url}</a></p>
+        <p><a href=\"{rec_url}\" style=\"font-weight:bold; font-size:16px;\">{rec_url}</a></p>
     </div>
 """
 
@@ -607,7 +620,7 @@ def _render_report_html(report_data: Dict[str, Any], batch_dir: str | None = Non
         if f.get("data") and str(f.get("name", "")).lower().endswith((".html", ".htm"))
     ]
     if html_notes:
-        html += '    <div class="attached-notes">\n        <h2>Attached Notes</h2>\n'
+        html += "    <div class=\"attached-notes\">\n        <h2>Attached Notes</h2>\n"
         for note in html_notes:
             note_name = note.get("name", "Untitled")
             note_data = note.get("data", "")
@@ -626,7 +639,7 @@ def _render_report_html(report_data: Dict[str, Any], batch_dir: str | None = Non
             note_html = re.sub(r"<head[^>]*>.*?</head>", "", note_html, flags=re.IGNORECASE | re.DOTALL)
             note_html = re.sub(r"</?body[^>]*>", "", note_html, flags=re.IGNORECASE)
 
-            html += f'        <div class="note-page">\n            <h3>{note_name}</h3>\n            {note_html}\n        </div>\n'
+            html += f"        <div class=\"note-page\">\n            <h3>{note_name}</h3>\n            {note_html}\n        </div>\n"
 
         html += "    </div>\n"
 
@@ -634,13 +647,13 @@ def _render_report_html(report_data: Dict[str, Any], batch_dir: str | None = Non
         f for f in attached_files if f.get("name") and not str(f.get("name", "")).lower().endswith((".html", ".htm"))
     ]
     if other_files:
-        html += '    <div class="section">\n        <h2>Other Attachments</h2>\n        <ul>\n'
+        html += "    <div class=\"section\">\n        <h2>Other Attachments</h2>\n        <ul>\n"
         for af in other_files:
             size_kb = float(af.get("size", 0)) / 1024
             html += f"            <li>{af.get('name')} ({size_kb:.1f} KB)</li>\n"
         html += "        </ul>\n    </div>\n"
 
-    html += f"""    <div class="footer">
+    html += f"""    <div class=\"footer\">
         <p><strong>{org.get('name', 'Thermal Survey Services')}</strong></p>
         <p>{org.get('website', '')} | {org.get('contact', '')}</p>
         <p>Report generated on {generated_at}</p>
