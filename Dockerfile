@@ -1,12 +1,16 @@
 # Thermal Report Docker Image
 # Build: docker build -t thermal-report:latest .
-# Run: docker run -it --rm -v $(pwd)/Images:/app/Images thermal-report:latest
+# Run: docker run -p 8080:8080 thermal-report:latest
 
-FROM python:3.9-slim
+FROM python:3.11-slim
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
+# libGL1 + libglib2.0 are required by opencv-python (used by flirimageextractor)
+# Use opencv-python-headless in requirements.txt to avoid X11/display deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libimage-exiftool-perl \
+    libgl1 \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -17,14 +21,16 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
-COPY *.py .
-COPY test1.py .
+COPY app.py settings.py ./
+COPY services/ ./services/
+COPY lib/ ./lib/
+COPY templates/ ./templates/
+COPY static/ ./static/
 
-# Create directories for images and reports
-RUN mkdir -p Images reports test_images
-
-# Set environment variable
+# Use /tmp for ephemeral storage (Cloud Run filesystem is read-only except /tmp)
+ENV UPLOAD_FOLDER=/tmp/.images
+ENV REPORTS_FOLDER=/tmp/.reports
 ENV PYTHONUNBUFFERED=1
 
-# Default command
-CMD ["/bin/bash"]
+# Cloud Run injects $PORT (default 8080); gunicorn binds to it
+CMD exec gunicorn --bind 0.0.0.0:${PORT:-8080} --workers 2 --timeout 120 app:app
