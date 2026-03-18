@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application files
 COPY app.py settings.py ./
 COPY services/ ./services/
-COPY lib/ ./lib/
+COPY utils/ ./lib/
 COPY templates/ ./templates/
 COPY static/ ./static/
 
