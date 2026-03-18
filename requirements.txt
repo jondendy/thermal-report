@@ -7,10 +7,15 @@ pillow>=8.0.0
 python-dotenv>=1.2.1
 
 # For FLIR image extraction
+# Uses opencv-python-headless to avoid libGL/X11 dependencies in containers
 flirimageextractor>=1.0.0
+opencv-python-headless>=4.5.0
 
-# For visualization (optional but recommended)
+# For visualisation (optional but recommended)
 matplotlib>=3.3.0
 
-# For web interface
+# Web interface
 flask>=2.0.0
+
+# WSGI server for production (Cloud Run)
+gunicorn>=21.0.0
