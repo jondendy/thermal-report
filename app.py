@@ -7,9 +7,8 @@ from __future__ import annotations
 from dotenv import load_dotenv
 load_dotenv()  # call this before `import settings`
 
-import json
+import os
 import shutil
-import logging
 from typing import Any
 from flask import Flask, render_template, request, jsonify, abort, url_for, send_file
 from pathlib import Path
@@ -127,9 +126,9 @@ def save_labels(batchid: str) -> Any:
 def generate_heat_loss_report_route(batch_id):
     """
     Generate professional heat loss report from labeled hot spots.
-    
+
     Step 2: Creates final HTML report with energy-saving recommendations
-    
+
     Optional form parameters:
     - property_address: Property address for report
     - inspector_name: Inspector name for report
@@ -140,7 +139,7 @@ def generate_heat_loss_report_route(batch_id):
         property_address = request.form.get('property_address', '')
         inspector_name = request.form.get('inspector_name', '')
         doc_mode = request.form.get('doc_mode', 'link')  # 'link' or 'embed'
-        
+
         report_data = heatlossservice.generate_report(
             batch_id,
             property_address=property_address,
@@ -148,16 +147,16 @@ def generate_heat_loss_report_route(batch_id):
             doc_mode=doc_mode,
             tenant_id=tenant_id
         )
-        
+
         return jsonify({
             'success': True,
             'message': 'Heat loss report generated successfully',
             'report_url': url_for('view_heat_loss_report', batch_id=batch_id)
         })
-    
+
     except FileNotFoundError as e:
         logger.error(f"Missing data for batch {batch_id}: {str(e)}")
-        return jsonify({'error': 'Required data not found. Please ensure hotspots are labeled.'}), 404
+        return jsonify({'error': 'Required data not found. Please ensure hotspots are labelled.'}), 404
     except ValueError as e:
         logger.error(f"Validation error for batch {batch_id}: {str(e)}")
         return jsonify({'error': 'Invalid input data.'}), 400
@@ -257,14 +256,14 @@ def download_file(batch_id: str, filename: str) -> Any:
     try:
         batch_path = safe_batch_path(batch_id, tenant_id)
         file_path = batch_path / filename
-        
+
         # Verify file is within batch directory (security check)
         if not str(file_path.resolve()).startswith(str(batch_path.resolve())):
             abort(403)
-        
+
         if not file_path.exists():
             abort(404)
-        
+
         return send_file(file_path, as_attachment=True)
     except Exception as e:
         logger.exception(f"Error downloading file: {str(e)}")
@@ -285,4 +284,5 @@ def server_error(error) -> tuple:
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host="127.0.0.1", port=5000)
+    port = int(os.environ.get("PORT", 8080))
+    app.run(debug=False, host="0.0.0.0", port=port)
