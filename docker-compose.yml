@@ -1,0 +1,49 @@
+# docker-compose.yml
+# Usage:
+#   docker compose up --build -d        # first run / after code changes
+#   docker compose logs -f              # tail logs
+#   docker compose down                 # stop
+#
+# Copy .env.example → .env and fill in secrets before first run.
+
+services:
+
+  # ── Flask / gunicorn app ──────────────────────────────────────────────────
+  app:
+    build: .
+    container_name: thermal-app
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      # Persist uploaded images and generated reports outside the container
+      - ./upload:/app/upload
+      - ./reports:/app/reports
+      - ./.Images:/app/.Images
+    expose:
+      - "8000"          # internal only — Nginx handles public traffic
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ── Nginx reverse proxy ───────────────────────────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: thermal-nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"       # public port → Nginx HTTP
+      # Uncomment once you have TLS certs:
+      # - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # Uncomment for Let's Encrypt certs:
+      # - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - app
+
+networks:
+  default:
+    name: thermal-net

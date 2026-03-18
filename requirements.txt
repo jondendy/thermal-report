@@ -1,32 +1,35 @@
 # Thermal Report - Python Dependencies
 # Install with: pip install -r requirements.txt
 
-# Core dependencies
+# Core
 numpy>=1.19.0
 pillow>=8.0.0
 python-dotenv>=1.2.1
-gunicorn
+
+# Web server
+flask>=2.0.0
+gunicorn>=21.0.0
+
+# Google Drive integration
 google-api-python-client
 google-auth
 google-auth-httplib2
 google-auth-oauthlib
 
-# For FLIR image extraction
+# FLIR image extraction
 flirimageextractor>=1.0.0
 
-# For visualization (optional but recommended)
+# Visualisation
 matplotlib>=3.3.0
 
-# For web interface
-flask>=2.0.0
-
-# HTTP (recommendations/shared-notes fetching)
+# HTTP (recommendations / shared-notes fetching)
 requests>=2.31.0
 
-# PDF generation (preferred)
+# PDF generation — primary (requires Cairo system libs; baked into Dockerfile)
 weasyprint>=60.0
 
-# Alternative PDF backends (optional)
-# pdfkit>=1.0.0          # Requires wkhtmltopdf system package
-# xhtml2pdf>=0.2.15
+# PDF generation — fallback (pure Python, no system deps)
+xhtml2pdf>=0.2.15
+
+# PDF merging (recommendations append)
 pypdf>=3.0.0
