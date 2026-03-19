@@ -1,66 +1,54 @@
 #!/usr/bin/env python3
 """
 Flask entrypoint for the Thermal Report web tool.
-
-Testbed goals (branch: testbed/main-flat-safe-pdf):
-- Flat folders under settings.BASE_REPORT_DIR via security_utils.safe_batch_path
-- tenant_id defaults to None (portable main)
-- Add PDF generation + /download_pdf like folder-workflow branch
-- Keep Drive/GCS routes optional (only used when configured)
+Canonical routes that match edit_spots.html, index.html, and JS expectations.
 """
-
 from __future__ import annotations
-
 from dotenv import load_dotenv
 load_dotenv()  # call this before `import settings`
 
-import re
+import os
 import shutil
-from datetime import datetime
 from typing import Any
+from flask import Flask, render_template, request, jsonify, abort, url_for, send_file
 from pathlib import Path
 
-from flask import Flask, render_template, request, jsonify, abort, url_for, send_file
-
 import settings
-from settings import APP_NAME, APP_VERSION, MAX_CONTENT_LENGTH, BATCH_SIZE_MAX
+from settings import (
+    APP_NAME,
+    APP_VERSION,
+    MAX_CONTENT_LENGTH,
+    BATCH_SIZE_MAX,
+)
 
 import services.batch_service as batchservice
 import services.heat_loss_service as heatlossservice
+import services.batch_io as batchio
+from utils.security_utils import validate_tenant_id, safe_batch_path
+from utils.logging_config import setup_logging
 
-from security_utils import validate_tenant_id, safe_batch_path
-from services.logging_service import setup_logging
-
-# Optional Drive ingest routes (guarded)
-try:
-    from ingest_drive import register_ingest_routes
-except Exception:
-    register_ingest_routes = None
-
-logger = setup_logging(level="INFO")
+# Initialize logger
+logger = setup_logging(level='INFO')
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 app.config["SECRET_KEY"] = "change-me-in-production"
 
-SPOT_TYPES = ["Wall", "Window", "Door", "Roof", "Floor", "Vent", "Eaves", "Chimney", "Utilities", "Sills", "Other"]
-
-if register_ingest_routes:
-    try:
-        register_ingest_routes(app)
-    except Exception:
-        pass
+# Spot types for thermal annotations
+SPOT_TYPES = ["Wall", "Window", "Door", "Roof", "Floor", "Vent", "Other"]
 
 
-def _get_tenant_id() -> str | None:
-    """Tenant is optional in portable main; validate only if provided."""
-    tenant_id = request.args.get("tenant") or request.headers.get("X-Tenant-ID") or None
+def _get_tenant_id() -> str:
+    """Get tenant ID from request headers or query params."""
+    tenant_id = request.args.get("tenant") or request.headers.get('X-Tenant-ID') or None
     return validate_tenant_id(tenant_id)
 
 
 @app.route("/", methods=["GET"])
 def index() -> str:
-    batches = batchservice.get_all_batches(None)
+    """Display batch list and upload interface."""
+    tenant_id = _get_tenant_id()
+    batches = batchservice.get_all_batches(tenant_id)
     return render_template(
         "index.html",
         app_name=APP_NAME,
@@ -72,149 +60,38 @@ def index() -> str:
 
 @app.route("/upload", methods=["POST"])
 def upload() -> Any:
+    """Process uploaded thermal images and create batch."""
+    tenant_id = _get_tenant_id()
     files = request.files.getlist("files")
+
     if not files or len(files) == 0:
         return jsonify({"error": "No files uploaded"}), 400
+
     try:
+        # Generate batch_id from files
         batch_id = batchservice.get_batch_id(files)
-        results = batchservice.process_batch(batch_id, files, None)
-        summary = results.get("summary", {})
-        return jsonify({"batchid": batch_id, "results": {"summary": summary}})
+        # Process batch with correct argument order: batch_id, files, tenant_id
+        results = batchservice.process_batch(batch_id, files, tenant_id)
+        summary = results.get('summary', {})
     except ValueError as e:
-        logger.warning("Validation error during upload: %s", str(e))
+        logger.warning(f"Validation error during upload: {str(e)}")
         return jsonify({"error": str(e)}), 400
     except Exception as e:
-        logger.exception("Error processing batch: %s", str(e))
+        logger.exception(f"Error processing batch: {str(e)}")
         return jsonify({"error": f"Processing error: {e}"}), 500
 
-
-@app.route("/list_folders")
-def list_folders():
-    try:
-        import services.drive_client as drive_client
-        from settings import STORAGE_ADDRESS
-
-        logger.info("DEBUG STORAGE_ADDRESS: %s", STORAGE_ADDRESS)
-
-        if not STORAGE_ADDRESS:
-            return "<h1>Error</h1><p>STORAGE_ADDRESS not configured</p>", 500
-
-        folders = drive_client.list_files_in_folder(STORAGE_ADDRESS)
-        logger.info("DEBUG total items from Drive: %d", len(folders))
-        for f in folders:
-            logger.info(
-                "DEBUG item: name=%s mimeType=%s id=%s",
-                f.get("name"), f.get("mimeType"), f.get("id"),
-            )
-
-        folder_list = [f for f in folders if f.get("mimeType") == "application/vnd.google-apps.folder"]
-        logger.info("DEBUG folders after filtering: %d", len(folder_list))
-
-        return render_template("list_folders.html", folders=folder_list, parent_id=STORAGE_ADDRESS)
-    except Exception as e:
-        logger.exception("Error listing folders: %s", str(e))
-        return f"<h1>Error</h1><p>Failed to list folders: {str(e)}</p>", 500
-
-
-@app.route("/select_images/<folder_id>", methods=["GET"])
-def select_images(folder_id: str):
-    try:
-        import services.drive_client as drive_client
-        folder_metadata = drive_client.get_folder_metadata(folder_id)
-        folder_name = folder_metadata.get("name", "Unknown Folder")
-        service = drive_client.get_drive_service()
-        query = f"'{folder_id}' in parents and trashed = false"
-        results = service.files().list(
-            q=query,
-            fields="files(id, name, thumbnailLink, mimeType)",
-            orderBy="name",
-        ).execute()
-        files = results.get("files", [])
-        image_mimes = ["image/jpeg", "image/png", "image/tiff"]
-        image_files = [f for f in files if f.get("mimeType") in image_mimes]
-        if not image_files:
-            return (
-                f"<!DOCTYPE html><html><head><title>No Images Found</title>"
-                f"<style>body {{ font-family: Arial; margin: 40px; text-align: center; }} "
-                f"h1 {{ color: #d32f2f; }} a {{ color: #1976d2; }}</style>"
-                f"</head><body><h1>No Image Files Found</h1>"
-                f"<p>The folder \"{folder_name}\" does not contain any image files.</p>"
-                f"<p><a href=\"/\">&larr; Return to Home</a></p></body></html>",
-                200,
-            )
-        return render_template("select_images.html", folder_id=folder_id, folder_name=folder_name, images=image_files)
-    except Exception as e:
-        logger.exception("Error listing folder %s: %s", folder_id, str(e))
-        abort(500)
-
-
-@app.route("/process_selected_images", methods=["POST"])
-def process_selected_images():
-    """Process only user-selected images from Drive folder."""
-    try:
-        import services.drive_client as drive_client
-        import tempfile
-        import shutil
-        from pathlib import Path
-        from werkzeug.datastructures import FileStorage
-
-        data = request.get_json()
-        folder_id = data.get("folder_id")
-        file_ids = data.get("file_ids", [])
-
-        if not folder_id or not file_ids:
-            return jsonify({"error": "Missing folder_id or file_ids"}), 400
-
-        batch_id = f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        temp_batch_dir = Path(tempfile.gettempdir()) / batch_id
-        temp_batch_dir.mkdir(parents=True, exist_ok=True)
-
-        downloaded_files = []
-        service = drive_client.get_drive_service()
-        for file_id in file_ids:
-            file_info = service.files().get(fileId=file_id, fields="name").execute()
-            dest_path = temp_batch_dir / file_info["name"]
-            drive_client.download_file(file_id, str(dest_path))
-            downloaded_files.append(dest_path)
-
-        file_objects = []
-        try:
-            for file_path in downloaded_files:
-                f = open(file_path, "rb")
-                file_obj = FileStorage(stream=f, filename=file_path.name, content_type="image/jpeg")
-                file_objects.append(file_obj)
-            results = batchservice.process_batch(batch_id, file_objects, None)
-        finally:
-            for f in file_objects:
-                f.stream.close()
-            shutil.rmtree(temp_batch_dir, ignore_errors=True)
-
-        return jsonify({
-            "status": "success",
-            "batch_id": batch_id,
-            "message": f"Processed {len(file_ids)} images"
-        }), 200
-
-    except Exception as e:
-        logger.exception("Error processing selected images: %s", str(e))
-        return jsonify({"error": str(e)}), 500
+    return jsonify({"batchid": batch_id, "results": {"summary": summary}})
 
 
 @app.route("/edit_spots/<batchid>", methods=["GET"])
 def editspots(batchid: str) -> str:
+    """Display thermal hotspot editing interface."""
+    tenant_id = _get_tenant_id()
     try:
-        recommendations_url=getattr(settings, "RECOMMENDATIONS_DOCUMENT_URL", "") or "",
-        analysis_data = heatlossservice.get_thermal_analysis(batchid, None)
-        existing_labels = heatlossservice.get_existing_labels(batchid, None)
+        # Load thermal analysis and existing labels
+        analysis_data = heatlossservice.get_thermal_analysis(batchid, tenant_id)
+        existing_labels = heatlossservice.get_existing_labels(batchid, tenant_id)
         saved_links = existing_labels.get("links", [])
-
-        if "images" not in analysis_data:
-            if "results" in analysis_data and "images" in analysis_data["results"]:
-                analysis_data = analysis_data["results"]
-            elif "images_data" in analysis_data:
-                analysis_data = {"images": analysis_data["images_data"]}
-
-        current_sensitivity = analysis_data.get("sensitivity", "medium")
 
         return render_template(
             "edit_spots.html",
@@ -223,535 +100,189 @@ def editspots(batchid: str) -> str:
             existing_labels=existing_labels,
             saved_links=saved_links,
             spot_types=SPOT_TYPES,
-            current_sensitivity=current_sensitivity,
         )
     except FileNotFoundError:
+        logger.error(f"Batch {batchid} not found")
         abort(404)
     except Exception as e:
-        logger.exception("Error loading batch %s: %s", batchid, str(e))
+        logger.exception(f"Error loading batch {batchid}: {str(e)}")
         abort(500)
-
-
-@app.route("/api/temperature_at_point/<batch_id>", methods=["POST"])
-def api_temperature_at_point(batch_id: str) -> Any:
-    try:
-        data = request.get_json() or {}
-        image_name = data.get("image_name", "")
-        x_pct = float(data.get("x_pct", 50))
-        y_pct = float(data.get("y_pct", 50))
-
-        if not image_name:
-            return jsonify({"error": "image_name is required"}), 400
-
-        batch_dir = safe_batch_path(settings.BASE_REPORT_DIR, batch_id, None)
-
-        from services.thermal_data_service import load_thermal_data
-        thermal_grid = load_thermal_data(batch_dir, image_name)
-
-        if thermal_grid is None:
-            return jsonify({"error": "Thermal data not found for this image"}), 404
-
-        thermal_height, thermal_width = thermal_grid.shape
-        px = int(round(x_pct / 100.0 * thermal_width))
-        py = int(round(y_pct / 100.0 * thermal_height))
-        px = max(0, min(px, thermal_width - 1))
-        py = max(0, min(py, thermal_height - 1))
-
-        temperature = float(thermal_grid[py, px])
-        return jsonify({"temperature": round(temperature, 2)})
-
-    except Exception as e:
-        logger.exception("Error reading temperature at point for batch %s: %s", batch_id, str(e))
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/reprocess_batch/<batch_id>", methods=["POST"])
-def api_reprocess_batch(batch_id: str) -> Any:
-    """Re-run thermal analysis on existing batch with new sensitivity settings."""
-    try:
-        data = request.get_json() or {}
-        new_sensitivity = data.get("sensitivity", "medium")
-        if new_sensitivity not in ["low", "medium", "high"]:
-            return jsonify({"error": "Invalid sensitivity. Use: low, medium, or high"}), 400
-
-        upload_dir = settings.BASE_UPLOAD_PATH / batch_id
-        if not upload_dir.exists():
-            return jsonify({"error": "Batch images not found"}), 404
-
-        image_files = list(upload_dir.glob("*.jpg")) + list(upload_dir.glob("*.jpeg"))
-        if not image_files:
-            return jsonify({"error": "No images in batch directory"}), 404
-
-        from services.flir_processor_simple import SimpleFLIRProcessor
-        from services.thermal_analyzer import ThermalAnalyzer
-
-        processor = SimpleFLIRProcessor()
-        analyzer = ThermalAnalyzer(sensitivity=new_sensitivity)
-
-        batch_dir = safe_batch_path(settings.BASE_REPORT_DIR, batch_id, None)
-        max_spots = settings.MAX_HOTSPOTS_PER_IMAGE
-
-        results = {
-            "batch_id": batch_id,
-            "sensitivity": new_sensitivity,
-            "max_spots_per_image": max_spots,
-            "images": [],
-        }
-
-        for image_path in image_files:
-            temp_data, stats = processor.process_single_image(str(image_path), display=False)
-            hot_spots = analyzer.detect_hot_spots(temp_data, image_path=str(image_path))[:max_spots]
-
-            labeled_filename = image_path.stem + "_labeled.jpg"
-            labeled_path = batch_dir / labeled_filename
-            try:
-                analyzer.label_hot_spots(str(image_path), hot_spots, str(labeled_path))
-            except Exception:
-                pass
-
-            image_result = {
-                "filename": image_path.name,
-                "stats": {
-                    "min": float(stats["min"]),
-                    "max": float(stats["max"]),
-                    "mean": float(stats["mean"]),
-                    "median": float(stats["median"]),
-                    "std": float(stats["std"]),
-                },
-                "hot_spots": [spot.to_dict() for spot in hot_spots],
-                "hot_spot_count": len(hot_spots),
-                "labeled_image": labeled_filename,
-            }
-            results["images"].append(image_result)
-
-        import services.batch_io as batchio
-        batchio.save_thermal_analysis(batch_id, results, None)
-
-        total_spots = sum(img["hot_spot_count"] for img in results["images"])
-        return jsonify(
-            {
-                "success": True,
-                "sensitivity": new_sensitivity,
-                "total_spots": total_spots,
-                "image_count": len(results["images"]),
-                "message": f"Reprocessed with {new_sensitivity} sensitivity: {total_spots} spots detected",
-            }
-        )
-
-    except Exception as e:
-        logger.exception("Error reprocessing batch %s: %s", batch_id, str(e))
-        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/save_labels/<batchid>", methods=["POST"])
 def save_labels(batchid: str) -> Any:
+    """Save operator hotspot labels and document links."""
+    tenant_id = _get_tenant_id()
     try:
         data = request.get_json()
-        heatlossservice.save_labels(batchid, data, None)
+        heatlossservice.save_labels(batchid, data, tenant_id)
         return jsonify({"success": True, "message": "Labels saved"})
     except Exception as e:
-        logger.exception("Error saving labels for batch %s: %s", batchid, str(e))
+        logger.exception(f"Error saving labels for batch {batchid}: {str(e)}")
         return jsonify({"error": "Failed to save labels"}), 500
 
 
-@app.route("/review_report/<batch_id>", methods=["GET"])
-def review_report(batch_id: str) -> str:
-    try:
-        labels = heatlossservice.get_existing_labels(batch_id, None)
-        analysis = heatlossservice.get_thermal_analysis(batch_id, None)
-        findings = heatlossservice._combine_analysis_and_labels(analysis, labels)
-        review_data = labels.get("review", {})
-        return render_template(
-            "review_report.html",
-            batch_id=batch_id,
-            findings=findings,
-            review_data=review_data,
-            labels=labels,
-        )
-    except FileNotFoundError:
-        abort(404)
-    except Exception as e:
-        logger.exception("Error loading review for batch %s: %s", batch_id, str(e))
-        abort(500)
-
-
-@app.route("/review_report/<batch_id>", methods=["POST"])
-def review_report_submit(batch_id: str) -> Any:
-    try:
-        data = request.get_json()
-        heatlossservice.save_review(batch_id, data, None)
-
-        property_address = data.get("property_address", "")
-        inspector_name = data.get("inspector_name", "")
-
-        report_data = heatlossservice.generate_report(
-            batch_id,
-            property_address=property_address,
-            inspector_name=inspector_name,
-            doc_mode="link",
-            tenant_id=None,
-        )
-
-        pdf_path = None
-        try:
-            pdf_path = heatlossservice.generate_pdf_from_report_data(batch_id, report_data, None)
-        except Exception as e:
-            logger.warning("PDF generation failed (non-fatal): %s", e)
-
-        return jsonify({
-            "success": True,
-            "report_url": url_for("view_heat_loss_report", batch_id=batch_id),
-            "pdf_generated": pdf_path is not None,
-        })
-    except Exception as e:
-        logger.exception("Error submitting review for batch %s: %s", batch_id, str(e))
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/save_heatloss_report/<batch_id>", methods=["POST"])
-def save_heatloss_report(batch_id: str) -> Any:
+@app.route('/generate_heat_loss_report/<batch_id>', methods=['POST'])
+def generate_heat_loss_report_route(batch_id):
     """
-    Re-generate the PDF and upload it to the Google Drive folder defined by
-    PDF_STORAGE_ADDRESS in .env.  Falls back to local-only save if that var
-    is not set or if the upload fails.
+    Generate professional heat loss report from labeled hot spots.
+
+    Step 2: Creates final HTML report with energy-saving recommendations
+
+    Optional form parameters:
+    - property_address: Property address for report
+    - inspector_name: Inspector name for report
+    - doc_mode: 'link' to include external link, 'embed' to embed document
     """
     try:
-        # Accept review payload from the review page and persist it first
-        posted = request.get_json(silent=True) or {}
-        if posted:
-            heatlossservice.save_review(batch_id, posted, None)
-
-        labels = heatlossservice.get_existing_labels(batch_id, None)
-        property_address = posted.get("property_address") or labels.get("property_address", "")
-        inspector_name = posted.get("inspector_name") or labels.get("surveyor_name", "")
-
-        report_data = heatlossservice.generate_report(
-            batch_id,
-            property_address=property_address,
-            inspector_name=inspector_name,
-            doc_mode="link",
-            tenant_id=None,
-        )
-        report_data["generated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-        heatlossservice.save_report(batch_id, report_data, None)
-
-        pdf_path = None
-        try:
-            pdf_path = heatlossservice.generate_pdf_from_report_data(batch_id, report_data, None)
-        except Exception as e:
-            logger.warning("PDF generation failed (non-fatal): %s", e)
-
-        # Upload to Drive output folder if configured
-        drive_upload_result = None
-        output_folder_id = getattr(settings, "PDF_STORAGE_ADDRESS", "") or ""
-        if pdf_path and output_folder_id:
-            try:
-                import services.drive_client as drive_client
-                drive_upload_result = drive_client.upload_file_to_folder(
-                    pdf_path, output_folder_id
-                )
-                logger.info(
-                    "Uploaded PDF for batch %s to Drive folder %s",
-                    batch_id, output_folder_id,
-                )
-            except Exception as e:
-                logger.warning(
-                    "Drive upload failed for batch %s (non-fatal): %s", batch_id, e
-                )
-                drive_upload_result = {"error": str(e)}
-        elif pdf_path and not output_folder_id:
-            logger.info(
-                "PDF_STORAGE_ADDRESS not set — PDF saved locally only for batch %s", batch_id
-            )
-
-        batch_dir = safe_batch_path(settings.BASE_REPORT_DIR, batch_id, None)
-        response = {
-            "success": True,
-            "saved_to": str(batch_dir),
-            "pdf_generated": pdf_path is not None,
-        }
-        if drive_upload_result and not isinstance(drive_upload_result, dict):
-            response["drive_file_id"] = drive_upload_result.get("id", "")
-            response["drive_message"] = "Uploaded to Google Drive output folder"
-        elif output_folder_id and isinstance(drive_upload_result, dict) and "error" in drive_upload_result:
-            response["drive_warning"] = (
-                f"Local save OK but Drive upload failed: {drive_upload_result['error']}"
-            )
-
-        return jsonify(response)
-
-    except FileNotFoundError:
-        return jsonify({"error": "Report data not found. Generate the report first."}), 404
-    except Exception as e:
-        logger.exception("Error saving heat loss report for batch %s: %s", batch_id, str(e))
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/fetch_shared_notes", methods=["POST"])
-def api_fetch_shared_notes() -> Any:
-    """Fetch shared recommendations HTML from RECOMMENDATIONS_DOCUMENT_URL and return inner HTML."""
-    try:
-        from settings import RECOMMENDATIONS_DOCUMENT_URL
-        if not RECOMMENDATIONS_DOCUMENT_URL:
-            return jsonify({"error": "No shared notes URL configured"}), 400
-
-        file_id = _extract_drive_file_id(RECOMMENDATIONS_DOCUMENT_URL)
-        if not file_id:
-            return jsonify({"error": "Could not extract file ID from URL"}), 400
-
-        html_content = None
-        try:
-            import services.drive_client as drive_client
-            service = drive_client.get_drive_service()
-            file_meta = service.files().get(fileId=file_id, fields="mimeType,name").execute()
-            mime = file_meta.get("mimeType", "")
-
-            if "google-apps" in mime:
-                resp = service.files().export(fileId=file_id, mimeType="text/html").execute()
-                html_content = resp.decode("utf-8") if isinstance(resp, (bytes, bytearray)) else resp
-            else:
-                import io
-                from googleapiclient.http import MediaIoBaseDownload
-                req = service.files().get_media(fileId=file_id)
-                fh = io.BytesIO()
-                downloader = MediaIoBaseDownload(fh, req)
-                done = False
-                while not done:
-                    _, done = downloader.next_chunk()
-                html_content = fh.getvalue().decode("utf-8", errors="replace")
-
-        except Exception as e:
-            logger.warning("Drive API fetch failed, trying direct HTTP: %s", e)
-            html_content = _fetch_drive_html_direct(file_id)
-
-        if not html_content:
-            return jsonify({"error": "Failed to fetch shared notes content"}), 500
-
-        html_content = re.sub(r"<!DOCTYPE[^>]*>", "", html_content, flags=re.IGNORECASE)
-        html_content = re.sub(r"</?html[^>]*>", "", html_content, flags=re.IGNORECASE)
-        html_content = re.sub(r"<head[^>]*>.*?</head>", "", html_content, flags=re.IGNORECASE | re.DOTALL)
-        html_content = re.sub(r"</?body[^>]*>", "", html_content, flags=re.IGNORECASE)
-
-        return jsonify({"success": True, "html": html_content.strip()})
-
-    except Exception as e:
-        logger.exception("Error fetching shared notes: %s", e)
-        return jsonify({"error": str(e)}), 500
-
-
-def _extract_drive_file_id(url: str) -> str | None:
-    patterns = [
-        r"/file/d/([a-zA-Z0-9_-]+)",
-        r"/document/d/([a-zA-Z0-9_-]+)",
-        r"/spreadsheets/d/([a-zA-Z0-9_-]+)",
-        r"[?&]id=([a-zA-Z0-9_-]+)",
-    ]
-    for pattern in patterns:
-        m = re.search(pattern, url)
-        if m:
-            return m.group(1)
-    return None
-
-
-def _fetch_drive_html_direct(file_id: str) -> str | None:
-    import requests
-
-    export_url = f"https://docs.google.com/document/d/{file_id}/export?format=html"
-    try:
-        resp = requests.get(export_url, timeout=15, allow_redirects=True)
-        if resp.status_code == 200 and "<" in resp.text[:100]:
-            return resp.text
-    except Exception:
-        pass
-
-    direct_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-    try:
-        resp = requests.get(direct_url, timeout=15, allow_redirects=True)
-        if resp.status_code == 200:
-            return resp.text
-    except Exception:
-        pass
-
-    return None
-
-
-@app.route("/generate_heat_loss_report/<batch_id>", methods=["POST"])
-def generate_heat_loss_report_route(batch_id: str):
-    try:
-        property_address = request.form.get("property_address", "")
-        inspector_name = request.form.get("inspector_name", "")
-        doc_mode = request.form.get("doc_mode", "link")
-        folder_id = request.form.get("folder_id")
-
-        attach_recommendations = request.form.get("attach_recommendations", "false") == "true"
-        attach_tips = request.form.get("attach_tips", "false") == "true"
+        tenant_id = request.headers.get('X-Tenant-ID', settings.DEFAULT_TENANT)
+        property_address = request.form.get('property_address', '')
+        inspector_name = request.form.get('inspector_name', '')
+        doc_mode = request.form.get('doc_mode', 'link')  # 'link' or 'embed'
 
         report_data = heatlossservice.generate_report(
             batch_id,
             property_address=property_address,
             inspector_name=inspector_name,
             doc_mode=doc_mode,
-            tenant_id=None,
+            tenant_id=tenant_id
         )
 
-        report_data["attach_recommendations"] = attach_recommendations
-        report_data["attach_tips"] = attach_tips
+        return jsonify({
+            'success': True,
+            'message': 'Heat loss report generated successfully',
+            'report_url': url_for('view_heat_loss_report', batch_id=batch_id)
+        })
 
-        pdf_path = None
-        try:
-            pdf_path = heatlossservice.generate_pdf_from_report_data(batch_id, report_data, None)
-            if pdf_path and folder_id:
-                import services.drive_client as drive_client
-                drive_client.upload_file_to_folder(pdf_path, folder_id)
-        except Exception as e:
-            logger.warning("PDF generation/upload failed (non-fatal): %s", e)
-
-        return jsonify(
-            {
-                "success": True,
-                "message": "Heat loss report generated successfully",
-                "report_url": url_for("view_heat_loss_report", batch_id=batch_id),
-                "pdf_generated": pdf_path is not None,
-            }
-        )
-
-    except FileNotFoundError:
-        return jsonify({"error": "Required data not found. Please ensure hotspots are labeled."}), 404
-    except ValueError:
-        return jsonify({"error": "Invalid input data."}), 400
+    except FileNotFoundError as e:
+        logger.error(f"Missing data for batch {batch_id}: {str(e)}")
+        return jsonify({'error': 'Required data not found. Please ensure hotspots are labelled.'}), 404
+    except ValueError as e:
+        logger.error(f"Validation error for batch {batch_id}: {str(e)}")
+        return jsonify({'error': 'Invalid input data.'}), 400
     except Exception as e:
-        logger.exception("Error generating heat loss report for batch %s: %s", batch_id, str(e))
-        return jsonify({"error": "Report generation failed"}), 500
+        logger.exception(f"Error generating heat loss report for batch {batch_id}: {str(e)}")
+        return jsonify({'error': 'Report generation failed'}), 500
 
 
 @app.route("/view_heat_loss_report/<batch_id>", methods=["GET"])
 def view_heat_loss_report(batch_id: str) -> str:
+    """Display professional heat loss report."""
+    tenant_id = _get_tenant_id()
     try:
-        report_data = heatlossservice.get_report(batch_id, None)
-        return render_template("heat_loss_report.html", batch_id=batch_id, report_data=report_data)
-    except FileNotFoundError:
-        abort(404)
-    except Exception as e:
-        logger.exception("Error loading report for batch %s: %s", batch_id, str(e))
-        abort(500)
-
-
-@app.route("/download_pdf/<batch_id>", methods=["GET"])
-def download_pdf(batch_id: str) -> Any:
-    try:
-        batch_dir = safe_batch_path(settings.BASE_REPORT_DIR, batch_id, None)
-        pdf_filename = f"thermal_report_{batch_id}.pdf"
-        pdf_path = batch_dir / pdf_filename
-
-        if pdf_path.exists():
-            return send_file(str(pdf_path), as_attachment=True, download_name=pdf_filename, mimetype="application/pdf")
-
-        report_data = heatlossservice.get_report(batch_id, None)
-        result_path = heatlossservice.generate_pdf_from_report_data(batch_id, report_data, None)
-        if not result_path:
-            return jsonify({"error": "PDF generation failed. Check server logs."}), 500
-
-        result_file = Path(result_path)
-        if not result_file.exists():
-            return jsonify({"error": "Generated file not found"}), 500
-
-        if result_file.suffix == ".pdf":
-            return send_file(str(result_file), as_attachment=True, download_name=pdf_filename, mimetype="application/pdf")
-
-        return send_file(
-            str(result_file),
-            as_attachment=True,
-            download_name=f"thermal_report_{batch_id}.html",
-            mimetype="text/html",
+        report_data = heatlossservice.get_report(batch_id, tenant_id)
+        return render_template(
+            "heat_loss_report.html",
+            batch_id=batch_id,
+            report_data=report_data,
         )
-
     except FileNotFoundError:
+        logger.error(f"Report for batch {batch_id} not found")
         abort(404)
     except Exception as e:
-        logger.exception("Error downloading PDF for batch %s: %s", batch_id, str(e))
-        abort(500)
-
-
-@app.route("/download/<batch_id>/<filename>", methods=["GET"])
-def download_file(batch_id: str, filename: str) -> Any:
-    try:
-        batch_dir = safe_batch_path(settings.BASE_REPORT_DIR, batch_id, None)
-        file_path = (batch_dir / filename).resolve()
-
-        if not str(file_path).startswith(str(batch_dir.resolve())):
-            abort(403)
-        if not file_path.exists():
-            abort(404)
-
-        return send_file(file_path, as_attachment=False)
-    except Exception as e:
-        logger.exception("Error downloading file: %s", str(e))
+        logger.exception(f"Error loading report for batch {batch_id}: {str(e)}")
         abort(500)
 
 
 @app.route("/delete/<batch_id>", methods=["DELETE"])
 def delete_batch(batch_id: str) -> Any:
+    """Delete batch and all associated files."""
+    tenant_id = _get_tenant_id()
     try:
-        batch_path = safe_batch_path(settings.BASE_REPORT_DIR, batch_id, None)
+        batch_path = safe_batch_path(batch_id, tenant_id)
         if batch_path.exists():
             shutil.rmtree(batch_path)
+            logger.info(f"Deleted batch {batch_id}")
         return jsonify({"success": True, "message": "Batch deleted"})
     except Exception as e:
-        logger.exception("Error deleting batch %s: %s", batch_id, str(e))
+        logger.exception(f"Error deleting batch {batch_id}: {str(e)}")
         return jsonify({"error": "Failed to delete batch"}), 500
 
 
 @app.route("/api/batches", methods=["GET"])
 def api_list_batches() -> Any:
+    """List all batches as JSON."""
+    tenant_id = _get_tenant_id()
     try:
-        batches = batchservice.get_all_batches(None)
+        batches = batchservice.get_all_batches(tenant_id)
         return jsonify({"success": True, "batches": batches})
     except Exception as e:
-        logger.exception("Error listing batches: %s", str(e))
+        logger.exception(f"Error listing batches: {str(e)}")
         return jsonify({"error": "Failed to list batches"}), 500
 
 
 @app.route("/api/batch/<batch_id>", methods=["GET"])
 def api_batch_info(batch_id: str) -> Any:
+    """Get batch summary as JSON."""
+    tenant_id = _get_tenant_id()
     try:
-        summary = batchservice.get_batch_summary(batch_id, None)
+        summary = batchservice.get_batch_summary(batch_id, tenant_id)
         return jsonify({"success": True, "batch": summary})
     except FileNotFoundError:
         return jsonify({"error": "Batch not found"}), 404
     except Exception as e:
-        logger.exception("Error getting batch info: %s", str(e))
+        logger.exception(f"Error getting batch info: {str(e)}")
         return jsonify({"error": "Failed to get batch info"}), 500
 
 
 @app.route("/api/batch/<batch_id>/analysis", methods=["GET"])
 def api_thermal_analysis(batch_id: str) -> Any:
+    """Get thermal analysis data as JSON."""
+    tenant_id = _get_tenant_id()
     try:
-        analysis = heatlossservice.get_thermal_analysis(batch_id, None)
+        analysis = heatlossservice.get_thermal_analysis(batch_id, tenant_id)
         return jsonify({"success": True, "analysis": analysis})
     except FileNotFoundError:
         return jsonify({"error": "Analysis not found"}), 404
     except Exception as e:
-        logger.exception("Error getting thermal analysis: %s", str(e))
+        logger.exception(f"Error getting thermal analysis: {str(e)}")
         return jsonify({"error": "Failed to get analysis"}), 500
 
 
 @app.route("/info", methods=["GET"])
 def info() -> str:
-    return render_template("info.html", app_name=APP_NAME, app_version=APP_VERSION)
+    """Display help and information page."""
+    return render_template(
+        "info.html",
+        app_name=APP_NAME,
+        app_version=APP_VERSION,
+    )
+
+
+@app.route("/download/<batch_id>/<filename>", methods=["GET"])
+def download_file(batch_id: str, filename: str) -> Any:
+    """Download a file from batch storage."""
+    tenant_id = _get_tenant_id()
+    try:
+        batch_path = safe_batch_path(batch_id, tenant_id)
+        file_path = batch_path / filename
+
+        # Verify file is within batch directory (security check)
+        if not str(file_path.resolve()).startswith(str(batch_path.resolve())):
+            abort(403)
+
+        if not file_path.exists():
+            abort(404)
+
+        return send_file(file_path, as_attachment=True)
+    except Exception as e:
+        logger.exception(f"Error downloading file: {str(e)}")
+        abort(500)
 
 
 @app.errorhandler(404)
 def not_found(error) -> tuple:
+    """Handle 404 errors."""
     return jsonify({"error": "Not found"}), 404
 
 
 @app.errorhandler(500)
 def server_error(error) -> tuple:
-    logger.exception("Server error: %s", str(error))
+    """Handle 500 errors."""
+    logger.exception(f"Server error: {str(error)}")
     return jsonify({"error": "Internal server error"}), 500
 
 
 if __name__ == "__main__":
-    import os
     port = int(os.environ.get("PORT", 8080))
     app.run(debug=False, host="0.0.0.0", port=port)

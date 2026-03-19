@@ -4,7 +4,7 @@ Tests path validation, tenant ID validation, and path traversal prevention.
 """
 import pytest
 from pathlib import Path
-from lib.security_utils import (
+from utils.security_utils import (
     validate_tenant_id, validate_batch_id, safe_batch_path, safe_upload_path
 )
 

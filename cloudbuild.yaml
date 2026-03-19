@@ -35,13 +35,13 @@ substitutions:
   _REGION: us-central1
   _PROJECT: sc-thermal-project
   _SERVICE: thermal-report
-  _REGISTRY: us-central1-docker.pkg.dev
+  #   _REGISTRY: us-central1-docker.pkg.dev
   _IMAGE: us-central1-docker.pkg.dev/sc-thermal-project/thermal-report/app
 
 options:
   logging: CLOUD_LOGGING_ONLY
   machineType: E2_HIGHCPU_8   # faster builds, still cheap
-
+  
 steps:
 
   # ── 1. Build the image ─────────────────────────────────────────────────────
