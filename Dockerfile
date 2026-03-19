@@ -24,6 +24,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgdk-pixbuf-xlib-2.0-0 \
     libgdk-pixbuf-xlib-2.0-dev \
     libffi-dev \
+    libgl1 \
+    libglib2.0-0 \
     pkg-config \
     shared-mime-info \
     gcc \
