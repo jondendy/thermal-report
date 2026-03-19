@@ -89,6 +89,7 @@ steps:
       # Uncomment and extend once you've created secrets in Secret Manager:
       - --set-secrets=GOOGLE_DRIVE_CREDENTIALS=GOOGLE_DRIVE_CREDENTIALS:latest
       - --set-secrets=FLASK_SECRET_KEY=FLASK_SECRET_KEY:latest
+      - --set-secrets=GOOGLE_DRIVE_ROOT_FOLDER_ID=GOOGLE_DRIVE_ROOT_FOLDER_ID:latest
       # ── Cloud Storage bucket for persistent uploads/reports
       # Uncomment once you've created the bucket and enabled GCS FUSE:
       # - --add-volume=name=gcs-data,type=cloud-storage,bucket=sc-thermal-data
