@@ -17,7 +17,7 @@
         .upload-btn:hover { background: #45a049; }
         .process-btn { background: #FF9800; }
         .process-btn:hover { background: #F57C00; }
-        .drive-btn { background: #1a73e8; color: white; padding: 12px 30px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; text-decoration: none; display: inline-block; }
+        .drive-btn { background: #1a73e8; color: white; padding: 12px 30px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
         .drive-btn:hover { background: #1558b0; }
         .file-list { margin-top: 20px; }
         .file-item { background: white; padding: 10px; margin: 5px 0; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; }
@@ -45,14 +45,38 @@
         .success { background: #e8f5e9; color: #2e7d32; }
         .upload-divider { display: flex; align-items: center; gap: 15px; margin: 20px 0; color: #999; font-size: 14px; }
         .upload-divider::before, .upload-divider::after { content: ''; flex: 1; border-top: 1px solid #ddd; }
+
+        /* Modal */
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+        .modal-overlay.open { display: flex; }
+        .modal { background: white; border-radius: 8px; width: 90%; max-width: 600px; max-height: 80vh; display: flex; flex-direction: column; }
+        .modal-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        .modal-header h3 { color: #333; }
+        .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #999; }
+        .modal-close:hover { color: #333; }
+        .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+        .modal-footer { padding: 15px 20px; border-top: 1px solid #eee; display: flex; justify-content: flex-end; gap: 10px; }
+        .folder-item { padding: 12px 15px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 10px; border: 1px solid #eee; margin-bottom: 8px; }
+        .folder-item:hover { background: #f0f7ff; border-color: #1a73e8; }
+        .folder-item.selected { background: #e8f0fe; border-color: #1a73e8; }
+        .image-item { padding: 10px 15px; border-radius: 4px; display: flex; align-items: center; gap: 10px; border: 1px solid #eee; margin-bottom: 6px; cursor: pointer; }
+        .image-item:hover { background: #f9f9f9; }
+        .image-item input[type=checkbox] { width: 18px; height: 18px; cursor: pointer; }
+        .image-item label { cursor: pointer; flex: 1; }
+        .back-btn { background: none; border: none; color: #1a73e8; cursor: pointer; font-size: 14px; margin-bottom: 15px; display: flex; align-items: center; gap: 5px; padding: 0; }
+        .back-btn:hover { text-decoration: underline; }
+        .loading { text-align: center; padding: 30px; color: #999; }
+        .select-all-row { display: flex; align-items: center; gap: 10px; padding: 8px 15px; margin-bottom: 8px; font-size: 14px; color: #555; cursor: pointer; }
+        .select-all-row input { width: 18px; height: 18px; cursor: pointer; }
+        .selected-count { font-size: 13px; color: #1a73e8; font-weight: bold; }
     </style>
 </head>
 <body>
     <nav style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-    <a href="/" style="margin-right: 20px; color: #667eea; text-decoration: none;">🏠 Home</a>
-    <a href="/info" style="margin-right: 20px; color: #667eea; text-decoration: none;">ℹ️ User Guide</a>
-    <a href="/api/batches" style="margin-right: 20px; color: #667eea; text-decoration: none;">📊 API</a>
-</nav>
+        <a href="/" style="margin-right: 20px; color: #667eea; text-decoration: none;">🏠 Home</a>
+        <a href="/info" style="margin-right: 20px; color: #667eea; text-decoration: none;">ℹ️ User Guide</a>
+        <a href="/api/batches" style="margin-right: 20px; color: #667eea; text-decoration: none;">📊 API</a>
+    </nav>
 
     <div class="container">
         <h1>🌡️ Thermal Report - Batch Upload</h1>
@@ -68,7 +92,7 @@
 
             <div class="upload-divider">or</div>
 
-            <a href="/list_folders" class="drive-btn">📁 Choose from Google Drive</a>
+            <button class="drive-btn" onclick="openDrivePicker()">📁 Choose from Google Drive</button>
 
             <div class="file-list" id="fileList"></div>
             <progress id="progress" max="100" value="0"></progress>
@@ -118,51 +142,47 @@
         </div>
     </div>
 
+    <!-- Drive Picker Modal -->
+    <div class="modal-overlay" id="driveModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modalTitle">📁 Select a Job Folder</h3>
+                <button class="modal-close" onclick="closeDrivePicker()">✕</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <div class="loading">Loading folders...</div>
+            </div>
+            <div class="modal-footer" id="modalFooter" style="display:none;">
+                <span class="selected-count" id="selectedCount">0 images selected</span>
+                <button class="upload-btn" style="padding:8px 20px;" onclick="processDriveImages()">Process Selected</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let selectedFiles = [];
+        let driveSelectedImages = [];
+        let currentFolderId = null;
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
         const fileList = document.getElementById('fileList');
         const message = document.getElementById('message');
         const progress = document.getElementById('progress');
 
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, preventDefaults, false);
+        // ── Drag & drop ──────────────────────────────────────────────────────
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(e => {
+            dropZone.addEventListener(e, ev => { ev.preventDefault(); ev.stopPropagation(); }, false);
         });
-
-        function preventDefaults(e) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => dropZone.classList.add('drag-over'), false);
-        });
-
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => dropZone.classList.remove('drag-over'), false);
-        });
-
-        dropZone.addEventListener('drop', handleDrop, false);
-
-        function handleDrop(e) {
-            const dt = e.dataTransfer;
-            const files = Array.from(dt.files);
-            addFiles(files);
-        }
-
-        fileInput.addEventListener('change', (e) => {
-            addFiles(Array.from(e.target.files));
-        });
+        ['dragenter', 'dragover'].forEach(e => dropZone.addEventListener(e, () => dropZone.classList.add('drag-over')));
+        ['dragleave', 'drop'].forEach(e => dropZone.addEventListener(e, () => dropZone.classList.remove('drag-over')));
+        dropZone.addEventListener('drop', e => addFiles(Array.from(e.dataTransfer.files)));
+        fileInput.addEventListener('change', e => addFiles(Array.from(e.target.files)));
 
         function addFiles(files) {
             files.forEach(file => {
                 if (file.type === 'image/jpeg' || file.name.toLowerCase().endsWith('.jpg')) {
-                    if (selectedFiles.length < 8) {
-                        selectedFiles.push(file);
-                    } else {
-                        showMessage('Maximum 8 images per batch', 'error');
-                    }
+                    if (selectedFiles.length < 8) selectedFiles.push(file);
+                    else showMessage('Maximum 8 images per batch', 'error');
                 }
             });
             updateFileList();
@@ -173,18 +193,13 @@
             selectedFiles.forEach((file, index) => {
                 const div = document.createElement('div');
                 div.className = 'file-item';
-                div.innerHTML = `
-                    <span>${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)</span>
-                    <span class="remove-file" onclick="removeFile(${index})">✕ Remove</span>
-                `;
+                div.innerHTML = `<span>${file.name} (${(file.size/1024/1024).toFixed(2)} MB)</span>
+                    <span class="remove-file" onclick="removeFile(${index})">✕ Remove</span>`;
                 fileList.appendChild(div);
             });
         }
 
-        function removeFile(index) {
-            selectedFiles.splice(index, 1);
-            updateFileList();
-        }
+        function removeFile(index) { selectedFiles.splice(index, 1); updateFileList(); }
 
         function showMessage(msg, type) {
             message.className = 'message ' + type;
@@ -193,33 +208,20 @@
             setTimeout(() => message.style.display = 'none', 5000);
         }
 
+        // ── Local upload ─────────────────────────────────────────────────────
         async function uploadFiles() {
-            if (selectedFiles.length === 0) {
-                showMessage('Please select images first', 'error');
-                return;
-            }
-
-            if (selectedFiles.length < 6) {
-                if (!confirm('You have less than 6 images. Continue anyway?')) return;
-            }
-
+            if (selectedFiles.length === 0) { showMessage('Please select images first', 'error'); return; }
+            if (selectedFiles.length < 6 && !confirm('You have less than 6 images. Continue anyway?')) return;
             const formData = new FormData();
             selectedFiles.forEach(file => formData.append('files', file));
-
             progress.style.display = 'block';
             progress.value = 0;
-
             try {
-                const response = await fetch('/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-
+                const response = await fetch('/upload', { method: 'POST', body: formData });
                 progress.value = 100;
-
                 if (response.ok) {
                     const result = await response.json();
-                    showMessage(`Batch processed successfully! ${result.results.summary.total_images} images processed.`, 'success');
+                    showMessage(`Batch processed! ${result.results.summary.total_images} images processed.`, 'success');
                     selectedFiles = [];
                     updateFileList();
                     setTimeout(() => location.reload(), 2000);
@@ -227,26 +229,135 @@
                     const error = await response.json();
                     showMessage('Error: ' + (error.error || 'Upload failed'), 'error');
                 }
-            } catch (error) {
-                showMessage('Error: ' + error.message, 'error');
+            } catch (e) {
+                showMessage('Error: ' + e.message, 'error');
             } finally {
                 setTimeout(() => progress.style.display = 'none', 2000);
             }
         }
 
+        // ── Drive picker ─────────────────────────────────────────────────────
+        async function openDrivePicker() {
+            driveSelectedImages = [];
+            document.getElementById('driveModal').classList.add('open');
+            document.getElementById('modalTitle').textContent = '📁 Select a Job Folder';
+            document.getElementById('modalFooter').style.display = 'none';
+            const body = document.getElementById('modalBody');
+            body.innerHTML = '<div class="loading">⏳ Loading folders...</div>';
+            try {
+                const res = await fetch('/list_folders');
+                const data = await res.json();
+                if (data.error) { body.innerHTML = `<div class="loading" style="color:#c62828;">Error: ${data.error}</div>`; return; }
+                if (!data.folders.length) { body.innerHTML = '<div class="loading">No folders found in Drive.</div>'; return; }
+                body.innerHTML = '';
+                data.folders.forEach(folder => {
+                    const div = document.createElement('div');
+                    div.className = 'folder-item';
+                    div.innerHTML = `<span>📁</span><span>${folder.name}</span>`;
+                    div.onclick = () => loadFolderImages(folder.id, folder.name);
+                    body.appendChild(div);
+                });
+            } catch (e) {
+                body.innerHTML = `<div class="loading" style="color:#c62828;">Failed to load folders: ${e.message}</div>`;
+            }
+        }
+
+        async function loadFolderImages(folderId, folderName) {
+            currentFolderId = folderId;
+            driveSelectedImages = [];
+            document.getElementById('modalTitle').textContent = `📂 ${folderName}`;
+            document.getElementById('modalFooter').style.display = 'none';
+            const body = document.getElementById('modalBody');
+            body.innerHTML = '<div class="loading">⏳ Loading images...</div>';
+            try {
+                const res = await fetch(`/select_images?folder_id=${folderId}`);
+                const data = await res.json();
+                if (data.error) { body.innerHTML = `<div class="loading" style="color:#c62828;">Error: ${data.error}</div>`; return; }
+                if (!data.images.length) { body.innerHTML = `<button class="back-btn" onclick="openDrivePicker()">← Back</button><div class="loading">No images found in this folder.</div>`; return; }
+
+                body.innerHTML = `<button class="back-btn" onclick="openDrivePicker()">← Back to folders</button>
+                    <div class="select-all-row">
+                        <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)">
+                        <label for="selectAll">Select all (${data.images.length} images)</label>
+                    </div>`;
+
+                data.images.forEach(img => {
+                    const div = document.createElement('div');
+                    div.className = 'image-item';
+                    div.innerHTML = `<input type="checkbox" id="img_${img.id}" value="${img.id}" data-name="${img.name}" onchange="updateDriveSelection()">
+                        <label for="img_${img.id}">🖼️ ${img.name}</label>`;
+                    body.appendChild(div);
+                });
+                document.getElementById('modalFooter').style.display = 'flex';
+                updateDriveSelection();
+            } catch (e) {
+                body.innerHTML = `<div class="loading" style="color:#c62828;">Failed to load images: ${e.message}</div>`;
+            }
+        }
+
+        function toggleSelectAll(cb) {
+            document.querySelectorAll('#modalBody input[type=checkbox][id^=img_]').forEach(c => c.checked = cb.checked);
+            updateDriveSelection();
+        }
+
+        function updateDriveSelection() {
+            const checked = document.querySelectorAll('#modalBody input[type=checkbox][id^=img_]:checked');
+            driveSelectedImages = Array.from(checked).map(c => ({ id: c.value, name: c.dataset.name }));
+            document.getElementById('selectedCount').textContent = `${driveSelectedImages.length} image${driveSelectedImages.length !== 1 ? 's' : ''} selected`;
+        }
+
+        async function processDriveImages() {
+            if (driveSelectedImages.length === 0) { showMessage('Please select at least one image', 'error'); return; }
+            if (driveSelectedImages.length < 6 && !confirm(`Only ${driveSelectedImages.length} images selected. Continue anyway?`)) return;
+            if (driveSelectedImages.length > 8) { showMessage('Maximum 8 images per batch', 'error'); return; }
+            closeDrivePicker();
+            showMessage('⏳ Downloading images from Drive and processing...', 'success');
+            progress.style.display = 'block';
+            progress.value = 30;
+            try {
+                const res = await fetch('/upload_from_drive', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ images: driveSelectedImages, folder_id: currentFolderId })
+                });
+                progress.value = 100;
+                if (res.ok) {
+                    const result = await res.json();
+                    showMessage(`Batch processed! ${result.results.summary.total_images} images processed.`, 'success');
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    const err = await res.json();
+                    showMessage('Error: ' + (err.error || 'Processing failed'), 'error');
+                }
+            } catch (e) {
+                showMessage('Error: ' + e.message, 'error');
+            } finally {
+                setTimeout(() => progress.style.display = 'none', 2000);
+            }
+        }
+
+        function closeDrivePicker() {
+            document.getElementById('driveModal').classList.remove('open');
+        }
+
+        // Close modal on overlay click
+        document.getElementById('driveModal').addEventListener('click', function(e) {
+            if (e.target === this) closeDrivePicker();
+        });
+
+        // ── Delete batch ─────────────────────────────────────────────────────
         async function deleteBatch(batchId) {
             if (!confirm('Delete this batch? This cannot be undone.')) return;
-
             try {
-                const response = await fetch(`/delete/${batchId}`, { method: 'POST' });
+                const response = await fetch(`/delete/${batchId}`, { method: 'DELETE' });
                 if (response.ok) {
                     showMessage('Batch deleted', 'success');
                     setTimeout(() => location.reload(), 1000);
                 } else {
                     showMessage('Error deleting batch', 'error');
                 }
-            } catch (error) {
-                showMessage('Error: ' + error.message, 'error');
+            } catch (e) {
+                showMessage('Error: ' + e.message, 'error');
             }
         }
     </script>

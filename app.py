@@ -266,3 +266,38 @@ def server_error(error) -> tuple:
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(debug=False, host="0.0.0.0", port=port)
+
+@app.route("/upload_from_drive", methods=["POST"])
+def upload_from_drive():
+    import tempfile, io
+    from services.drive_client import download_file as drive_download
+    tenant_id = _get_tenant_id()
+    data = request.get_json()
+    images = data.get("images", [])
+    if not images:
+        return jsonify({"error": "No images specified"}), 400
+    try:
+        tmp_files = []
+        for img in images:
+            tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+            drive_download(img["id"], tmp.name)
+            tmp_files.append((tmp.name, img["name"]))
+
+        from werkzeug.datastructures import FileStorage
+        file_objects = []
+        for path, name in tmp_files:
+            with open(path, "rb") as f:
+                fs = FileStorage(stream=io.BytesIO(f.read()), filename=name, content_type="image/jpeg")
+                file_objects.append(fs)
+
+        batch_id = batchservice.get_batch_id(file_objects)
+        results = batchservice.process_batch(batch_id, file_objects, tenant_id)
+        summary = results.get("summary", {})
+
+        for path, _ in tmp_files:
+            os.unlink(path)
+
+        return jsonify({"batchid": batch_id, "results": {"summary": summary}})
+    except Exception as e:
+        logger.exception(f"Drive upload error: {e}")
+        return jsonify({"error": str(e)}), 500
