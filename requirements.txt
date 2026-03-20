@@ -19,3 +19,6 @@ flask>=2.0.0
 
 # WSGI server for production (Cloud Run)
 gunicorn>=21.0.0
+google-auth==2.29.0
+google-auth-httplib2==0.2.0
+google-api-python-client==2.126.0
