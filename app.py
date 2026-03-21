@@ -301,3 +301,20 @@ def upload_from_drive():
     except Exception as e:
         logger.exception(f"Drive upload error: {e}")
         return jsonify({"error": str(e)}), 500
+
+@app.route("/api/reprocess_batch/<batch_id>", methods=["POST"])
+def reprocess_batch(batch_id: str) -> Any:
+    """Reprocess a batch with new sensitivity settings."""
+    tenant_id = _get_tenant_id()
+    try:
+        data = request.get_json() or {}
+        sensitivity = data.get("sensitivity", "medium")
+        results = batchservice.reprocess_batch(batch_id, sensitivity, tenant_id)
+        summary = results.get("summary", {})
+        return jsonify({"success": True, "results": {"summary": summary}})
+    except FileNotFoundError:
+        logger.error(f"Batch {batch_id} not found for reprocess")
+        return jsonify({"error": "Batch not found"}), 404
+    except Exception as e:
+        logger.exception(f"Reprocess error for {batch_id}: {e}")
+        return jsonify({"error": str(e)}), 500
