@@ -47,28 +47,43 @@
         .upload-divider::before, .upload-divider::after { content: ''; flex: 1; border-top: 1px solid #ddd; }
 
         /* Modal */
-        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; }
         .modal-overlay.open { display: flex; }
-        .modal { background: white; border-radius: 8px; width: 90%; max-width: 600px; max-height: 80vh; display: flex; flex-direction: column; }
-        .modal-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
-        .modal-header h3 { color: #333; }
-        .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #999; }
+        .modal { background: white; border-radius: 8px; width: 95%; max-width: 900px; max-height: 88vh; display: flex; flex-direction: column; }
+        .modal-header { padding: 18px 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+        .modal-header h3 { color: #333; font-size: 18px; }
+        .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #999; line-height: 1; }
         .modal-close:hover { color: #333; }
         .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
-        .modal-footer { padding: 15px 20px; border-top: 1px solid #eee; display: flex; justify-content: flex-end; gap: 10px; }
-        .folder-item { padding: 12px 15px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 10px; border: 1px solid #eee; margin-bottom: 8px; }
-        .folder-item:hover { background: #f0f7ff; border-color: #1a73e8; }
-        .folder-item.selected { background: #e8f0fe; border-color: #1a73e8; }
-        .image-item { padding: 10px 15px; border-radius: 4px; display: flex; align-items: center; gap: 10px; border: 1px solid #eee; margin-bottom: 6px; cursor: pointer; }
-        .image-item:hover { background: #f9f9f9; }
-        .image-item input[type=checkbox] { width: 18px; height: 18px; cursor: pointer; }
-        .image-item label { cursor: pointer; flex: 1; }
-        .back-btn { background: none; border: none; color: #1a73e8; cursor: pointer; font-size: 14px; margin-bottom: 15px; display: flex; align-items: center; gap: 5px; padding: 0; }
+        .modal-footer { padding: 14px 20px; border-top: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+
+        /* Folder list */
+        .folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+        .folder-item { padding: 14px 16px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 10px; border: 1px solid #e0e0e0; background: #fafafa; transition: all 0.15s; }
+        .folder-item:hover { background: #e8f0fe; border-color: #1a73e8; transform: translateY(-1px); }
+        .folder-name { font-size: 14px; color: #333; word-break: break-word; }
+
+        /* Image grid */
+        .image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
+        .image-card { border: 2px solid #e0e0e0; border-radius: 8px; overflow: hidden; cursor: pointer; transition: all 0.15s; background: white; position: relative; }
+        .image-card:hover { border-color: #1a73e8; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(26,115,232,0.15); }
+        .image-card.selected { border-color: #1a73e8; background: #e8f0fe; }
+        .image-card.selected::after { content: '✓'; position: absolute; top: 6px; right: 6px; background: #1a73e8; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; }
+        .thumb-wrap { width: 100%; height: 130px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .thumb-wrap img { width: 100%; height: 100%; object-fit: cover; }
+        .thumb-placeholder { font-size: 40px; }
+        .image-meta { padding: 8px 10px; }
+        .image-name { font-size: 12px; font-weight: 600; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
+        .image-details { font-size: 11px; color: #777; line-height: 1.5; }
+
+        /* Controls bar */
+        .controls-bar { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #eee; flex-wrap: wrap; }
+        .back-btn { background: none; border: none; color: #1a73e8; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 4px; padding: 0; white-space: nowrap; }
         .back-btn:hover { text-decoration: underline; }
-        .loading { text-align: center; padding: 30px; color: #999; }
-        .select-all-row { display: flex; align-items: center; gap: 10px; padding: 8px 15px; margin-bottom: 8px; font-size: 14px; color: #555; cursor: pointer; }
-        .select-all-row input { width: 18px; height: 18px; cursor: pointer; }
-        .selected-count { font-size: 13px; color: #1a73e8; font-weight: bold; }
+        .select-all-label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #555; cursor: pointer; }
+        .select-all-label input { width: 17px; height: 17px; cursor: pointer; }
+        .selected-count { font-size: 13px; color: #1a73e8; font-weight: 600; margin-left: auto; }
+        .loading { text-align: center; padding: 40px; color: #999; font-size: 15px; }
     </style>
 </head>
 <body>
@@ -89,11 +104,8 @@
             <input type="file" id="fileInput" multiple accept=".jpg,.jpeg" />
             <button class="upload-btn" onclick="document.getElementById('fileInput').click()">Select Images</button>
             <button class="upload-btn process-btn" onclick="uploadFiles()" style="margin-left:10px;">Process Batch</button>
-
             <div class="upload-divider">or</div>
-
             <button class="drive-btn" onclick="openDrivePicker()">📁 Choose from Google Drive</button>
-
             <div class="file-list" id="fileList"></div>
             <progress id="progress" max="100" value="0"></progress>
             <div id="message"></div>
@@ -150,11 +162,14 @@
                 <button class="modal-close" onclick="closeDrivePicker()">✕</button>
             </div>
             <div class="modal-body" id="modalBody">
-                <div class="loading">Loading folders...</div>
+                <div class="loading">⏳ Loading folders...</div>
             </div>
             <div class="modal-footer" id="modalFooter" style="display:none;">
+                <label class="select-all-label">
+                    <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)"> Select all
+                </label>
                 <span class="selected-count" id="selectedCount">0 images selected</span>
-                <button class="upload-btn" style="padding:8px 20px;" onclick="processDriveImages()">Process Selected</button>
+                <button class="upload-btn" style="padding:10px 24px;" onclick="processDriveImages()">⚡ Process Selected</button>
             </div>
         </div>
     </div>
@@ -170,11 +185,10 @@
         const progress = document.getElementById('progress');
 
         // ── Drag & drop ──────────────────────────────────────────────────────
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(e => {
-            dropZone.addEventListener(e, ev => { ev.preventDefault(); ev.stopPropagation(); }, false);
-        });
-        ['dragenter', 'dragover'].forEach(e => dropZone.addEventListener(e, () => dropZone.classList.add('drag-over')));
-        ['dragleave', 'drop'].forEach(e => dropZone.addEventListener(e, () => dropZone.classList.remove('drag-over')));
+        ['dragenter','dragover','dragleave','drop'].forEach(e =>
+            dropZone.addEventListener(e, ev => { ev.preventDefault(); ev.stopPropagation(); }));
+        ['dragenter','dragover'].forEach(e => dropZone.addEventListener(e, () => dropZone.classList.add('drag-over')));
+        ['dragleave','drop'].forEach(e => dropZone.addEventListener(e, () => dropZone.classList.remove('drag-over')));
         dropZone.addEventListener('drop', e => addFiles(Array.from(e.dataTransfer.files)));
         fileInput.addEventListener('change', e => addFiles(Array.from(e.target.files)));
 
@@ -205,40 +219,35 @@
             message.className = 'message ' + type;
             message.textContent = msg;
             message.style.display = 'block';
-            setTimeout(() => message.style.display = 'none', 5000);
+            setTimeout(() => message.style.display = 'none', 6000);
         }
 
         // ── Local upload ─────────────────────────────────────────────────────
         async function uploadFiles() {
-            if (selectedFiles.length === 0) { showMessage('Please select images first', 'error'); return; }
+            if (!selectedFiles.length) { showMessage('Please select images first', 'error'); return; }
             if (selectedFiles.length < 6 && !confirm('You have less than 6 images. Continue anyway?')) return;
             const formData = new FormData();
-            selectedFiles.forEach(file => formData.append('files', file));
-            progress.style.display = 'block';
-            progress.value = 0;
+            selectedFiles.forEach(f => formData.append('files', f));
+            progress.style.display = 'block'; progress.value = 0;
             try {
-                const response = await fetch('/upload', { method: 'POST', body: formData });
+                const res = await fetch('/upload', { method: 'POST', body: formData });
                 progress.value = 100;
-                if (response.ok) {
-                    const result = await response.json();
-                    showMessage(`Batch processed! ${result.results.summary.total_images} images processed.`, 'success');
-                    selectedFiles = [];
-                    updateFileList();
+                if (res.ok) {
+                    const r = await res.json();
+                    showMessage(`Batch processed! ${r.results.summary.total_images} images processed.`, 'success');
+                    selectedFiles = []; updateFileList();
                     setTimeout(() => location.reload(), 2000);
                 } else {
-                    const error = await response.json();
-                    showMessage('Error: ' + (error.error || 'Upload failed'), 'error');
+                    const err = await res.json();
+                    showMessage('Error: ' + (err.error || 'Upload failed'), 'error');
                 }
-            } catch (e) {
-                showMessage('Error: ' + e.message, 'error');
-            } finally {
-                setTimeout(() => progress.style.display = 'none', 2000);
-            }
+            } catch(e) { showMessage('Error: ' + e.message, 'error'); }
+            finally { setTimeout(() => progress.style.display = 'none', 2000); }
         }
 
-        // ── Drive picker ─────────────────────────────────────────────────────
+        // ── Drive picker — folder list ────────────────────────────────────────
         async function openDrivePicker() {
-            driveSelectedImages = [];
+            driveSelectedImages = []; currentFolderId = null;
             document.getElementById('driveModal').classList.add('open');
             document.getElementById('modalTitle').textContent = '📁 Select a Job Folder';
             document.getElementById('modalFooter').style.display = 'none';
@@ -247,73 +256,117 @@
             try {
                 const res = await fetch('/list_folders');
                 const data = await res.json();
-                if (data.error) { body.innerHTML = `<div class="loading" style="color:#c62828;">Error: ${data.error}</div>`; return; }
-                if (!data.folders.length) { body.innerHTML = '<div class="loading">No folders found in Drive.</div>'; return; }
-                body.innerHTML = '';
+                if (data.error) { body.innerHTML = `<div class="loading" style="color:#c62828">Error: ${data.error}</div>`; return; }
+                if (!data.folders.length) { body.innerHTML = '<div class="loading">No folders found.</div>'; return; }
+                body.innerHTML = '<div class="folder-grid"></div>';
+                const grid = body.querySelector('.folder-grid');
                 data.folders.forEach(folder => {
                     const div = document.createElement('div');
                     div.className = 'folder-item';
-                    div.innerHTML = `<span>📁</span><span>${folder.name}</span>`;
+                    div.innerHTML = `<span style="font-size:22px">📁</span><span class="folder-name">${folder.name}</span>`;
                     div.onclick = () => loadFolderImages(folder.id, folder.name);
-                    body.appendChild(div);
+                    grid.appendChild(div);
                 });
-            } catch (e) {
-                body.innerHTML = `<div class="loading" style="color:#c62828;">Failed to load folders: ${e.message}</div>`;
-            }
+            } catch(e) { body.innerHTML = `<div class="loading" style="color:#c62828">Failed: ${e.message}</div>`; }
         }
 
+        // ── Drive picker — image grid ─────────────────────────────────────────
         async function loadFolderImages(folderId, folderName) {
-            currentFolderId = folderId;
-            driveSelectedImages = [];
+            currentFolderId = folderId; driveSelectedImages = [];
             document.getElementById('modalTitle').textContent = `📂 ${folderName}`;
             document.getElementById('modalFooter').style.display = 'none';
+            document.getElementById('selectAll').checked = false;
             const body = document.getElementById('modalBody');
             body.innerHTML = '<div class="loading">⏳ Loading images...</div>';
             try {
                 const res = await fetch(`/select_images?folder_id=${folderId}`);
                 const data = await res.json();
-                if (data.error) { body.innerHTML = `<div class="loading" style="color:#c62828;">Error: ${data.error}</div>`; return; }
-                if (!data.images.length) { body.innerHTML = `<button class="back-btn" onclick="openDrivePicker()">← Back</button><div class="loading">No images found in this folder.</div>`; return; }
-
-                body.innerHTML = `<button class="back-btn" onclick="openDrivePicker()">← Back to folders</button>
-                    <div class="select-all-row">
-                        <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)">
-                        <label for="selectAll">Select all (${data.images.length} images)</label>
-                    </div>`;
-
+                if (data.error) { body.innerHTML = `<div class="loading" style="color:#c62828">Error: ${data.error}</div>`; return; }
+                if (!data.images.length) {
+                    body.innerHTML = `<button class="back-btn" onclick="openDrivePicker()">← Back to folders</button>
+                        <div class="loading">No images found in this folder.</div>`;
+                    return;
+                }
+                body.innerHTML = `<div class="controls-bar">
+                    <button class="back-btn" onclick="openDrivePicker()">← Back to folders</button>
+                    <span style="font-size:13px;color:#666">${data.images.length} image${data.images.length!==1?'s':''} found</span>
+                </div>
+                <div class="image-grid" id="imageGrid"></div>`;
+                const grid = document.getElementById('imageGrid');
                 data.images.forEach(img => {
-                    const div = document.createElement('div');
-                    div.className = 'image-item';
-                    div.innerHTML = `<input type="checkbox" id="img_${img.id}" value="${img.id}" data-name="${img.name}" onchange="updateDriveSelection()">
-                        <label for="img_${img.id}">🖼️ ${img.name}</label>`;
-                    body.appendChild(div);
+                    const meta = img.imageMediaMetadata || {};
+                    const date = meta.time ? meta.time.substring(0,16).replace('T',' ') : '—';
+                    const dims = (meta.width && meta.height) ? `${meta.width}×${meta.height}` : '—';
+                    const size = img.size ? `${(img.size/1024).toFixed(0)} KB` : '—';
+                    const card = document.createElement('div');
+                    card.className = 'image-card';
+                    card.dataset.id = img.id;
+                    card.dataset.name = img.name;
+                    card.innerHTML = `
+                        <div class="thumb-wrap">
+                            ${img.thumbnailLink
+                                ? `<img src="${img.thumbnailLink}" alt="${img.name}" loading="lazy">`
+                                : `<span class="thumb-placeholder">🖼️</span>`}
+                        </div>
+                        <div class="image-meta">
+                            <div class="image-name" title="${img.name}">${img.name}</div>
+                            <div class="image-details">
+                                📅 ${date}<br>
+                                📐 ${dims}<br>
+                                💾 ${size}
+                            </div>
+                        </div>`;
+                    card.onclick = () => toggleImageCard(card, img);
+                    grid.appendChild(card);
                 });
                 document.getElementById('modalFooter').style.display = 'flex';
                 updateDriveSelection();
-            } catch (e) {
-                body.innerHTML = `<div class="loading" style="color:#c62828;">Failed to load images: ${e.message}</div>`;
+            } catch(e) { body.innerHTML = `<div class="loading" style="color:#c62828">Failed: ${e.message}</div>`; }
+        }
+
+        function toggleImageCard(card, img) {
+            const idx = driveSelectedImages.findIndex(i => i.id === img.id);
+            if (idx === -1) {
+                if (driveSelectedImages.length >= 8) { showMessage('Maximum 8 images per batch', 'error'); return; }
+                driveSelectedImages.push({ id: img.id, name: img.name });
+                card.classList.add('selected');
+            } else {
+                driveSelectedImages.splice(idx, 1);
+                card.classList.remove('selected');
             }
+            updateDriveSelection();
         }
 
         function toggleSelectAll(cb) {
-            document.querySelectorAll('#modalBody input[type=checkbox][id^=img_]').forEach(c => c.checked = cb.checked);
+            const cards = document.querySelectorAll('#imageGrid .image-card');
+            driveSelectedImages = [];
+            cards.forEach(card => {
+                if (cb.checked) {
+                    if (driveSelectedImages.length < 8) {
+                        driveSelectedImages.push({ id: card.dataset.id, name: card.dataset.name });
+                        card.classList.add('selected');
+                    } else {
+                        card.classList.remove('selected');
+                    }
+                } else {
+                    card.classList.remove('selected');
+                }
+            });
             updateDriveSelection();
         }
 
         function updateDriveSelection() {
-            const checked = document.querySelectorAll('#modalBody input[type=checkbox][id^=img_]:checked');
-            driveSelectedImages = Array.from(checked).map(c => ({ id: c.value, name: c.dataset.name }));
-            document.getElementById('selectedCount').textContent = `${driveSelectedImages.length} image${driveSelectedImages.length !== 1 ? 's' : ''} selected`;
+            const n = driveSelectedImages.length;
+            document.getElementById('selectedCount').textContent = `${n} image${n!==1?'s':''} selected`;
         }
 
+        // ── Process Drive images ──────────────────────────────────────────────
         async function processDriveImages() {
-            if (driveSelectedImages.length === 0) { showMessage('Please select at least one image', 'error'); return; }
-            if (driveSelectedImages.length < 6 && !confirm(`Only ${driveSelectedImages.length} images selected. Continue anyway?`)) return;
-            if (driveSelectedImages.length > 8) { showMessage('Maximum 8 images per batch', 'error'); return; }
+            if (!driveSelectedImages.length) { showMessage('Please select at least one image', 'error'); return; }
+            if (driveSelectedImages.length < 6 && !confirm(`Only ${driveSelectedImages.length} selected. Continue anyway?`)) return;
             closeDrivePicker();
             showMessage('⏳ Downloading images from Drive and processing...', 'success');
-            progress.style.display = 'block';
-            progress.value = 30;
+            progress.style.display = 'block'; progress.value = 30;
             try {
                 const res = await fetch('/upload_from_drive', {
                     method: 'POST',
@@ -322,43 +375,28 @@
                 });
                 progress.value = 100;
                 if (res.ok) {
-                    const result = await res.json();
-                    showMessage(`Batch processed! ${result.results.summary.total_images} images processed.`, 'success');
+                    const r = await res.json();
+                    showMessage(`Batch processed! ${r.results.summary.total_images} images processed.`, 'success');
                     setTimeout(() => location.reload(), 2000);
                 } else {
                     const err = await res.json();
                     showMessage('Error: ' + (err.error || 'Processing failed'), 'error');
                 }
-            } catch (e) {
-                showMessage('Error: ' + e.message, 'error');
-            } finally {
-                setTimeout(() => progress.style.display = 'none', 2000);
-            }
+            } catch(e) { showMessage('Error: ' + e.message, 'error'); }
+            finally { setTimeout(() => progress.style.display = 'none', 2000); }
         }
 
-        function closeDrivePicker() {
-            document.getElementById('driveModal').classList.remove('open');
-        }
+        function closeDrivePicker() { document.getElementById('driveModal').classList.remove('open'); }
+        document.getElementById('driveModal').addEventListener('click', function(e) { if (e.target===this) closeDrivePicker(); });
 
-        // Close modal on overlay click
-        document.getElementById('driveModal').addEventListener('click', function(e) {
-            if (e.target === this) closeDrivePicker();
-        });
-
-        // ── Delete batch ─────────────────────────────────────────────────────
+        // ── Delete batch ──────────────────────────────────────────────────────
         async function deleteBatch(batchId) {
             if (!confirm('Delete this batch? This cannot be undone.')) return;
             try {
-                const response = await fetch(`/delete/${batchId}`, { method: 'DELETE' });
-                if (response.ok) {
-                    showMessage('Batch deleted', 'success');
-                    setTimeout(() => location.reload(), 1000);
-                } else {
-                    showMessage('Error deleting batch', 'error');
-                }
-            } catch (e) {
-                showMessage('Error: ' + e.message, 'error');
-            }
+                const res = await fetch(`/delete/${batchId}`, { method: 'DELETE' });
+                if (res.ok) { showMessage('Batch deleted', 'success'); setTimeout(() => location.reload(), 1000); }
+                else showMessage('Error deleting batch', 'error');
+            } catch(e) { showMessage('Error: ' + e.message, 'error'); }
         }
     </script>
 </body>

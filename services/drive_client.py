@@ -25,7 +25,11 @@ def list_folders(parent_id):
 def list_files_in_folder(folder_id):
     service = get_drive_service()
     q = f"'{folder_id}' in parents and trashed=false"
-    results = service.files().list(q=q, fields="files(id, name, mimeType)").execute()
+    results = service.files().list(
+        q=q,
+        fields="files(id, name, mimeType, thumbnailLink, imageMediaMetadata, size)",
+        orderBy="name"
+    ).execute()
     return results.get("files", [])
 
 def get_folder_metadata(folder_id: str) -> dict:
