@@ -1,4 +1,4 @@
-"""Batch service: orchestrates upload, processing, and batch management.
+	"""Batch service: orchestrates upload, processing, and batch management.
 Separates batch logic from Flask routing.
 """
 from __future__ import annotations
@@ -18,11 +18,20 @@ from settings import (
     ALLOWED_EXTENSIONS,
 )
 from utils.security_utils import safe_batch_path, validate_tenant_id
+import numpy as np	
 import services.batch_io as batchio
-from services.flir_processor_simple import SimpleFLIRProcessor
 from services.thermal_analyzer import ThermalAnalyzer
 from services.thermal_data_service import ThermalDataExtractor, save_thermal_data
 
+def _compute_stats(temp_data):
+    valid = temp_data[np.isfinite(temp_data)]
+    if len(valid) == 0:
+        return {'min': 0.0, 'max': 0.0, 'mean': 0.0, 'median': 0.0, 'std': 0.0}
+    return {
+        'min': float(np.min(valid)), 'max': float(np.max(valid)),
+        'mean': float(np.mean(valid)), 'median': float(np.median(valid)),
+        'std': float(np.std(valid)),
+    }	
 
 def get_batch_id(files: Iterable[FileStorage]) -> str:
     """
@@ -48,7 +57,7 @@ def process_batch(
     """
     Process a batch of uploaded thermal images.
     
-    - Extract temperature data using SimpleFLIRProcessor
+    - Extract temperature data using FLIR Extractor
     - Detect hot spots using ThermalAnalyzer with HIGH sensitivity
     - Generate labeled images and reports
     - Save results to batch directory
@@ -74,7 +83,7 @@ def process_batch(
     upload_dir = BASE_UPLOAD_PATH / tenant_id / batch_id
     upload_dir.mkdir(parents=True, exist_ok=True)
     
-    processor = SimpleFLIRProcessor()
+    extractor = ThermalDataExtractor()	
     # Use HIGH sensitivity to detect more hotspots for operator review
     analyzer = ThermalAnalyzer(sensitivity='high')
     
@@ -103,9 +112,12 @@ def process_batch(
     all_temps = []
     for image_path in saved_images:
         try:
-            temp_data, stats = processor.process_single_image(image_path, display=False)
+            temp_data = extractor.extract_thermal_data(Path(image_path))
+            if temp_data is None:
+                raise ValueError("Could not extract thermal data from image")
+            stats = _compute_stats(temp_data)
 
-            # Extract thermal temperature data for coordinate lookups
+            # Ex	tract thermal temperature data for coordinate lookups
             thermal_extractor = ThermalDataExtractor()
             thermal_data = thermal_extractor.extract_thermal_data(Path(image_path))
             
@@ -266,7 +278,7 @@ def reprocess_batch(batch_id: str, sensitivity: str = 'medium', tenant_id: str |
     if not saved_images:
         raise FileNotFoundError(f"No images found in batch directory for {batch_id}")
 
-    processor = SimpleFLIRProcessor()
+    extractor = ThermalDataExtractor()
     analyzer = ThermalAnalyzer(sensitivity=sensitivity)
 
     results = {
@@ -280,7 +292,10 @@ def reprocess_batch(batch_id: str, sensitivity: str = 'medium', tenant_id: str |
     all_temps = []
     for image_path in saved_images:
         try:
-            temp_data, stats = processor.process_single_image(image_path, display=False)
+            temp_data = extractor.extract_thermal_data(Path(image_path))
+            if temp_data is None:
+                raise ValueError("Could not extract thermal data from image")
+            stats = _compute_stats(temp_data)
 
             hot_spots = analyzer.detect_hot_spots(temp_data, image_path=image_path)
 
