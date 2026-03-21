@@ -3,7 +3,7 @@
 # Or via compose: docker compose up --build -d
 
 FROM python:3.11-slim
-
+	
 LABEL maintainer="thermal-report"
 LABEL description="Thermal survey report web application"
 
@@ -35,6 +35,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+# ── Pre-warm flirimageextractor dji_executables ──────────────────────────
+# flirimageextractor unpacks bundled executables on first use.
+# Cloud Run has a read-only package filesystem at runtime, so we force
+# the extraction to happen now (as root) during the build layer.
+RUN python -c "from flirimageextractor import FlirImageExtractor; FlirImageExtractor()" 2>/dev/null || true \
+    && find /usr/local/lib/python3.11/site-packages/dji_executables -type f -exec chmod +x {} \; 2>/dev/null || true
+
 
 # ── Application files ──────────────────────────────────────────────────────
 COPY . .
