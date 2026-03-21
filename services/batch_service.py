@@ -1,4 +1,4 @@
-	"""Batch service: orchestrates upload, processing, and batch management.
+"""Batch service: orchestrates upload, processing, and batch management.
 Separates batch logic from Flask routing.
 """
 from __future__ import annotations
@@ -6,8 +6,9 @@ from __future__ import annotations
 import hashlib
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable, Dict, Any, Tuple, List
+from typing import Iterable, Dict, Any, List
 
+import numpy as np
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
@@ -18,35 +19,28 @@ from settings import (
     ALLOWED_EXTENSIONS,
 )
 from utils.security_utils import safe_batch_path, validate_tenant_id
-import numpy as np	
 import services.batch_io as batchio
 from services.thermal_analyzer import ThermalAnalyzer
 from services.thermal_data_service import ThermalDataExtractor, save_thermal_data
 
-def _compute_stats(temp_data):
+
+def get_batch_id(files: Iterable[FileStorage]) -> str:
+    file_list = sorted([f.filename or "" for f in files if f and f.filename])
+    hash_str = hashlib.md5(''.join(file_list).encode()).hexdigest()[:8]
+    return f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hash_str}"
+
+
+def _compute_stats(temp_data: np.ndarray) -> Dict[str, float]:
     valid = temp_data[np.isfinite(temp_data)]
     if len(valid) == 0:
         return {'min': 0.0, 'max': 0.0, 'mean': 0.0, 'median': 0.0, 'std': 0.0}
     return {
-        'min': float(np.min(valid)), 'max': float(np.max(valid)),
-        'mean': float(np.mean(valid)), 'median': float(np.median(valid)),
+        'min': float(np.min(valid)),
+        'max': float(np.max(valid)),
+        'mean': float(np.mean(valid)),
+        'median': float(np.median(valid)),
         'std': float(np.std(valid)),
-    }	
-
-def get_batch_id(files: Iterable[FileStorage]) -> str:
-    """
-    Generate unique batch ID from uploaded files.
-    Format: batch_YYYYMMDD_HHMMSS_hash
-    
-    Args:
-        files: List of FileStorage objects
-        
-    Returns:
-        str: Unique batch ID
-    """
-    file_list = sorted([f.filename or "" for f in files if f and f.filename])
-    hash_str = hashlib.md5(''.join(file_list).encode()).hexdigest()[:8]
-    return f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hash_str}"
+    }
 
 
 def process_batch(
@@ -54,39 +48,17 @@ def process_batch(
     image_files: Iterable[FileStorage],
     tenant_id: str | None = None,
 ) -> Dict[str, Any]:
-    """
-    Process a batch of uploaded thermal images.
-    
-    - Extract temperature data using FLIR Extractor
-    - Detect hot spots using ThermalAnalyzer with HIGH sensitivity
-    - Generate labeled images and reports
-    - Save results to batch directory
-    
-    Args:
-        batch_id (str): Unique batch identifier
-        image_files: List of FileStorage objects from upload
-        tenant_id (str): Tenant ID (uses DEFAULT_TENANT if not provided)
-        
-    Returns:
-        dict: Processing results with summary and per-image analysis
-        
-    Raises:
-        ValueError: If batch_id or tenant_id invalid
-    """
     tenant_id = validate_tenant_id(tenant_id)
-    
-    # Create batch directory
+
     batch_dir = safe_batch_path(batch_id, tenant_id)
     batch_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Create upload directory
+
     upload_dir = BASE_UPLOAD_PATH / tenant_id / batch_id
     upload_dir.mkdir(parents=True, exist_ok=True)
-    
-    extractor = ThermalDataExtractor()	
-    # Use HIGH sensitivity to detect more hotspots for operator review
+
+    extractor = ThermalDataExtractor()
     analyzer = ThermalAnalyzer(sensitivity='high')
-    
+
     results = {
         'batch_id': batch_id,
         'tenant_id': tenant_id,
@@ -94,8 +66,7 @@ def process_batch(
         'images': [],
         'summary': {}
     }
-    
-    # Save uploaded images and process them
+
     saved_images = []
     for file in image_files:
         if file and file.filename and _allowed_file(file.filename):
@@ -103,99 +74,65 @@ def process_batch(
             filepath = upload_dir / filename
             filepath.parent.mkdir(parents=True, exist_ok=True)
             file.save(str(filepath))
-            saved_images.append(str(filepath))
-    
+            saved_images.append(filepath)
+
     if not saved_images:
         raise ValueError("No valid JPEG files found in upload")
-    
-    # Process each image
-    all_temps = []
+
+    all_stats = []
     for image_path in saved_images:
         try:
-            temp_data = extractor.extract_thermal_data(Path(image_path))
+            temp_data = extractor.extract_thermal_data(image_path)
             if temp_data is None:
                 raise ValueError("Could not extract thermal data from image")
-            stats = _compute_stats(temp_data)
 
-            # Ex	tract thermal temperature data for coordinate lookups
-            thermal_extractor = ThermalDataExtractor()
-            thermal_data = thermal_extractor.extract_thermal_data(Path(image_path))
-            
-            # Save thermal data for later retrieval
-            if thermal_data is not None:
-                save_thermal_data(batch_dir, Path(image_path).name, thermal_data)
-            
-            # Detect hot spots - pass image_path so analyzer can get visual dimensions
-            hot_spots = analyzer.detect_hot_spots(temp_data, image_path=image_path)
-            
-            # Generate HTML report for this image
-            html_report = analyzer.generate_report(
-                Path(image_path).name,
-                hot_spots,
-                stats
-            )
-            
-            # Save HTML report
-            report_filename = Path(image_path).stem + '_thermal_report.html'
-            report_path = batch_dir / report_filename
-            with open(report_path, 'w') as f:
-                f.write(html_report)
-            
-            # Create labeled image with annotations
-            labeled_filename = Path(image_path).stem + '_labeled.jpg'
-            labeled_path = batch_dir / labeled_filename
+            stats = _compute_stats(temp_data)
+            save_thermal_data(batch_dir, image_path.name, temp_data)
+
+            hot_spots = analyzer.detect_hot_spots(temp_data, image_path=str(image_path))
+
+            html_report = analyzer.generate_report(image_path.name, hot_spots, stats)
+            report_filename = image_path.stem + '_thermal_report.html'
+            (batch_dir / report_filename).write_text(html_report)
+
+            labeled_filename = image_path.stem + '_labeled.jpg'
             try:
-                analyzer.label_hot_spots(image_path, hot_spots, str(labeled_path))
-            except Exception as e:
-                # Log but don't fail on labeled image generation
+                analyzer.label_hot_spots(str(image_path), hot_spots, str(batch_dir / labeled_filename))
+            except Exception:
                 pass
-            
-            # Save temperature CSV
-            csv_filename = Path(image_path).stem + '_temperatures.csv'
-            csv_path = batch_dir / csv_filename
-            processor.save_temperature_array(temp_data, str(csv_path))
-            
-            # Record image result
-            image_result = {
-                'filename': Path(image_path).name,
-                'stats': {
-                    'min': float(stats['min']),
-                    'max': float(stats['max']),
-                    'mean': float(stats['mean']),
-                    'median': float(stats['median']),
-                    'std': float(stats['std'])
-                },
-                'shape': temp_data.shape,
-                'hot_spots': [spot.to_dict() for spot in hot_spots],
+
+            csv_filename = image_path.stem + '_temperatures.csv'
+            np.savetxt(str(batch_dir / csv_filename), temp_data, delimiter=',', fmt='%.2f')
+
+            results['images'].append({
+                'filename': image_path.name,
+                'stats': stats,
+                'shape': list(temp_data.shape),
+                'hot_spots': [s.to_dict() for s in hot_spots],
                 'hot_spot_count': len(hot_spots),
                 'thermal_report': report_filename,
                 'labeled_image': labeled_filename,
-                'temperatures_csv': csv_filename
-            }
-            results['images'].append(image_result)
-            all_temps.append(stats)
-            
+                'temperatures_csv': csv_filename,
+            })
+            all_stats.append(stats)
+
         except Exception as e:
             results['images'].append({
-                'filename': Path(image_path).name,
+                'filename': image_path.name,
                 'error': str(e)
             })
-    
-    # Calculate batch summary
-    if all_temps:
-        temps = [t['mean'] for t in all_temps]
+
+    if all_stats:
         results['summary'] = {
-            'total_images': len(all_temps),
-            'successful_images': len(all_temps),
-            'avg_temperature': sum(temps) / len(temps),
-            'min_temperature': min([t['min'] for t in all_temps]),
-            'max_temperature': max([t['max'] for t in all_temps])
+            'total_images': len(all_stats),
+            'successful_images': len(all_stats),
+            'avg_temperature': sum(s['mean'] for s in all_stats) / len(all_stats),
+            'min_temperature': min(s['min'] for s in all_stats),
+            'max_temperature': max(s['max'] for s in all_stats),
         }
-    
-    # Save results
+
     batchio.save_batch_results(batch_id, results, tenant_id=tenant_id)
-    
-    # Save thermal analysis for UI (frontend expects this exact structure)
+
     thermal_analysis = {
         'batch_id': batch_id,
         'tenant_id': tenant_id,
@@ -207,39 +144,20 @@ def process_batch(
                 'labeled_image': img.get('labeled_image', ''),
             }
             for img in results['images']
-            if 'error' not in img  # Only include successful images
+            if 'error' not in img
         ]
     }
     batchio.save_thermal_analysis(batch_id, thermal_analysis, tenant_id=tenant_id)
-    
+
     return results
 
 
 def get_all_batches(tenant_id: str | None = None) -> List[Dict[str, Any]]:
-    """
-    Get list of all processed batches for a tenant.
-    
-    Args:
-        tenant_id (str): Tenant ID (uses DEFAULT_TENANT if not provided)
-        
-    Returns:
-        list: List of batch summaries, sorted by date (newest first)
-    """
     tenant_id = validate_tenant_id(tenant_id)
     return batchio.list_batches(tenant_id)
 
 
 def get_batch_summary(batch_id: str, tenant_id: str | None = None) -> Dict[str, Any]:
-    """
-    Get summary for a single batch.
-    
-    Args:
-        batch_id (str): Batch ID
-        tenant_id (str): Tenant ID
-        
-    Returns:
-        dict: Batch summary from results.json
-    """
     tenant_id = validate_tenant_id(tenant_id)
     data = batchio.load_batch_results(batch_id, tenant_id)
     if not data:
@@ -248,22 +166,10 @@ def get_batch_summary(batch_id: str, tenant_id: str | None = None) -> Dict[str, 
 
 
 def _allowed_file(filename: str) -> bool:
-    """Check if file extension is allowed."""
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 def reprocess_batch(batch_id: str, sensitivity: str = 'medium', tenant_id: str | None = None) -> dict:
-    """Reprocess an existing batch with a different sensitivity setting.
-
-    Args:
-        batch_id: The batch to reprocess
-        sensitivity: 'low', 'medium' or 'high'
-        tenant_id: Optional tenant scope
-
-    Returns:
-        dict: Updated results with new summary
-    """
     tenant_id = validate_tenant_id(tenant_id)
     batch_dir = safe_batch_path(batch_id, tenant_id)
     upload_dir = BASE_UPLOAD_PATH / tenant_id / batch_id
@@ -271,10 +177,7 @@ def reprocess_batch(batch_id: str, sensitivity: str = 'medium', tenant_id: str |
     if not upload_dir.exists():
         raise FileNotFoundError(f"Batch images not found for {batch_id}")
 
-    # Find saved images
-    saved_images = sorted([
-        str(p) for p in upload_dir.glob("*.jpg")
-    ])
+    saved_images = sorted(upload_dir.glob("*.jpg"))
     if not saved_images:
         raise FileNotFoundError(f"No images found in batch directory for {batch_id}")
 
@@ -289,72 +192,55 @@ def reprocess_batch(batch_id: str, sensitivity: str = 'medium', tenant_id: str |
         'summary': {}
     }
 
-    all_temps = []
+    all_stats = []
     for image_path in saved_images:
         try:
-            temp_data = extractor.extract_thermal_data(Path(image_path))
+            temp_data = extractor.extract_thermal_data(image_path)
             if temp_data is None:
                 raise ValueError("Could not extract thermal data from image")
+
             stats = _compute_stats(temp_data)
+            hot_spots = analyzer.detect_hot_spots(temp_data, image_path=str(image_path))
 
-            hot_spots = analyzer.detect_hot_spots(temp_data, image_path=image_path)
-
-            html_report = analyzer.generate_report(
-                Path(image_path).name,
-                hot_spots,
-                stats
-            )
-
-            report_filename = Path(image_path).stem + '_thermal_report.html'
-            report_path = batch_dir / report_filename
+            html_report = analyzer.generate_report(image_path.name, hot_spots, stats)
+            report_filename = image_path.stem + '_thermal_report.html'
             batch_dir.mkdir(parents=True, exist_ok=True)
-            with open(report_path, 'w') as f:
-                f.write(html_report)
+            (batch_dir / report_filename).write_text(html_report)
 
-            labeled_filename = Path(image_path).stem + '_labeled.jpg'
-            labeled_path = batch_dir / labeled_filename
+            labeled_filename = image_path.stem + '_labeled.jpg'
             try:
-                analyzer.label_hot_spots(image_path, hot_spots, str(labeled_path))
+                analyzer.label_hot_spots(str(image_path), hot_spots, str(batch_dir / labeled_filename))
             except Exception:
                 pass
 
-            csv_filename = Path(image_path).stem + '_temperatures.csv'
-            csv_path = batch_dir / csv_filename
-            processor.save_temperature_array(temp_data, str(csv_path))
+            csv_filename = image_path.stem + '_temperatures.csv'
+            np.savetxt(str(batch_dir / csv_filename), temp_data, delimiter=',', fmt='%.2f')
 
-            image_result = {
-                'filename': Path(image_path).name,
-                'stats': {
-                    'min': float(stats['min']),
-                    'max': float(stats['max']),
-                    'mean': float(stats['mean']),
-                    'median': float(stats['median']),
-                    'std': float(stats['std'])
-                },
-                'shape': temp_data.shape,
-                'hot_spots': [spot.to_dict() for spot in hot_spots],
+            results['images'].append({
+                'filename': image_path.name,
+                'stats': stats,
+                'shape': list(temp_data.shape),
+                'hot_spots': [s.to_dict() for s in hot_spots],
                 'hot_spot_count': len(hot_spots),
                 'thermal_report': report_filename,
                 'labeled_image': labeled_filename,
-                'temperatures_csv': csv_filename
-            }
-            results['images'].append(image_result)
-            all_temps.append(stats)
+                'temperatures_csv': csv_filename,
+            })
+            all_stats.append(stats)
 
         except Exception as e:
             results['images'].append({
-                'filename': Path(image_path).name,
+                'filename': image_path.name,
                 'error': str(e)
             })
 
-    if all_temps:
-        temps = [t['mean'] for t in all_temps]
+    if all_stats:
         results['summary'] = {
-            'total_images': len(all_temps),
-            'successful_images': len(all_temps),
-            'avg_temperature': sum(temps) / len(temps),
-            'min_temperature': min([t['min'] for t in all_temps]),
-            'max_temperature': max([t['max'] for t in all_temps])
+            'total_images': len(all_stats),
+            'successful_images': len(all_stats),
+            'avg_temperature': sum(s['mean'] for s in all_stats) / len(all_stats),
+            'min_temperature': min(s['min'] for s in all_stats),
+            'max_temperature': max(s['max'] for s in all_stats),
         }
 
     batchio.save_batch_results(batch_id, results, tenant_id=tenant_id)
