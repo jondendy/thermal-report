@@ -8,7 +8,7 @@ python-dotenv>=1.2.1
 
 # For FLIR image extraction
 # Uses opencv-python-headless to avoid libGL/X11 dependencies in containers
-flirimageextractor>=1.0.0
+flirimageextractor==1.4.0
 opencv-python-headless>=4.5.0
 
 # For visualisation (optional but recommended)

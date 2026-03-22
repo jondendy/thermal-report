@@ -50,7 +50,7 @@ COPY . .
 RUN mkdir -p upload reports .Images \
     && useradd -m -u 1001 appuser \
     && chown -R appuser:appuser /app \	
-    && chmod -R 777 /usr/local/lib/python3.11/site-packages/dji_executables
+
 
 USER appuser
 
