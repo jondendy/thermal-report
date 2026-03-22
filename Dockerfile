@@ -49,7 +49,7 @@ COPY . .
 # ── Runtime directories (owned by app before dropping root) ───────────────
 RUN mkdir -p upload reports .Images \
     && useradd -m -u 1001 appuser \
-    && chown -R appuser:appuser /app
+    && chown -R appuser:appuser /app \	
     && chmod -R 777 /usr/local/lib/python3.11/site-packages/dji_executables
 
 USER appuser
