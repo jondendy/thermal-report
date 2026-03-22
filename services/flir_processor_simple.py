@@ -7,6 +7,22 @@ Uses flirimageextractor library for easy processing
 import numpy as np
 import os
 import glob
+import shutil
+
+# ── Cloud Run fix: copy dji_executables to writable /tmp before import ────
+try:
+    import flirimageextractor as _fie_module
+    _src = os.path.join(os.path.dirname(_fie_module.__file__), 'dji_executables')
+    _dst = '/tmp/dji_executables'
+    if os.path.exists(_src) and not os.path.exists(_dst):
+        shutil.copytree(_src, _dst)
+        for _f in Path(_dst).iterdir():
+            _f.chmod(0o755)
+    if hasattr(_fie_module, 'dji_executables_path'):
+        _fie_module.dji_executables_path = _dst
+except Exception as _e:
+    print(f"Warning: dji_executables copy failed: {_e}")
+
 from pathlib import Path
 
 try:
