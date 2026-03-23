@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+		#!/usr/bin/env python3
 """
 Flask entrypoint for the Thermal Report web tool.
 Canonical routes that match edit_spots.html, index.html, and JS expectations.
@@ -68,7 +68,7 @@ def list_folders_route():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/select_images")
+@app.route("/sel		ect_images")
 def select_images_route():
     folder_id = request.args.get("folder_id", "")
     if not folder_id:
@@ -230,7 +230,22 @@ def api_thermal_analysis(batch_id: str) -> Any:
         logger.exception(f"Error getting thermal analysis: {str(e)}")
         return jsonify({"error": "Failed to get analysis"}), 500
 
+@app.route("/api/temperature_at_point/<batch_id>", methods=["GET"])
+def api_temperature_at_point(batch_id: str) -> Any:
+    tenant_id = _get_tenant_id()
+    try:
+        x = float(request.args.get("x", 0))
+        y = float(request.args.get("y", 0))
+        image_index = int(request.args.get("image_index", 0))
+        temp = heatlossservice.get_temperature_at_point(batch_id, image_index, x, y, tenant_id)
+        return jsonify({"success": True, "temperature": temp})
+    except FileNotFoundError:
+        return jsonify({"error": "Batch not found"}), 404
+    except Exception as e:
+        logger.exception(f"Error getting temperature at point for batch {batch_id}: {e}")
+        return jsonify({"error": "Failed to get temperature"}), 500
 
+	
 @app.route("/info", methods=["GET"])
 def info() -> str:
     return render_template("info.html", app_name=APP_NAME, app_version=APP_VERSION)
