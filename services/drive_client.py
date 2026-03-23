@@ -28,7 +28,7 @@ def list_files_in_folder(folder_id):
     results = service.files().list(
         q=q,
         fields="files(id, name, mimeType, thumbnailLink, imageMediaMetadata, size)",
-        orderBy="name"
+        orderBy="name",
         supportsAllDrives=True,
         includeItemsFromAllDrives=True
     ).execute()
