@@ -68,7 +68,7 @@ def list_folders_route():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/sel		ect_images")
+@app.route("/select_images")
 def select_images_route():
     folder_id = request.args.get("folder_id", "")
     if not folder_id:
@@ -294,7 +294,7 @@ def upload_from_drive():
     try:
         tmp_files = []
         for img in images:
-            tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+	            tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
             drive_download(img["id"], tmp.name)
             tmp_files.append((tmp.name, img["name"]))
 
