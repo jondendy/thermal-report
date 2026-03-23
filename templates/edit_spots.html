@@ -609,11 +609,18 @@
             // Try to get the exact sensor temperature at the clicked point
             let temperature = fallbackTemp;
             try {
+                const imgIdx = state.pendingSpot.imgIdx;
+                const xNorm = (xPct / 100).toFixed(4);
+                const yNorm = (yPct / 100).toFixed(4);
+                const res = await fetch(
+                    `/api/temperature_at_point/${BATCH}?image_index=${imgIdx}&x=${xNorm}&y=${yNorm}`
+                );
+
                 const res = await fetch(`/api/temperature_at_point/${BATCH}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image_name: imageName, x_pct: xPct, y_pct: yPct })
-                });
+#                    method: 'POST',
+#                    headers: { 'Content-Type': 'application/json' },
+#                    body: JSON.stringify({ image_name: imageName, x_pct: xPct, y_pct: yPct })
+#                });
                 if (res.ok) {
                     const data = await res.json();
                     if (typeof data.temperature === 'number') {
