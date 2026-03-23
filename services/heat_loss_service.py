@@ -76,6 +76,32 @@ def get_existing_labels(batch_id: str, tenant_id: str | None = None) -> Dict[str
     labels = batchio.load_hotspot_labels(batch_id, tenant_id)
     return labels or {"labeled_spots": []}
 
+def get_temperature_at_point(
+    batch_id: str,
+    image_index: int,
+    x: float,
+    y: float,
+    tenant_id: str | None = None,
+) -> float:
+    """Return the temperature (°C) at normalised coordinates (x, y) for a given image.
+
+    x and y are floats in the range 0.0–1.0, relative to image width and height.
+    """
+    analysis = get_thermal_analysis(batch_id, tenant_id)
+    images = analysis.get("images", [])
+    if image_index < 0 or image_index >= len(images):
+        raise FileNotFoundError(f"Image index {image_index} out of range for batch {batch_id}")
+    image_data = images[image_index]
+    thermal_matrix = image_data.get("thermal_matrix")
+    if thermal_matrix is None:
+        raise FileNotFoundError("No thermal matrix available for this image")
+    import numpy as np
+    matrix = np.array(thermal_matrix)
+    h, w = matrix.shape
+    col = min(int(x * w), w - 1)
+    row = min(int(y * h), h - 1)
+    return float(matrix[row, col])
+
 
 def save_labels(batch_id: str, label_data: Dict[str, Any], tenant_id: str | None = None) -> None:
     batchio.save_hotspot_labels(batch_id, label_data, tenant_id)
