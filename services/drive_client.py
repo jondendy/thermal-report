@@ -19,7 +19,7 @@ def get_drive_service():
 def list_folders(parent_id):
     service = get_drive_service()
     q = f"'{parent_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
-    results = service.files().list(q=q, fields="files(id, name)", orderBy="name").execute()
+    results = service.files().list(q=q, fields="files(id, name)", orderBy="name", supportsAllDrives=True, includeItemsFromAllDrives=True).execute()
     return results.get("files", [])
 
 def list_files_in_folder(folder_id):
@@ -29,6 +29,8 @@ def list_files_in_folder(folder_id):
         q=q,
         fields="files(id, name, mimeType, thumbnailLink, imageMediaMetadata, size)",
         orderBy="name"
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True
     ).execute()
     return results.get("files", [])
 
