@@ -1,4 +1,4 @@
-		#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Flask entrypoint for the Thermal Report web tool.
 Canonical routes that match edit_spots.html, index.html, and JS expectations.
@@ -294,7 +294,7 @@ def upload_from_drive():
     try:
         tmp_files = []
         for img in images:
-	            tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+            tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
             drive_download(img["id"], tmp.name)
             tmp_files.append((tmp.name, img["name"]))
 
