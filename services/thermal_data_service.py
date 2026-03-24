@@ -147,9 +147,9 @@ class ThermalDataExtractor:
                 'F':  float(metadata.get('PlanckF', 1)),
                 'O':  float(metadata.get('PlanckO', -7340)),
                 'emissivity':     float(metadata.get('Emissivity', 0.95)),
-                'distance':       float(metadata.get('ObjectDistance', 1.0)),
-                'reflected_temp': float(metadata.get('ReflectedApparentTemperature', 20.0)),
-                'atm_temp':       float(metadata.get('AtmosphericTemperature', 20.0)),
+                'distance':       float(str(metadata.get('ObjectDistance', 1.0)).split()[0]),
+                'reflected_temp': float(str(metadata.get('ReflectedApparentTemperature', 20.0)).split()[0]),
+                'atm_temp':       float(str(metadata.get('AtmosphericTemperature', 20.0)).split()[0]),
                 'atm_trans':      float(metadata.get('AtmosphericTransAlpha1', 0.006569)),
             }
             return params
