@@ -39,19 +39,11 @@ def download_file(file_id, dest_path):
         while not done:
             _, done = downloader.next_chunk()
 
-def getdriveservice():
-    """Return an authorized Drive API service instance."""
-    creds = service_account.Credentials.from_service_account_file(
-        STORAGE_ACCESS_KEY,
-        scopes=["https://www.googleapis.com/auth/drive"],
-    )
-    return build("drive", "v3", credentials=creds)
-
 def upload_file_to_folder(folder_id: str, local_path: str, mime_type: str | None = None) -> str:
     """
     Upload a local file to a Google Drive folder and return the new file ID.
     """
-    service = getdriveservice()
+    service = get_drive_service()
 
     path = Path(local_path)
     if not mime_type:
