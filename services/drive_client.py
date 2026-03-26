@@ -1,7 +1,10 @@
+from __future__ import annotations
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
 import io
+from pathlib import Path
+from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
+from settings import STORAGE_ADDRESS, STORAGE_ACCESS_KEY, PDF_STORAGE_ADDRESS
 
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 
@@ -35,3 +38,36 @@ def download_file(file_id, dest_path):
         done = False
         while not done:
             _, done = downloader.next_chunk()
+
+def getdriveservice():
+    """Return an authorized Drive API service instance."""
+    creds = service_account.Credentials.from_service_account_file(
+        STORAGE_ACCESS_KEY,
+        scopes=["https://www.googleapis.com/auth/drive"],
+    )
+    return build("drive", "v3", credentials=creds)
+
+def upload_file_to_folder(folder_id: str, local_path: str, mime_type: str | None = None) -> str:
+    """
+    Upload a local file to a Google Drive folder and return the new file ID.
+    """
+    service = getdriveservice()
+
+    path = Path(local_path)
+    if not mime_type:
+        # fall back to a generic PDF type if not provided
+        mime_type = "application/pdf"
+
+    file_metadata = {
+        "name": path.name,
+        "parents": [folder_id],
+    }
+    media = MediaFileUpload(str(path), mimetype=mime_type, resumable=False)
+
+    created = service.files().create(
+        body=file_metadata,
+        media_body=media,
+        fields="id",
+    ).execute()
+
+    return created.get("id")

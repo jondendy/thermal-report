@@ -22,6 +22,8 @@ from typing import Dict, Any, List
 from settings import ORG_NAME, ORG_WEBSITE, ORG_CONTACT, RECOMMENDATIONS_DOCUMENT_URL
 import services.batch_io as batchio
 from services.heat_loss_reporter import HeatLossReporter
+from settings import PDF_STORAGE_ADDRESS
+from services import drive_client
 
 logger = logging.getLogger(__name__)
 
@@ -362,7 +364,9 @@ def generate_pdf_from_report_data(
     """
     from security_utils import safe_batch_path
     from settings import BASE_REPORT_DIR
-
+    from settings import PDF_STORAGE_ADDRESS
+    from services import drive_client
+    
     try:
         batch_dir = safe_batch_path(BASE_REPORT_DIR, batch_id, tenant_id)
 
@@ -387,6 +391,14 @@ def generate_pdf_from_report_data(
 
             WeasyHTML(string=html_content, base_url=str(batch_dir)).write_pdf(str(pdf_path))
             _merge_additional_pdfs(pdf_path, report_data)
+            try:
+                drive_client.upload_file_to_folder(PDF_STORAGE_ADDRESS, str(pdf_path))
+            except Exception as e:
+                logger.warning(
+                    "Drive upload failed for batch %s (non-fatal): %s",
+                    batch_id,
+                    e,
+                )
             return str(pdf_path)
         except ImportError:
             logger.warning("weasyprint not installed")
@@ -398,6 +410,14 @@ def generate_pdf_from_report_data(
 
             pdfkit.from_string(html_content, str(pdf_path))
             _merge_additional_pdfs(pdf_path, report_data)
+            try:
+                drive_client.upload_file_to_folder(PDF_STORAGE_ADDRESS, str(pdf_path))
+            except Exception as e:
+                logger.warning(
+                    "Drive upload failed for batch %s (non-fatal): %s",
+                    batch_id,
+                    e,
+                )
             return str(pdf_path)
         except ImportError:
             logger.warning("pdfkit not installed")
@@ -411,6 +431,14 @@ def generate_pdf_from_report_data(
                 result = pisa.CreatePDF(html_content, dest=pdf_file)
                 if not result.err:
                     _merge_additional_pdfs(pdf_path, report_data)
+                    try:
+                        drive_client.upload_file_to_folder(PDF_STORAGE_ADDRESS, str(pdf_path))
+                    except Exception as e:
+                        logger.warning(
+                            "Drive upload failed for batch %s (non-fatal): %s",
+                            batch_id,
+                            e,
+                        )
                     return str(pdf_path)
                 logger.warning("xhtml2pdf reported errors: %s", result.err)
         except ImportError:
