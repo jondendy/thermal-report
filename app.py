@@ -448,7 +448,7 @@ def save_heatloss_report(batch_id: str) -> Any:
             try:
                 import services.drive_client as drive_client
                 drive_upload_result = drive_client.upload_file_to_folder(
-                    pdf_path, output_folder_id
+                    output_folder_id, pdf_path
                 )
                 logger.info(
                     "Uploaded PDF for batch %s to Drive folder %s",
@@ -602,7 +602,7 @@ def generate_heat_loss_report_route(batch_id: str):
             pdf_path = heatlossservice.generate_pdf_from_report_data(batch_id, report_data, None)
             if pdf_path and folder_id:
                 import services.drive_client as drive_client
-                drive_client.upload_file_to_folder(pdf_path, folder_id)
+                drive_client.upload_file_to_folder(folder_id, pdf_path)
         except Exception as e:
             logger.warning("PDF generation/upload failed (non-fatal): %s", e)
 
