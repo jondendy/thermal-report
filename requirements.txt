@@ -15,6 +15,7 @@ google-api-python-client
 google-auth
 google-auth-httplib2
 google-auth-oauthlib
+google-cloud-secret-manager
 
 # FLIR image extraction
 flirimageextractor>=1.0.0
