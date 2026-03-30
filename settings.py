@@ -35,9 +35,9 @@ BASE_UPLOAD_PATH.mkdir(parents=True, exist_ok=True)
 BASE_REPORT_PATH.mkdir(parents=True, exist_ok=True)
 
 # Storage abstraction (currently only "local" implemented, but env-ready)
-STORAGE_TYPE = os.getenv("STORAGETYPE", "local")  # local, googledrive, s3
-STORAGE_ADDRESS = os.getenv("STORAGEADDRESS", "")  # Source Drive folder ID / URL
-STORAGE_ACCESS_KEY = os.getenv("STORAGEACCESSKEY", "")  # API key / service JSON
+STORAGE_TYPE = os.getenv("STORAGE_TYPE", "local")  # local, googledrive, s3
+STORAGE_ADDRESS = os.getenv("STORAGE_ADDRESS", "")  # Source Drive folder ID / URL
+STORAGE_ACCESS_KEY = os.getenv("STORAGE_ACCESS_KEY", "")  # API key / service JSON
 
 # Google Drive folder ID for finished report output.
 # The saved PDF is uploaded here when "Save report to output" is clicked.
