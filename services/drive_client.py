@@ -112,4 +112,4 @@ def upload_file_to_folder(folder_id: str, local_path: str, mime_type: str | None
         body=file_metadata, media_body=media, fields="id",
         supportsAllDrives=True,
     ).execute()
-    return created.get("id")
+    return created
