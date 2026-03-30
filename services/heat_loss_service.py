@@ -17,7 +17,7 @@ import re
 import base64
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from settings import ORG_NAME, ORG_WEBSITE, ORG_CONTACT, RECOMMENDATIONS_DOCUMENT_URL
 import services.batch_io as batchio
@@ -238,13 +238,22 @@ def generate_report(
     inspector_name: str | None,
     doc_mode: str = "link",
     tenant_id: str | None = None,
+    review_override: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    """Generate the full report data dict.
+
+    review_override: if supplied (e.g. fresh from the POST body), it is used
+    directly so we never read stale data from disk when generate_report is
+    called immediately after save_review.
+    """
     analysis = get_thermal_analysis(batch_id, tenant_id)
     labels = get_existing_labels(batch_id, tenant_id)
     findings = _combine_analysis_and_labels(analysis, labels)
 
+    # Use caller-supplied review when available, otherwise fall back to disk
+    review = review_override if review_override is not None else labels.get("review", {})
+
     # Apply surveyor review overrides (narrative, severity, note)
-    review = labels.get("review", {})
     for finding in findings:
         key = f"{finding['type']}_{finding['spot_number']}"
         if key in review:
@@ -311,45 +320,46 @@ def generate_report(
 def _regenerate_labeled_images_with_manual_spots(batch_id: str, labels: Dict[str, Any], tenant_id: str | None = None) -> None:
     """Regenerate labeled images with manual spot annotations before PDF generation."""
     from security_utils import safe_batch_path
-    from settings import BASE_REPORT_DIR
+    from settings import BASE_REPORT_DIR, BASE_UPLOAD_PATH  # FIX: import BASE_UPLOAD_PATH
     from services.thermal_analyzer import ThermalAnalyzer
 
     try:
         batch_dir = safe_batch_path(BASE_REPORT_DIR, batch_id, tenant_id)
         labeled_spots = labels.get("labeled_spots", [])
 
-        images_to_process = {}
+        images_to_process: Dict[str, list] = {}
         for spot in labeled_spots:
             if not spot.get('spot_number'):
                 continue
             img_name = spot.get('image_name')
             if img_name:
-                if img_name not in images_to_process:
-                    images_to_process[img_name] = []
-                images_to_process[img_name].append(spot)
+                images_to_process.setdefault(img_name, []).append(spot)
 
         analyzer = ThermalAnalyzer()
         for image_name, spots in images_to_process.items():
-            original_path = batch_dir / image_name
+            # FIX: images are stored under BASE_UPLOAD_PATH/batch_id — check there first
+            original_path = BASE_UPLOAD_PATH / batch_id / image_name
             if not original_path.exists():
-                images_dir = batch_dir.parent.parent / ".Images" / batch_id / image_name
-                if images_dir.exists():
-                    original_path = images_dir
+                # fallback: might have been copied into the report batch dir
+                original_path = batch_dir / image_name
             if not original_path.exists():
-                logger.warning(f"Original image not found: {original_path}")
+                logger.warning("Original image not found for labeling: %s", image_name)
                 continue
 
-            labeled_name = image_name.replace(".jpg", "_labeled.jpg").replace(".jpeg", "_labeled.jpeg")
+            labeled_name = (
+                image_name.replace(".jpg", "_labeled.jpg")
+                          .replace(".jpeg", "_labeled.jpeg")
+            )
             labeled_path = batch_dir / labeled_name
 
             try:
                 analyzer.draw_manual_labels(str(original_path), spots, str(labeled_path))
-                logger.info(f"Generated labeled image: {labeled_name}")
+                logger.info("Generated labeled image: %s", labeled_name)
             except Exception as e:
-                logger.error(f"Failed to generate labeled image {labeled_name}: {e}")
+                logger.error("Failed to generate labeled image %s: %s", labeled_name, e)
 
     except Exception as e:
-        logger.error(f"Failed to regenerate labeled images: {e}", exc_info=True)
+        logger.error("Failed to regenerate labeled images: %s", e, exc_info=True)
 
 
 def generate_pdf_from_report_data(
@@ -366,7 +376,7 @@ def generate_pdf_from_report_data(
     from settings import BASE_REPORT_DIR
     from settings import PDF_STORAGE_ADDRESS
     from services import drive_client
-    
+
     try:
         batch_dir = safe_batch_path(BASE_REPORT_DIR, batch_id, tenant_id)
 
@@ -506,8 +516,10 @@ def _render_report_html(report_data: Dict[str, Any], batch_dir: str | None = Non
         .finding img {{ width: 100%; max-width: 600px; margin: 10px 0; border: 1px solid #dee2e6; border-radius: 4px; }}
         .surveyor-note {{ color: #555; font-style: italic; border-left: 3px solid #ffc107; padding-left: 8px; margin-top: 6px; }}
         .recommendation {{ background: #e7f3ff; border-left: 4px solid #2196F3; padding: 15px; margin-bottom: 15px; border-radius: 4px; }}
-        .stats {{ display: flex; gap: 15px; margin-bottom: 20px; }}
-        .stat-box {{ background: #fff; border: 1px solid #dee2e6; padding: 15px; border-radius: 4px; text-align: center; flex: 1; }}
+        /* FIX: replaced gap: (unsupported in IE/old Edge flexbox) with margin-right on children */
+        .stats {{ display: -ms-flexbox; display: flex; margin-bottom: 20px; }}
+        .stat-box {{ background: #fff; border: 1px solid #dee2e6; padding: 15px; border-radius: 4px; text-align: center; -ms-flex: 1; flex: 1; margin-right: 15px; }}
+        .stat-box:last-child {{ margin-right: 0; }}
         .stat-value {{ font-size: 24px; font-weight: bold; color: #667eea; }}
         .stat-label {{ font-size: 12px; color: #6c757d; text-transform: uppercase; }}
         .links-section {{ background: #f0f7ff; border: 1px solid #b3d4fc; padding: 20px; margin: 30px 0; border-radius: 8px; }}
@@ -534,7 +546,7 @@ def _render_report_html(report_data: Dict[str, Any], batch_dir: str | None = Non
     # Render general surveyor notes immediately after header if present
     if general_notes:
         html += f"""    <div class=\"surveyor-notes\">
-        <strong>\ud83d\udcdd Surveyor Notes:</strong> {general_notes}
+        <strong>\U0001f4dd Surveyor Notes:</strong> {general_notes}
     </div>\n"""
 
     html += """    <div class=\"section\">
@@ -581,7 +593,7 @@ def _render_report_html(report_data: Dict[str, Any], batch_dir: str | None = Non
             <p>{description}</p>
 """
         if surveyor_note:
-            html += f'            <p class=\"surveyor-note\"><em>\ud83d\udcdd Surveyor note: {surveyor_note}</em></p>\n'
+            html += f'            <p class=\"surveyor-note\"><em>\U0001f4dd Surveyor note: {surveyor_note}</em></p>\n'
 
         spot_locations = finding.get("spot_locations", [])
         if batch_dir and spot_locations:
