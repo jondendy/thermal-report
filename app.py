@@ -379,8 +379,13 @@ def review_report(batch_id: str) -> str:
 def review_report_submit(batch_id: str) -> Any:
     try:
         data = request.get_json()
+
+        # Persist review to disk first
         heatlossservice.save_review(batch_id, data, None)
 
+        # Extract fields directly from POST body so generate_report uses the
+        # freshly submitted review without a disk round-trip (fixes Bug 2/3)
+        review_override = data.get("review", {})
         property_address = data.get("property_address", "")
         inspector_name = data.get("inspector_name", "")
 
@@ -390,6 +395,7 @@ def review_report_submit(batch_id: str) -> Any:
             inspector_name=inspector_name,
             doc_mode="link",
             tenant_id=None,
+            review_override=review_override,
         )
 
         pdf_path = None
@@ -416,10 +422,14 @@ def save_heatloss_report(batch_id: str) -> Any:
     is not set or if the upload fails.
     """
     try:
-        # Accept review payload from the review page and persist it first
         posted = request.get_json(silent=True) or {}
+
+        # Persist review to disk first
         if posted:
             heatlossservice.save_review(batch_id, posted, None)
+
+        # Use posted review directly to avoid stale disk read (fixes Bug 2/3)
+        review_override = posted.get("review", {}) if posted else None
 
         labels = heatlossservice.get_existing_labels(batch_id, None)
         property_address = posted.get("property_address") or labels.get("property_address", "")
@@ -431,6 +441,7 @@ def save_heatloss_report(batch_id: str) -> Any:
             inspector_name=inspector_name,
             doc_mode="link",
             tenant_id=None,
+            review_override=review_override,
         )
         report_data["generated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
         heatlossservice.save_report(batch_id, report_data, None)
