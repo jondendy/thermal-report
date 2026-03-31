@@ -82,6 +82,12 @@ RECOMMENDATIONS_DOCUMENT_URL = os.getenv(
     ""  # Leave empty to hide the link in reports
 )
 
+# Energy saving tips document URL (e.g., Google Drive shareable link)
+TIPS_DOCUMENT_URL = os.getenv(
+    "TIPS_DOCUMENT_URL",
+    ""  # Leave empty to hide
+)
+
 # Suffix appended to generated report filenames
 REPORT_FILENAME_SUFFIX = os.getenv("REPORTFILENAMESUFFIX", "thermal-survey-report")
 
@@ -110,9 +116,3 @@ def is_allowed_file(filename: str) -> bool:
 
 # Thermal analysis parameters
 MAX_HOTSPOTS_PER_IMAGE = 50  # Maximum hot spots to detect per image
-
-# Energy saving tips document URL (e.g., Google Drive shareable link)
-# TIPS_DOCUMENT_URL = os.getenv(
-#    "TIPS_DOCUMENT_URL",
-#    ""  # Leave empty to hide
-#)
