@@ -413,7 +413,7 @@ def generate_pdf_from_report_data(
         except ImportError:
             logger.warning("weasyprint not installed")
         except Exception as e:
-            logger.warning("weasyprint failed at runtime: %s", e)
+            logger.warning("weasyprint failed at runtime: %s", e, exc_info=True)
 
         try:
             import pdfkit
@@ -426,13 +426,13 @@ def generate_pdf_from_report_data(
                 logger.warning(
                     "Drive upload failed for batch %s (non-fatal): %s",
                     batch_id,
-                    e,
+                    e
                 )
             return str(pdf_path)
         except ImportError:
             logger.warning("pdfkit not installed")
         except Exception as e:
-            logger.warning("pdfkit failed at runtime: %s", e)
+            logger.warning("pdfkit failed at runtime: %s", e, exc_info=True)
 
         try:
             from xhtml2pdf import pisa
@@ -447,14 +447,14 @@ def generate_pdf_from_report_data(
                         logger.warning(
                             "Drive upload failed for batch %s (non-fatal): %s",
                             batch_id,
-                            e,
+                            e
                         )
                     return str(pdf_path)
                 logger.warning("xhtml2pdf reported errors: %s", result.err)
         except ImportError:
             logger.warning("xhtml2pdf not installed")
         except Exception as e:
-            logger.warning("xhtml2pdf failed: %s", e)
+            logger.warning("xhtml2pdf failed: %s", e, exc_info=True)
 
         return str(html_path)
 
