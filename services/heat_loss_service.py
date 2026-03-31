@@ -396,24 +396,24 @@ def generate_pdf_from_report_data(
         pdf_filename = f"thermal_report_{batch_id}.pdf"
         pdf_path = batch_dir / pdf_filename
 
-        try:
-            from weasyprint import HTML as WeasyHTML
-
-            WeasyHTML(string=html_content, base_url=str(batch_dir)).write_pdf(str(pdf_path))
-            _merge_additional_pdfs(pdf_path, report_data)
-            try:
-                drive_client.upload_file_to_folder(PDF_STORAGE_ADDRESS, str(pdf_path))
-            except Exception as e:
-                logger.warning(
-                    "Drive upload failed for batch %s (non-fatal): %s",
-                    batch_id,
-                    e,
-                )
-            return str(pdf_path)
-        except ImportError:
-            logger.warning("weasyprint not installed")
-        except Exception as e:
-            logger.warning("weasyprint failed at runtime: %s", e, exc_info=True)
+#        try:
+ #           from weasyprint import HTML as WeasyHTML
+#
+ #           WeasyHTML(string=html_content, base_url=str(batch_dir)).write_pdf(str(pdf_path))
+  #          _merge_additional_pdfs(pdf_path, report_data)
+   #         try:
+    #            drive_client.upload_file_to_folder(PDF_STORAGE_ADDRESS, str(pdf_path))
+     #       except Exception as e:
+#                logger.warning(
+ #                   "Drive upload failed for batch %s (non-fatal): %s",
+  #                  batch_id,
+   #                 e,
+#                )
+ #           return str(pdf_path)
+  #      except ImportError:
+#            logger.warning("weasyprint not installed")
+ #       except Exception as e:
+  #          logger.warning("weasyprint failed at runtime: %s", e, exc_info=True)
 
         try:
             import pdfkit
