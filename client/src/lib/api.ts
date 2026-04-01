@@ -1,0 +1,161 @@
+import { apiRequest, API_BASE } from "./queryClient";
+
+// Survey types
+export interface Survey {
+  id: number;
+  propertyAddress: string;
+  inspectorName: string;
+  sensitivity: number;
+  status: string;
+  createdAt: string;
+}
+
+export interface ThermalImage {
+  id: number;
+  surveyId: number;
+  filename: string;
+  originalPath: string;
+  labeledPath: string;
+  thermalDataPath: string;
+  minTemp: number | null;
+  maxTemp: number | null;
+  meanTemp: number | null;
+  medianTemp: number | null;
+  stdTemp: number | null;
+  thermalWidth: number | null;
+  thermalHeight: number | null;
+  visualWidth: number | null;
+  visualHeight: number | null;
+}
+
+export interface Spot {
+  id: number;
+  surveyId: number;
+  imageId: number;
+  spotNumber: number;
+  spotType: string;
+  temperature: number | null;
+  severity: string;
+  pixelX: number;
+  pixelY: number;
+  areaSize: number;
+  isAutoDetected: number;
+  isDeleted: number;
+}
+
+export interface AssessorNote {
+  id: number;
+  surveyId: number;
+  spotNumber: number;
+  note: string;
+  removedRecommendations: string;
+}
+
+export interface Recommendations {
+  [key: string]: {
+    advice: string[];
+    savings: string;
+    priority: string;
+    description: string;
+  };
+}
+
+// API functions
+export async function createSurvey(data: Partial<Survey>): Promise<Survey> {
+  const res = await apiRequest("POST", "/api/surveys", data);
+  return res.json();
+}
+
+export async function getSurveys(): Promise<Survey[]> {
+  const res = await apiRequest("GET", "/api/surveys");
+  return res.json();
+}
+
+export async function getSurvey(id: number): Promise<Survey> {
+  const res = await apiRequest("GET", `/api/surveys/${id}`);
+  return res.json();
+}
+
+export async function updateSurvey(id: number, data: Partial<Survey>): Promise<Survey> {
+  const res = await apiRequest("PATCH", `/api/surveys/${id}`, data);
+  return res.json();
+}
+
+export async function deleteSurvey(id: number): Promise<void> {
+  await apiRequest("DELETE", `/api/surveys/${id}`);
+}
+
+export async function uploadImages(surveyId: number, files: FileList): Promise<any> {
+  const formData = new FormData();
+  for (let i = 0; i < files.length; i++) {
+    formData.append("files", files[i]);
+  }
+  const res = await fetch(`${API_BASE}/api/surveys/${surveyId}/images`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function getImages(surveyId: number): Promise<ThermalImage[]> {
+  const res = await apiRequest("GET", `/api/surveys/${surveyId}/images`);
+  return res.json();
+}
+
+export async function getSpots(surveyId: number): Promise<Spot[]> {
+  const res = await apiRequest("GET", `/api/surveys/${surveyId}/spots`);
+  return res.json();
+}
+
+export async function addSpot(surveyId: number, data: Partial<Spot>): Promise<Spot> {
+  const res = await apiRequest("POST", `/api/surveys/${surveyId}/spots`, data);
+  return res.json();
+}
+
+export async function updateSpot(spotId: number, data: Partial<Spot>): Promise<Spot> {
+  const res = await apiRequest("PATCH", `/api/spots/${spotId}`, data);
+  return res.json();
+}
+
+export async function deleteSpot(spotId: number): Promise<void> {
+  await apiRequest("DELETE", `/api/spots/${spotId}`);
+}
+
+export async function reprocessSurvey(surveyId: number, sensitivity: number): Promise<any> {
+  const res = await apiRequest("POST", `/api/surveys/${surveyId}/reprocess`, { sensitivity });
+  return res.json();
+}
+
+export async function regenerateLabels(surveyId: number): Promise<void> {
+  await apiRequest("POST", `/api/surveys/${surveyId}/regenerate-labels`);
+}
+
+export async function getNotes(surveyId: number): Promise<AssessorNote[]> {
+  const res = await apiRequest("GET", `/api/surveys/${surveyId}/notes`);
+  return res.json();
+}
+
+export async function saveNote(
+  surveyId: number,
+  spotNumber: number,
+  note: string,
+  removedRecommendations: number[]
+): Promise<AssessorNote> {
+  const res = await apiRequest("POST", `/api/surveys/${surveyId}/notes`, {
+    spotNumber,
+    note,
+    removedRecommendations,
+  });
+  return res.json();
+}
+
+export async function generatePdf(surveyId: number): Promise<{ success: boolean; filename: string }> {
+  const res = await apiRequest("POST", `/api/surveys/${surveyId}/generate-pdf`);
+  return res.json();
+}
+
+export async function getRecommendations(): Promise<Recommendations> {
+  const res = await apiRequest("GET", "/api/recommendations");
+  return res.json();
+}
