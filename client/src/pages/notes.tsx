@@ -11,6 +11,7 @@ import {
   generatePdf,
   updateSurvey,
   getImages,
+  exportPdfToDrive,
 } from "@/lib/api";
 import type { Spot, AssessorNote, Recommendations } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +28,7 @@ import {
   CheckCircle,
   AlertTriangle,
   Pencil,
+  HardDrive,
 } from "lucide-react";
 
 const SEVERITY_ORDER = ["critical", "high", "medium", "low"];
@@ -37,6 +39,9 @@ export default function NotesPage() {
   const [, navigate] = useLocation();
   const [generating, setGenerating] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfFilename, setPdfFilename] = useState<string | null>(null);
+  const [driveExporting, setDriveExporting] = useState(false);
+  const [driveExported, setDriveExported] = useState(false);
 
   const { data: survey } = useQuery({
     queryKey: ["/api/surveys", surveyId],
@@ -80,6 +85,7 @@ export default function NotesPage() {
       setGenerating(false);
       if (result.filename) {
         setPdfUrl(`/api/reports/${result.filename}`);
+        setPdfFilename(result.filename);
       }
       queryClient.invalidateQueries({ queryKey: ["/api/surveys", surveyId] });
     },
@@ -225,17 +231,56 @@ export default function NotesPage() {
           </Button>
 
           {pdfUrl && (
-            <div className="flex items-center justify-center gap-2 mt-3">
-              <CheckCircle className="w-4 h-4 text-green-600" />
-              <a
-                href={pdfUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-primary underline"
-                data-testid="link-download-pdf"
-              >
-                Download Report PDF
-              </a>
+            <div className="space-y-3 mt-3">
+              <div className="flex items-center justify-center gap-2">
+                <CheckCircle className="w-4 h-4 text-green-600" />
+                <a
+                  href={pdfUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-primary underline"
+                  data-testid="link-download-pdf"
+                >
+                  Download Report PDF
+                </a>
+              </div>
+              <div className="flex justify-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    if (!pdfFilename) return;
+                    setDriveExporting(true);
+                    try {
+                      await exportPdfToDrive(pdfFilename);
+                      setDriveExported(true);
+                    } catch {
+                      // silently fail
+                    } finally {
+                      setDriveExporting(false);
+                    }
+                  }}
+                  disabled={driveExporting || driveExported}
+                  data-testid="button-export-drive"
+                >
+                  {driveExported ? (
+                    <>
+                      <CheckCircle className="w-4 h-4 mr-1.5 text-green-600" />
+                      Saved to Google Drive
+                    </>
+                  ) : driveExporting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                      Saving to Drive…
+                    </>
+                  ) : (
+                    <>
+                      <HardDrive className="w-4 h-4 mr-1.5" />
+                      Save to Google Drive
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>

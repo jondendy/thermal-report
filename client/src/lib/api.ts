@@ -159,3 +159,33 @@ export async function getRecommendations(): Promise<Recommendations> {
   const res = await apiRequest("GET", "/api/recommendations");
   return res.json();
 }
+
+// ── Drive Integration ──────────────────────────────────────────
+
+export interface DriveProperty {
+  folderName: string;
+  folderId: string;
+  images: { name: string; fileId: string; size: number; isThermal: boolean; downloadUrl: string }[];
+  lastModified: string;
+  thermalCount: number;
+}
+
+export async function getDriveProperties(): Promise<DriveProperty[]> {
+  const res = await apiRequest("GET", "/api/drive/property-folders");
+  const data = await res.json();
+  return data.properties || [];
+}
+
+export async function importDriveImages(data: {
+  propertyName: string;
+  inspectorName: string;
+  images: { name: string; url: string }[];
+}): Promise<Survey> {
+  const res = await apiRequest("POST", "/api/drive/import-images", data);
+  return res.json();
+}
+
+export async function exportPdfToDrive(filename: string): Promise<{ success: boolean; message: string }> {
+  const res = await apiRequest("POST", "/api/drive/export-pdf", { filename });
+  return res.json();
+}

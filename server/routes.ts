@@ -299,7 +299,12 @@ export function registerRoutes(server: Server, app: Express) {
     const spots = storage.getSpotsBySurvey(surveyId);
     const notes = storage.getNotesBySurvey(surveyId);
 
-    const pdfFilename = `thermal-survey-${surveyId}-${Date.now()}.pdf`;
+    // Build a sanitized filename from the property address
+    const sanitizedAddress = (survey.propertyAddress || `survey-${surveyId}`)
+      .replace(/[^a-zA-Z0-9\s_-]/g, "")
+      .trim()
+      .replace(/\s+/g, "_");
+    const pdfFilename = `Thermal_Survey_Report_${sanitizedAddress}.pdf`;
     const pdfPath = path.join(reportsDir, pdfFilename);
 
     try {
@@ -399,6 +404,188 @@ export function registerRoutes(server: Server, app: Express) {
 
     // Placeholder — will upload to Drive when connected
     res.json({ success: true, message: "Drive upload will be available once connected" });
+  });
+
+  // ── Drive Manifest Integration ─────────────────────────────────
+
+  // GET /api/drive/property-folders — read manifest and return properties with thermal counts
+  app.get("/api/drive/property-folders", (_req, res) => {
+    const manifestPath = path.join(process.cwd(), "drive-manifest.json");
+    try {
+      const raw = fs.existsSync(manifestPath)
+        ? JSON.parse(fs.readFileSync(manifestPath, "utf-8"))
+        : { lastScanned: null, properties: [] };
+
+      const properties = (raw.properties || []).map((prop: any) => {
+        const thermalImages = (prop.images || []).filter(
+          (img: any) => img.isThermal || img.size > 40 * 1024
+        );
+        return {
+          ...prop,
+          thermalCount: thermalImages.length,
+        };
+      });
+
+      res.json({
+        lastScanned: raw.lastScanned,
+        sourceFolder: raw.sourceFolder,
+        outputFolder: raw.outputFolder,
+        properties,
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/drive/import-images — download images from URLs and process them
+  app.post("/api/drive/import-images", async (req, res) => {
+    const { propertyName, inspectorName, images } = req.body as {
+      propertyName: string;
+      inspectorName: string;
+      images: { name: string; url: string }[];
+    };
+
+    if (!propertyName || !images || images.length === 0) {
+      return res.status(400).json({ error: "propertyName and images are required" });
+    }
+
+    // Create survey
+    const survey = storage.createSurvey({
+      propertyAddress: propertyName,
+      inspectorName: inspectorName || "",
+      sensitivity: 2.0,
+      status: "uploading",
+      createdAt: new Date().toISOString(),
+    });
+
+    const surveyId = survey.id;
+    const permDir = path.join(uploadDir, String(surveyId));
+    if (!fs.existsSync(permDir)) fs.mkdirSync(permDir, { recursive: true });
+
+    const results = [];
+
+    for (const img of images) {
+      try {
+        // Download image from pre-signed URL
+        const fetchRes = await fetch(img.url);
+        if (!fetchRes.ok) throw new Error(`Failed to download ${img.name}: ${fetchRes.statusText}`);
+        const buffer = Buffer.from(await fetchRes.arrayBuffer());
+
+        const permPath = path.join(permDir, img.name);
+        fs.writeFileSync(permPath, buffer);
+
+        // Process thermal data
+        const { stats, thermalData } = await processImage(permPath);
+
+        // Save thermal data
+        const thermalDir = path.join(permDir, "thermal_data");
+        if (!fs.existsSync(thermalDir)) fs.mkdirSync(thermalDir, { recursive: true });
+        const thermalPath = path.join(thermalDir, `${path.parse(img.name).name}.bin`);
+        saveThermalData(thermalPath, thermalData, stats.width, stats.height);
+
+        const image = storage.createImage({
+          surveyId,
+          filename: img.name,
+          originalPath: permPath,
+          thermalDataPath: thermalPath,
+          minTemp: stats.min,
+          maxTemp: stats.max,
+          meanTemp: stats.mean,
+          medianTemp: stats.median,
+          stdTemp: stats.std,
+          thermalWidth: stats.width,
+          thermalHeight: stats.height,
+          visualWidth: stats.width,
+          visualHeight: stats.height,
+        });
+
+        // Detect hotspots
+        const detectedSpots = detectHotspots(thermalData, stats.width, stats.height, survey.sensitivity);
+
+        let spotNumber = storage.getNextSpotNumber(surveyId);
+        for (const ds of detectedSpots) {
+          storage.createSpot({
+            surveyId,
+            imageId: image.id,
+            spotNumber,
+            spotType: "Unknown",
+            temperature: ds.temperature,
+            severity: ds.severity,
+            pixelX: ds.x,
+            pixelY: ds.y,
+            areaSize: ds.areaSize,
+            isAutoDetected: 1,
+            isDeleted: 0,
+          });
+          spotNumber++;
+        }
+
+        results.push({
+          imageId: image.id,
+          filename: img.name,
+          stats,
+          spotsDetected: detectedSpots.length,
+        });
+      } catch (e: any) {
+        results.push({ filename: img.name, error: e.message });
+      }
+    }
+
+    // Regenerate labeled images
+    await regenerateLabeledImages(surveyId);
+
+    storage.updateSurvey(surveyId, { status: "reviewing" });
+    const updatedSurvey = storage.getSurvey(surveyId);
+    res.json({ ...updatedSurvey, results });
+  });
+
+  // POST /api/drive/export-pdf — queue a generated report for Drive export
+  app.post("/api/drive/export-pdf", (req, res) => {
+    const { filename } = req.body;
+    if (!filename) return res.status(400).json({ error: "No filename provided" });
+
+    const filePath = path.join(reportsDir, filename);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Report file not found" });
+
+    // Write export queue entry so external process can pick it up
+    const exportQueuePath = path.join(process.cwd(), "drive-export-queue.json");
+    const queue = fs.existsSync(exportQueuePath)
+      ? JSON.parse(fs.readFileSync(exportQueuePath, "utf-8"))
+      : [];
+    queue.push({
+      filename,
+      filePath: path.resolve(filePath),
+      queuedAt: new Date().toISOString(),
+      exported: false,
+    });
+    fs.writeFileSync(exportQueuePath, JSON.stringify(queue, null, 2), "utf-8");
+
+    res.json({ success: true, message: "Report queued for Google Drive export", filePath: path.resolve(filePath) });
+  });
+
+  // GET /api/drive/export-status — check if a report has been exported
+  app.get("/api/drive/export-status/:filename", (req, res) => {
+    const exportQueuePath = path.join(process.cwd(), "drive-export-queue.json");
+    if (!fs.existsSync(exportQueuePath)) return res.json({ queued: false, exported: false });
+    const queue = JSON.parse(fs.readFileSync(exportQueuePath, "utf-8"));
+    const entry = queue.find((e: any) => e.filename === req.params.filename);
+    if (!entry) return res.json({ queued: false, exported: false });
+    res.json({ queued: true, exported: entry.exported });
+  });
+
+  // POST /api/drive/refresh-manifest — write a full manifest JSON from external assistant
+  app.post("/api/drive/refresh-manifest", (req, res) => {
+    const manifestPath = path.join(process.cwd(), "drive-manifest.json");
+    try {
+      const manifest = req.body;
+      if (!manifest || typeof manifest !== "object") {
+        return res.status(400).json({ error: "Invalid manifest body" });
+      }
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), "utf-8");
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 }
 

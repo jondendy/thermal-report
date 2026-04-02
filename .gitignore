@@ -7,3 +7,7 @@ vite.config.ts.*
 *.db
 *.db-shm
 *.db-wal
+uploads/
+reports/
+drive-export-queue.json
+drive-manifest.json
