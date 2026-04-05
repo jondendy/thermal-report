@@ -11,3 +11,14 @@ uploads/
 reports/
 drive-export-queue.json
 drive-manifest.json
+settings.json
+service-account.json
+token.json
+.env
+flask_output.log
+thermal_report_errors.log
+__pycache__/
+venv/
+.Images/
+.reports/
+README-local.md

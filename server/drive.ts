@@ -1,4 +1,3 @@
-cat > ~/thermal-report/server/drive.ts << 'EOF'
 import { google } from "googleapis";
 import path from "path";
 import fs from "fs";
@@ -42,4 +41,3 @@ export async function uploadFile(folderId: string, filePath: string, filename: s
   });
   return res.data;
 }
-EOF
