@@ -171,9 +171,13 @@ export interface DriveProperty {
 }
 
 export async function getDriveProperties(): Promise<DriveProperty[]> {
-  const res = await apiRequest("GET", "/api/drive/property-folders");
+  const settingsRes = await apiRequest("GET", "/api/settings");
+  const settings = await settingsRes.json();
+  const folderId = settings.driveSourceFolderId;
+  if (!folderId) return [];
+  const res = await apiRequest("GET", `/api/drive/folders?parent=${folderId}`);
   const data = await res.json();
-  return data.properties || [];
+  return data.folders || [];
 }
 
 export async function importDriveImages(data: {
