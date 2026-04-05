@@ -404,6 +404,25 @@ export function registerRoutes(server: Server, app: Express) {
     }
   });
 
+  // Download a file from Drive by fileId
+  app.get("/api/drive/download-file", async (req, res) => {
+    const fileId = req.query.fileId as string;
+    if (!fileId) return res.status(400).json({ error: "fileId required" });
+    try {
+      const drive = getDriveClient();
+      const meta = await drive.files.get({ fileId, fields: "name,mimeType" });
+      const fileRes = await drive.files.get(
+        { fileId, alt: "media" },
+        { responseType: "stream" }
+      );
+      res.setHeader("Content-Type", meta.data.mimeType || "image/jpeg");
+      res.setHeader("Content-Disposition", `attachment; filename="${meta.data.name}"`);
+      (fileRes.data as any).pipe(res);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // Upload PDF to Drive output folder
   app.post("/api/drive/upload-report", async (req, res) => {
     const settings = loadSettings();
