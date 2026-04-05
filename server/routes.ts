@@ -415,6 +415,7 @@ export function registerRoutes(server: Server, app: Express) {
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
+  });
 
   // ── Drive Manifest Integration ─────────────────────────────────
 
