@@ -392,6 +392,18 @@ export function registerRoutes(server: Server, app: Express) {
     }
   });
 
+    // List JPEG files in any given Drive folder
+  app.get("/api/drive/folder-files", async (req, res) => {
+    const folderId = req.query.folderId as string;
+    if (!folderId) return res.status(400).json({ error: "folderId required" });
+    try {
+      const files = await listJpegs(folderId);
+      res.json({ files });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // Upload PDF to Drive output folder
   app.post("/api/drive/upload-report", async (req, res) => {
     const settings = loadSettings();
