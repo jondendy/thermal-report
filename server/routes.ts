@@ -7,7 +7,7 @@ import { storage } from "./storage";
 import { processImage, detectHotspots, createLabeledImage, saveThermalData, loadThermalData } from "./thermal";
 import { generatePdfReport } from "./pdf-report";
 import { loadSettings, saveSettings } from "./settings";
-import { listFolders, listJpegs, uploadFile } from "./drive";
+import { listFolders, listJpegs, uploadFile, getDriveClient } from "./drive";
 import type { Spot } from "@shared/schema";
 
 // Configure multer for file uploads
