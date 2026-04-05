@@ -177,9 +177,14 @@ export async function getDriveProperties(): Promise<DriveProperty[]> {
   if (!folderId) return [];
   const res = await apiRequest("GET", `/api/drive/folders?parent=${folderId}`);
   const data = await res.json();
-  return data.folders || [];
+  return (data.folders || []).map((f: { id: string; name: string }) => ({
+    folderId: f.id,
+    folderName: f.name,
+    thermalCount: 0,
+    lastModified: null,
+    images: [],
+  }));
 }
-
 export async function importDriveImages(data: {
   propertyName: string;
   inspectorName: string;
