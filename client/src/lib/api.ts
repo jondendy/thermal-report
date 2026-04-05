@@ -198,21 +198,6 @@ export async function getDriveFolderFiles(folderId: string): Promise<DriveProper
   }));
 }
 
-export async function getDriveFolderFiles(folderId: string): Promise<DriveProperty["images"]> {
-  const res = await apiRequest("GET", `/api/drive/folders?parent=${folderId}`);
-  const data = await res.json();
-  // Also fetch JPEGs directly in this folder
-  const filesRes = await apiRequest("GET", `/api/drive/source-files-by-folder?folderId=${folderId}`);
-  const filesData = await filesRes.json();
-  return (filesData.files || []).map((f: any) => ({
-    name: f.name,
-    fileId: f.id,
-    size: parseInt(f.size || "0"),
-    isThermal: true,
-    downloadUrl: f.downloadUrl || "",
-  }));
-}
-
 export async function importDriveImages(data: {
   propertyName: string;
   inspectorName: string;
