@@ -187,6 +187,18 @@ export async function getDriveProperties(): Promise<DriveProperty[]> {
 }
 
 export async function getDriveFolderFiles(folderId: string): Promise<DriveProperty["images"]> {
+  const res = await apiRequest("GET", `/api/drive/folder-files?folderId=${folderId}`);
+  const data = await res.json();
+  return (data.files || []).map((f: any) => ({
+    name: f.name,
+    fileId: f.id,
+    size: parseInt(f.size || "0"),
+    isThermal: true,
+    downloadUrl: `/api/drive/download-file?fileId=${f.id}`,
+  }));
+}
+
+export async function getDriveFolderFiles(folderId: string): Promise<DriveProperty["images"]> {
   const res = await apiRequest("GET", `/api/drive/folders?parent=${folderId}`);
   const data = await res.json();
   // Also fetch JPEGs directly in this folder
