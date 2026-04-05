@@ -7,6 +7,7 @@ import { storage } from "./storage";
 import { processImage, detectHotspots, createLabeledImage, saveThermalData, loadThermalData } from "./thermal";
 import { generatePdfReport } from "./pdf-report";
 import { loadSettings, saveSettings } from "./settings";
+import { listFolders, listJpegs, uploadFile } from "./drive";
 import type { Spot } from "@shared/schema";
 
 // Configure multer for file uploads
@@ -369,10 +370,12 @@ export function registerRoutes(server: Server, app: Express) {
   // List folders in Drive (used by folder picker)
   app.get("/api/drive/folders", async (req, res) => {
     const parentId = (req.query.parent as string) || "root";
-    // This endpoint will be backed by the Google Drive connector.
-    // For now, return empty to allow the UI to render.
-    // In production, this calls the Drive API via service credentials.
-    res.json({ folders: [], parentId });
+    try {
+      const folders = await listFolders(parentId);
+      res.json({ folders, parentId });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // List FLIR images from source Drive folder
@@ -381,8 +384,12 @@ export function registerRoutes(server: Server, app: Express) {
     if (!settings.driveSourceFolderId) {
       return res.json({ files: [], error: "No source folder configured" });
     }
-    // Placeholder — will be populated when Drive is connected
-    res.json({ files: [], folderId: settings.driveSourceFolderId });
+    try {
+      const files = await listJpegs(settings.driveSourceFolderId);
+      res.json({ files, folderId: settings.driveSourceFolderId });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // Upload PDF to Drive output folder
@@ -402,9 +409,12 @@ export function registerRoutes(server: Server, app: Express) {
       return res.status(404).json({ error: "Report file not found" });
     }
 
-    // Placeholder — will upload to Drive when connected
-    res.json({ success: true, message: "Drive upload will be available once connected" });
-  });
+    try {
+      const result = await uploadFile(settings.driveOutputFolderId, filePath, filename);
+      res.json({ success: true, fileId: result.id, fileName: result.name });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
 
   // ── Drive Manifest Integration ─────────────────────────────────
 
