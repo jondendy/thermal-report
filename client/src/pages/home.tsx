@@ -265,7 +265,14 @@ export default function HomePage() {
                         <button
                           key={prop.folderId}
                           type="button"
-                          onClick={() => setSelectedProperty(selectedProperty?.folderId === prop.folderId ? null : prop)}
+                          onClick={async () => {
+                              if (selectedProperty?.folderId === prop.folderId) {
+                                  setSelectedProperty(null);
+                              } else {
+                                  const images = await getDriveFolderFiles(prop.folderId);
+                                  setSelectedProperty({ ...prop, images, thermalCount: images.length });
+                              }
+                          }}
                           className={[
                             "w-full text-left rounded-lg border px-4 py-3 transition-colors",
                             selectedProperty?.folderId === prop.folderId
