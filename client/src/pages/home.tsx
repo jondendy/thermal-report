@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Upload,
@@ -32,6 +33,13 @@ const STATUS_BADGES: Record<string, { label: string; variant: "default" | "secon
   complete: { label: "Complete", variant: "default" },
 };
 
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function HomePage() {
   const [, navigate] = useLocation();
   const [showNew, setShowNew] = useState(false);
@@ -42,8 +50,12 @@ export default function HomePage() {
 
   // Drive import state
   const [selectedProperty, setSelectedProperty] = useState<DriveProperty | null>(null);
+  const [loadingFolderFiles, setLoadingFolderFiles] = useState(false);
   const [driveInspector, setDriveInspector] = useState("");
   const [importing, setImporting] = useState(false);
+
+  // File selection state — Set of fileIds that are ticked
+  const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
 
   // Load default inspector name from settings
   const { data: appSettings } = useQuery({
@@ -111,26 +123,53 @@ export default function HomePage() {
   const importMutation = useMutation({
     mutationFn: async () => {
       if (!selectedProperty) throw new Error("No property selected");
+      if (selectedFileIds.size === 0) throw new Error("No files selected");
       setImporting(true);
 
-      const thermalImages = selectedProperty.images;
-      if (thermalImages.length === 0) throw new Error("No thermal images found in this folder");
+      const imagesToImport = selectedProperty.images.filter((img) =>
+        selectedFileIds.has(img.fileId)
+      );
 
       return importDriveImages({
         propertyName: selectedProperty.folderName,
         inspectorName: driveInspector,
-        images: thermalImages.map((img) => ({ name: img.name, url: img.downloadUrl })),
+        images: imagesToImport.map((img) => ({ name: img.name, url: img.downloadUrl })),
       });
     },
     onSuccess: (survey) => {
       queryClient.invalidateQueries({ queryKey: ["/api/surveys"] });
       setShowNew(false);
       setSelectedProperty(null);
+      setSelectedFileIds(new Set());
       setImporting(false);
       navigate(`/review/${survey.id}`);
     },
     onError: () => setImporting(false),
   });
+
+  // Helpers for the file selection checklist
+  function toggleFile(fileId: string) {
+    setSelectedFileIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(fileId)) next.delete(fileId);
+      else next.add(fileId);
+      return next;
+    });
+  }
+
+  function selectAllFiles() {
+    if (!selectedProperty) return;
+    setSelectedFileIds(new Set(selectedProperty.images.map((img) => img.fileId)));
+  }
+
+  function deselectAllFiles() {
+    setSelectedFileIds(new Set());
+  }
+
+  const allSelected =
+    selectedProperty !== null &&
+    selectedProperty.images.length > 0 &&
+    selectedFileIds.size === selectedProperty.images.length;
 
   return (
     <div className="max-w-4xl mx-auto p-6">
@@ -259,18 +298,29 @@ export default function HomePage() {
                   </div>
                 ) : (
                   <>
-                    <div className="space-y-2 max-h-64 overflow-y-auto" data-testid="drive-property-list">
+                    {/* ── Step 1: Property folder list ── */}
+                    <div className="space-y-2 max-h-48 overflow-y-auto" data-testid="drive-property-list">
                       {driveProperties.map((prop) => (
                         <button
                           key={prop.folderId}
                           type="button"
                           onClick={async () => {
-                              if (selectedProperty?.folderId === prop.folderId) {
-                                  setSelectedProperty(null);
-                              } else {
-                                  const images = await getDriveFolderFiles(prop.folderId);
-                                  setSelectedProperty({ ...prop, images, thermalCount: images.length });
+                            if (selectedProperty?.folderId === prop.folderId) {
+                              setSelectedProperty(null);
+                              setSelectedFileIds(new Set());
+                            } else {
+                              setLoadingFolderFiles(true);
+                              setSelectedFileIds(new Set());
+                              try {
+                                const images = await getDriveFolderFiles(prop.folderId);
+                                const fullProp = { ...prop, images, thermalCount: images.length };
+                                setSelectedProperty(fullProp);
+                                // Auto-select all files by default
+                                setSelectedFileIds(new Set(images.map((img) => img.fileId)));
+                              } finally {
+                                setLoadingFolderFiles(false);
                               }
+                            }
                           }}
                           className={[
                             "w-full text-left rounded-lg border px-4 py-3 transition-colors",
@@ -287,9 +337,15 @@ export default function HomePage() {
                                 {prop.folderName}
                               </span>
                             </div>
-                            <Badge variant="secondary" data-testid={`badge-thermal-count-${prop.folderId}`}>
-                              {prop.thermalCount} thermal
-                            </Badge>
+                            {selectedProperty?.folderId === prop.folderId ? (
+                              <Badge variant="default" data-testid={`badge-thermal-count-${prop.folderId}`}>
+                                {selectedFileIds.size} of {selectedProperty.images.length} selected
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary" data-testid={`badge-thermal-count-${prop.folderId}`}>
+                                {prop.thermalCount} thermal
+                              </Badge>
+                            )}
                           </div>
                           {prop.lastModified && (
                             <p className="text-xs text-muted-foreground mt-1 ml-6" data-testid={`text-last-modified-${prop.folderId}`}>
@@ -300,7 +356,73 @@ export default function HomePage() {
                       ))}
                     </div>
 
-                    {selectedProperty && (
+                    {/* ── Step 2: File selection checklist ── */}
+                    {loadingFolderFiles && (
+                      <div className="flex items-center justify-center py-6" data-testid="folder-files-loading">
+                        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground mr-2" />
+                        <span className="text-sm text-muted-foreground">Loading files…</span>
+                      </div>
+                    )}
+
+                    {selectedProperty && !loadingFolderFiles && selectedProperty.images.length > 0 && (
+                      <div className="border rounded-lg" data-testid="file-selection-panel">
+                        {/* Header row */}
+                        <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30 rounded-t-lg">
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id="select-all-files"
+                              checked={allSelected}
+                              onCheckedChange={(checked) =>
+                                checked ? selectAllFiles() : deselectAllFiles()
+                              }
+                              data-testid="checkbox-select-all"
+                            />
+                            <label
+                              htmlFor="select-all-files"
+                              className="text-xs font-medium cursor-pointer select-none"
+                            >
+                              {allSelected ? "Deselect all" : "Select all"}
+                            </label>
+                          </div>
+                          <span className="text-xs text-muted-foreground" data-testid="text-selection-count">
+                            {selectedFileIds.size} of {selectedProperty.images.length} selected
+                          </span>
+                        </div>
+
+                        {/* Scrollable file list */}
+                        <ul
+                          className="max-h-52 overflow-y-auto divide-y"
+                          data-testid="file-checklist"
+                        >
+                          {selectedProperty.images.map((img) => (
+                            <li key={img.fileId}>
+                              <label
+                                htmlFor={`file-${img.fileId}`}
+                                className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-muted/20 transition-colors"
+                              >
+                                <Checkbox
+                                  id={`file-${img.fileId}`}
+                                  checked={selectedFileIds.has(img.fileId)}
+                                  onCheckedChange={() => toggleFile(img.fileId)}
+                                  data-testid={`checkbox-file-${img.fileId}`}
+                                />
+                                <span className="flex-1 text-sm font-mono truncate" title={img.name}>
+                                  {img.name}
+                                </span>
+                                {img.size > 0 && (
+                                  <span className="text-xs text-muted-foreground flex-shrink-0">
+                                    {formatBytes(img.size)}
+                                  </span>
+                                )}
+                              </label>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* ── Step 3: Surveyor name + Import button ── */}
+                    {selectedProperty && !loadingFolderFiles && (
                       <div className="border-t pt-4 space-y-3" data-testid="drive-import-form">
                         <div>
                           <Label htmlFor="drive-inspector">Surveyor Name</Label>
@@ -312,14 +434,15 @@ export default function HomePage() {
                             data-testid="input-drive-inspector"
                           />
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          {selectedProperty.thermalCount} thermal image{selectedProperty.thermalCount !== 1 ? "s" : ""} will be
-                          imported from <strong>{selectedProperty.folderName}</strong>.
-                        </p>
+                        {selectedFileIds.size === 0 && (
+                          <p className="text-xs text-amber-600" data-testid="text-no-files-warning">
+                            Select at least one file to import.
+                          </p>
+                        )}
                         <div className="flex gap-2">
                           <Button
                             onClick={() => importMutation.mutate()}
-                            disabled={importing}
+                            disabled={importing || selectedFileIds.size === 0}
                             data-testid="button-import-drive"
                           >
                             {importing ? (
@@ -330,13 +453,16 @@ export default function HomePage() {
                             ) : (
                               <>
                                 <CloudDownload className="w-4 h-4 mr-1" />
-                                Import & Process
+                                Import & Process{selectedFileIds.size > 0 ? ` (${selectedFileIds.size})` : ""}
                               </>
                             )}
                           </Button>
                           <Button
                             variant="outline"
-                            onClick={() => setSelectedProperty(null)}
+                            onClick={() => {
+                              setSelectedProperty(null);
+                              setSelectedFileIds(new Set());
+                            }}
                             data-testid="button-deselect-property"
                           >
                             Deselect
