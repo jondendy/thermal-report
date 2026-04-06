@@ -508,10 +508,16 @@ export function registerRoutes(server: Server, app: Express) {
 
     for (const img of images) {
       try {
-        // Download image from pre-signed URL
-        const fetchRes = await fetch(img.url);
-        if (!fetchRes.ok) throw new Error(`Failed to download ${img.name}: ${fetchRes.statusText}`);
-        const buffer = Buffer.from(await fetchRes.arrayBuffer());
+        // Download image from Google Drive by fileId
+        const drive = getDriveClient();
+        const fileIdMatch = img.url.match(/fileId=([^&]+)/);
+        const fileId = fileIdMatch ? fileIdMatch[1] : null;
+        if (!fileId) throw new Error(`No fileId found in URL for ${img.name}`);
+        const driveRes = await drive.files.get(
+          { fileId, alt: "media" },
+          { responseType: "arraybuffer" }
+        );
+        const buffer = Buffer.from(driveRes.data as ArrayBuffer);
 
         const permPath = path.join(permDir, img.name);
         fs.writeFileSync(permPath, buffer);
