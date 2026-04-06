@@ -113,9 +113,7 @@ export default function HomePage() {
       if (!selectedProperty) throw new Error("No property selected");
       setImporting(true);
 
-      const thermalImages = selectedProperty.images.filter(
-        (img) => img.isThermal || img.size > 40 * 1024
-      );
+      const thermalImages = selectedProperty.images;
       if (thermalImages.length === 0) throw new Error("No thermal images found in this folder");
 
       return importDriveImages({
@@ -419,7 +417,7 @@ export default function HomePage() {
                       size="icon"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (confirm("Delete this survey?")) deleteMutation.mutate(survey.id);
+                        deleteMutation.mutate(survey.id);
                       }}
                       data-testid={`button-delete-${survey.id}`}
                     >
