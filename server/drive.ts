@@ -26,7 +26,7 @@ export async function listJpegs(folderId: string) {
   const drive = getDriveClient();
   const res = await drive.files.list({
     q: `'${folderId}' in parents and mimeType='image/jpeg' and trashed=false`,
-    fields: "files(id,name,size,modifiedTime)",
+    fields: "files(id,name,size,modifiedTime,thumbnailLink)",
     pageSize: 200,
   });
   return res.data.files || [];

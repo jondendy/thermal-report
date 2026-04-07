@@ -160,12 +160,21 @@ export async function getRecommendations(): Promise<Recommendations> {
   return res.json();
 }
 
-// ── Drive Integration ──────────────────────────────────────────
+// ── Drive Integration ──────────────────────────────────────────────
+
+export interface DriveImage {
+  name: string;
+  fileId: string;
+  size: number;
+  isThermal: boolean;
+  downloadUrl: string;
+  thumbnailLink: string | null;
+}
 
 export interface DriveProperty {
   folderName: string;
   folderId: string;
-  images: { name: string; fileId: string; size: number; isThermal: boolean; downloadUrl: string }[];
+  images: DriveImage[];
   lastModified: string;
   thermalCount: number;
 }
@@ -186,7 +195,7 @@ export async function getDriveProperties(): Promise<DriveProperty[]> {
   }));
 }
 
-export async function getDriveFolderFiles(folderId: string): Promise<DriveProperty["images"]> {
+export async function getDriveFolderFiles(folderId: string): Promise<DriveImage[]> {
   const res = await apiRequest("GET", `/api/drive/folder-files?folderId=${folderId}`);
   const data = await res.json();
   return (data.files || []).map((f: any) => ({
@@ -195,6 +204,7 @@ export async function getDriveFolderFiles(folderId: string): Promise<DriveProper
     size: parseInt(f.size || "0"),
     isThermal: true,
     downloadUrl: `/api/drive/download-file?fileId=${f.id}`,
+    thumbnailLink: f.thumbnailLink ?? null,
   }));
 }
 

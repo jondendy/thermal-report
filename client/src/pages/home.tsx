@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { queryClient } from "@/lib/queryClient";
 import { getSurveys, createSurvey, deleteSurvey, uploadImages, getDriveProperties, importDriveImages } from "@/lib/api";
-import type { DriveProperty } from "@/lib/api";
+import type { DriveProperty, DriveImage } from "@/lib/api";
 import { getDriveFolderFiles } from "@/lib/api";
 import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +24,7 @@ import {
   FolderOpen,
   HardDrive,
   CloudDownload,
+  ImageOff,
 } from "lucide-react";
 
 const STATUS_BADGES: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -54,7 +55,7 @@ export default function HomePage() {
   const [driveInspector, setDriveInspector] = useState("");
   const [importing, setImporting] = useState(false);
 
-  // File selection state — Set of fileIds that are ticked
+  // File selection — empty Set means nothing ticked (start deselected)
   const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
 
   // Load default inspector name from settings
@@ -66,7 +67,6 @@ export default function HomePage() {
     },
   });
 
-  // Pre-fill inspector when settings load
   useEffect(() => {
     if (appSettings?.defaultInspectorName) {
       if (!inspector) setInspector(appSettings.defaultInspectorName);
@@ -79,7 +79,6 @@ export default function HomePage() {
     queryFn: getSurveys,
   });
 
-  // Drive properties query — only runs when the panel is open
   const {
     data: driveProperties = [],
     isLoading: driveLoading,
@@ -95,12 +94,8 @@ export default function HomePage() {
     mutationFn: async () => {
       const files = fileRef.current?.files;
       if (!files || files.length === 0) throw new Error("Select at least one image");
-
       setUploading(true);
-      const survey = await createSurvey({
-        propertyAddress: address,
-        inspectorName: inspector,
-      });
+      const survey = await createSurvey({ propertyAddress: address, inspectorName: inspector });
       await uploadImages(survey.id, files);
       return survey;
     },
@@ -125,11 +120,9 @@ export default function HomePage() {
       if (!selectedProperty) throw new Error("No property selected");
       if (selectedFileIds.size === 0) throw new Error("No files selected");
       setImporting(true);
-
       const imagesToImport = selectedProperty.images.filter((img) =>
         selectedFileIds.has(img.fileId)
       );
-
       return importDriveImages({
         propertyName: selectedProperty.folderName,
         inspectorName: driveInspector,
@@ -147,7 +140,6 @@ export default function HomePage() {
     onError: () => setImporting(false),
   });
 
-  // Helpers for the file selection checklist
   function toggleFile(fileId: string) {
     setSelectedFileIds((prev) => {
       const next = new Set(prev);
@@ -201,12 +193,12 @@ export default function HomePage() {
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="upload" data-testid="tabs-new-survey">
-              <TabsList className="mb-4" data-testid="tablist-new-survey">
-                <TabsTrigger value="upload" data-testid="tab-upload-files">
+              <TabsList className="mb-4">
+                <TabsTrigger value="upload">
                   <Upload className="w-4 h-4 mr-1.5" />
                   Upload Files
                 </TabsTrigger>
-                <TabsTrigger value="drive" data-testid="tab-import-drive">
+                <TabsTrigger value="drive">
                   <HardDrive className="w-4 h-4 mr-1.5" />
                   Import from Drive
                 </TabsTrigger>
@@ -222,7 +214,6 @@ export default function HomePage() {
                       placeholder="e.g. 14 High Street, Chesham"
                       value={address}
                       onChange={(e) => setAddress(e.target.value)}
-                      data-testid="input-address"
                     />
                   </div>
                   <div>
@@ -232,74 +223,45 @@ export default function HomePage() {
                       placeholder="e.g. Jon Dendy"
                       value={inspector}
                       onChange={(e) => setInspector(e.target.value)}
-                      data-testid="input-inspector"
                     />
                   </div>
                 </div>
                 <div>
                   <Label htmlFor="files">Thermal Images (JPEG, max 8)</Label>
-                  <Input
-                    id="files"
-                    type="file"
-                    accept=".jpg,.jpeg"
-                    multiple
-                    ref={fileRef}
-                    className="mt-1"
-                    data-testid="input-files"
-                  />
+                  <Input id="files" type="file" accept=".jpg,.jpeg" multiple ref={fileRef} className="mt-1" />
                   <p className="text-xs text-muted-foreground mt-1">
                     Upload radiometric JPEG images from your FLIR thermal camera.
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  <Button
-                    onClick={() => createMutation.mutate()}
-                    disabled={uploading}
-                    data-testid="button-upload"
-                  >
+                  <Button onClick={() => createMutation.mutate()} disabled={uploading}>
                     {uploading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                        Processing...
-                      </>
+                      <><Loader2 className="w-4 h-4 mr-1 animate-spin" />Processing...</>
                     ) : (
-                      <>
-                        <Upload className="w-4 h-4 mr-1" />
-                        Upload & Process
-                      </>
+                      <><Upload className="w-4 h-4 mr-1" />Upload & Process</>
                     )}
                   </Button>
-                  <Button variant="outline" onClick={() => setShowNew(false)} data-testid="button-cancel-upload">
-                    Cancel
-                  </Button>
+                  <Button variant="outline" onClick={() => setShowNew(false)}>Cancel</Button>
                 </div>
               </TabsContent>
 
               {/* ── Tab 2: Import from Drive ── */}
               <TabsContent value="drive" className="space-y-4">
                 {driveLoading ? (
-                  <div className="flex items-center justify-center py-8" data-testid="drive-loading">
+                  <div className="flex items-center justify-center py-8">
                     <Loader2 className="w-5 h-5 animate-spin text-muted-foreground mr-2" />
                     <span className="text-sm text-muted-foreground">Loading property folders…</span>
                   </div>
                 ) : driveProperties.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground" data-testid="drive-empty">
+                  <div className="text-center py-8 text-muted-foreground">
                     <HardDrive className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                    <p className="text-sm">No property folders found. Ask your assistant to scan Google Drive.</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-3"
-                      onClick={() => refetchDrive()}
-                      data-testid="button-drive-refresh"
-                    >
-                      Refresh
-                    </Button>
+                    <p className="text-sm">No property folders found.</p>
+                    <Button variant="outline" size="sm" className="mt-3" onClick={() => refetchDrive()}>Refresh</Button>
                   </div>
                 ) : (
                   <>
-                    {/* ── Step 1: Property folder list ── */}
-                    <div className="space-y-2 max-h-48 overflow-y-auto" data-testid="drive-property-list">
+                    {/* Step 1: Property folder list */}
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
                       {driveProperties.map((prop) => (
                         <button
                           key={prop.folderId}
@@ -310,13 +272,11 @@ export default function HomePage() {
                               setSelectedFileIds(new Set());
                             } else {
                               setLoadingFolderFiles(true);
-                              setSelectedFileIds(new Set());
+                              setSelectedFileIds(new Set()); // start deselected
                               try {
                                 const images = await getDriveFolderFiles(prop.folderId);
-                                const fullProp = { ...prop, images, thermalCount: images.length };
-                                setSelectedProperty(fullProp);
-                                // Auto-select all files by default
-                                setSelectedFileIds(new Set(images.map((img) => img.fileId)));
+                                setSelectedProperty({ ...prop, images, thermalCount: images.length });
+                                // Do NOT auto-select — user chooses which files to import
                               } finally {
                                 setLoadingFolderFiles(false);
                               }
@@ -328,27 +288,22 @@ export default function HomePage() {
                               ? "border-primary bg-primary/5"
                               : "border-border hover:border-primary/40 hover:bg-muted/30",
                           ].join(" ")}
-                          data-testid={`card-drive-property-${prop.folderId}`}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2 min-w-0">
                               <FolderOpen className="w-4 h-4 text-primary flex-shrink-0" />
-                              <span className="font-medium text-sm truncate" data-testid={`text-property-name-${prop.folderId}`}>
-                                {prop.folderName}
-                              </span>
+                              <span className="font-medium text-sm truncate">{prop.folderName}</span>
                             </div>
                             {selectedProperty?.folderId === prop.folderId ? (
-                              <Badge variant="default" data-testid={`badge-thermal-count-${prop.folderId}`}>
+                              <Badge variant="default">
                                 {selectedFileIds.size} of {selectedProperty.images.length} selected
                               </Badge>
                             ) : (
-                              <Badge variant="secondary" data-testid={`badge-thermal-count-${prop.folderId}`}>
-                                {prop.thermalCount} thermal
-                              </Badge>
+                              <Badge variant="secondary">{prop.thermalCount} thermal</Badge>
                             )}
                           </div>
                           {prop.lastModified && (
-                            <p className="text-xs text-muted-foreground mt-1 ml-6" data-testid={`text-last-modified-${prop.folderId}`}>
+                            <p className="text-xs text-muted-foreground mt-1 ml-6">
                               Modified {new Date(prop.lastModified).toLocaleDateString("en-GB")}
                             </p>
                           )}
@@ -356,45 +311,37 @@ export default function HomePage() {
                       ))}
                     </div>
 
-                    {/* ── Step 2: File selection checklist ── */}
+                    {/* Loading spinner while fetching file list */}
                     {loadingFolderFiles && (
-                      <div className="flex items-center justify-center py-6" data-testid="folder-files-loading">
+                      <div className="flex items-center justify-center py-6">
                         <Loader2 className="w-4 h-4 animate-spin text-muted-foreground mr-2" />
                         <span className="text-sm text-muted-foreground">Loading files…</span>
                       </div>
                     )}
 
+                    {/* Step 2: File selection checklist with thumbnails */}
                     {selectedProperty && !loadingFolderFiles && selectedProperty.images.length > 0 && (
-                      <div className="border rounded-lg" data-testid="file-selection-panel">
-                        {/* Header row */}
-                        <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30 rounded-t-lg">
+                      <div className="border rounded-lg overflow-hidden">
+                        {/* Header: select-all + count */}
+                        <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
                           <div className="flex items-center gap-2">
                             <Checkbox
                               id="select-all-files"
                               checked={allSelected}
-                              onCheckedChange={(checked) =>
-                                checked ? selectAllFiles() : deselectAllFiles()
-                              }
-                              data-testid="checkbox-select-all"
+                              onCheckedChange={(checked) => checked ? selectAllFiles() : deselectAllFiles()}
                             />
-                            <label
-                              htmlFor="select-all-files"
-                              className="text-xs font-medium cursor-pointer select-none"
-                            >
+                            <label htmlFor="select-all-files" className="text-xs font-medium cursor-pointer select-none">
                               {allSelected ? "Deselect all" : "Select all"}
                             </label>
                           </div>
-                          <span className="text-xs text-muted-foreground" data-testid="text-selection-count">
+                          <span className="text-xs text-muted-foreground">
                             {selectedFileIds.size} of {selectedProperty.images.length} selected
                           </span>
                         </div>
 
                         {/* Scrollable file list */}
-                        <ul
-                          className="max-h-52 overflow-y-auto divide-y"
-                          data-testid="file-checklist"
-                        >
-                          {selectedProperty.images.map((img) => (
+                        <ul className="max-h-64 overflow-y-auto divide-y">
+                          {selectedProperty.images.map((img: DriveImage) => (
                             <li key={img.fileId}>
                               <label
                                 htmlFor={`file-${img.fileId}`}
@@ -404,8 +351,20 @@ export default function HomePage() {
                                   id={`file-${img.fileId}`}
                                   checked={selectedFileIds.has(img.fileId)}
                                   onCheckedChange={() => toggleFile(img.fileId)}
-                                  data-testid={`checkbox-file-${img.fileId}`}
                                 />
+                                {/* Thumbnail */}
+                                <div className="w-12 h-9 rounded overflow-hidden flex-shrink-0 bg-muted flex items-center justify-center">
+                                  {img.thumbnailLink ? (
+                                    <img
+                                      src={img.thumbnailLink}
+                                      alt={img.name}
+                                      className="w-full h-full object-cover"
+                                      loading="lazy"
+                                    />
+                                  ) : (
+                                    <ImageOff className="w-4 h-4 text-muted-foreground" />
+                                  )}
+                                </div>
                                 <span className="flex-1 text-sm font-mono truncate" title={img.name}>
                                   {img.name}
                                 </span>
@@ -421,9 +380,9 @@ export default function HomePage() {
                       </div>
                     )}
 
-                    {/* ── Step 3: Surveyor name + Import button ── */}
+                    {/* Step 3: Surveyor name + Import button */}
                     {selectedProperty && !loadingFolderFiles && (
-                      <div className="border-t pt-4 space-y-3" data-testid="drive-import-form">
+                      <div className="border-t pt-4 space-y-3">
                         <div>
                           <Label htmlFor="drive-inspector">Surveyor Name</Label>
                           <Input
@@ -431,39 +390,27 @@ export default function HomePage() {
                             placeholder="e.g. Jon Dendy"
                             value={driveInspector}
                             onChange={(e) => setDriveInspector(e.target.value)}
-                            data-testid="input-drive-inspector"
                           />
                         </div>
                         {selectedFileIds.size === 0 && (
-                          <p className="text-xs text-amber-600" data-testid="text-no-files-warning">
-                            Select at least one file to import.
-                          </p>
+                          <p className="text-xs text-amber-600">Select at least one file to import.</p>
                         )}
                         <div className="flex gap-2">
                           <Button
                             onClick={() => importMutation.mutate()}
                             disabled={importing || selectedFileIds.size === 0}
-                            data-testid="button-import-drive"
                           >
                             {importing ? (
-                              <>
-                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                                Importing…
-                              </>
+                              <><Loader2 className="w-4 h-4 mr-1 animate-spin" />Importing…</>
                             ) : (
-                              <>
-                                <CloudDownload className="w-4 h-4 mr-1" />
+                              <><CloudDownload className="w-4 h-4 mr-1" />
                                 Import & Process{selectedFileIds.size > 0 ? ` (${selectedFileIds.size})` : ""}
                               </>
                             )}
                           </Button>
                           <Button
                             variant="outline"
-                            onClick={() => {
-                              setSelectedProperty(null);
-                              setSelectedFileIds(new Set());
-                            }}
-                            data-testid="button-deselect-property"
+                            onClick={() => { setSelectedProperty(null); setSelectedFileIds(new Set()); }}
                           >
                             Deselect
                           </Button>
@@ -472,22 +419,13 @@ export default function HomePage() {
                     )}
 
                     <div className="flex justify-end">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => refetchDrive()}
-                        data-testid="button-drive-refresh-bottom"
-                      >
-                        Refresh folders
-                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => refetchDrive()}>Refresh folders</Button>
                     </div>
                   </>
                 )}
 
                 <div className="flex justify-start">
-                  <Button variant="outline" onClick={() => setShowNew(false)} data-testid="button-cancel-drive">
-                    Cancel
-                  </Button>
+                  <Button variant="outline" onClick={() => setShowNew(false)}>Cancel</Button>
                 </div>
               </TabsContent>
             </Tabs>
@@ -511,18 +449,14 @@ export default function HomePage() {
           {surveys.map((survey) => {
             const badge = STATUS_BADGES[survey.status] || STATUS_BADGES.uploading;
             const nextPage =
-              survey.status === "complete"
+              survey.status === "complete" || survey.status === "editing_notes"
                 ? `/notes/${survey.id}`
-                : survey.status === "editing_notes"
-                  ? `/notes/${survey.id}`
-                  : `/review/${survey.id}`;
-
+                : `/review/${survey.id}`;
             return (
               <Card
                 key={survey.id}
                 className="hover:border-primary/30 transition-colors cursor-pointer"
                 onClick={() => navigate(nextPage)}
-                data-testid={`card-survey-${survey.id}`}
               >
                 <CardContent className="flex items-center justify-between py-4">
                   <div className="flex-1 min-w-0">
@@ -541,11 +475,7 @@ export default function HomePage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteMutation.mutate(survey.id);
-                      }}
-                      data-testid={`button-delete-${survey.id}`}
+                      onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(survey.id); }}
                     >
                       <Trash2 className="w-4 h-4 text-muted-foreground" />
                     </Button>
