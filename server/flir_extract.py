@@ -14,7 +14,7 @@ Outputs a single JSON object to stdout:
     "mean":   <float>,
     "median": <float>,
     "std":    <float>,
-    "data":   "<base64-encoded little-endian float32 array, row-major>"
+    "data":   "<base64-encoded little-endian float32 array, row-major, raw °C>"
   }
 
 Errors are written to stderr and exit code is non-zero.
@@ -23,7 +23,6 @@ Errors are written to stderr and exit code is non-zero.
 import sys
 import json
 import base64
-import struct
 import os
 
 def main():
@@ -68,17 +67,21 @@ def main():
             "std":    float(np.std(valid)),
         }
 
-        # Normalise to 0-1 range (same contract as the old RGB-luminance approach)
-        # so detectHotspots() and the .bin cache format are unchanged.
-        t_min = stats["min"]
-        t_max = stats["max"]
-        t_range = t_max - t_min if t_max != t_min else 1.0
-
+        # Send raw °C values — do NOT normalise to 0-1.
+        # detectHotspots() uses std-dev thresholding which works identically
+        # on real temperatures. Preserving °C means:
+        #   - spot temperatures in the DB are real values (e.g. 14.2°C)
+        #   - the ±3°C camera accuracy can be accounted for downstream
+        #   - PDF reports show meaningful temperatures to assessors
         flat = temp_data.flatten().astype(np.float32)
-        normalised = ((flat - t_min) / t_range).astype(np.float32)
+
+        # Replace any remaining NaN/Inf with the image mean so the
+        # float32 buffer is clean (these are edge pixels in some cameras)
+        mean_val = stats["mean"]
+        flat = np.where(np.isfinite(flat), flat, mean_val).astype(np.float32)
 
         # Base64-encode as little-endian float32
-        encoded = base64.b64encode(normalised.tobytes()).decode("ascii")
+        encoded = base64.b64encode(flat.tobytes()).decode("ascii")
 
         result = {**stats, "data": encoded}
         print(json.dumps(result))
