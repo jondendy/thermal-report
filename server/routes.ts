@@ -214,6 +214,13 @@ export function registerRoutes(server: Server, app: Express) {
   });
 
   // ── Re-process with new sensitivity ────────────────────────────
+  //
+  // Always re-extracts raw thermal data from the original JPEG via
+  // processImage() (which calls flir_extract.py) rather than loading
+  // the cached .bin file.  This means:
+  //   - Old surveys imported before flir_extract.py was working get
+  //     fixed automatically on the next Reprocess click.
+  //   - The .bin cache is overwritten with fresh radiometric data.
 
   app.post("/api/surveys/:id/reprocess", async (req, res) => {
     const surveyId = Number(req.params.id);
@@ -231,31 +238,74 @@ export function registerRoutes(server: Server, app: Express) {
       }
     }
 
-    // Re-detect for each image
     const images = storage.getImagesBySurvey(surveyId);
     let spotNumber = storage.getNextSpotNumber(surveyId);
 
     for (const img of images) {
-      if (!img.thermalDataPath) continue;
-      const thermal = loadThermalData(img.thermalDataPath);
-      if (!thermal) continue;
+      if (!img.originalPath || !fs.existsSync(img.originalPath)) continue;
 
-      const detected = detectHotspots(thermal.data, thermal.width, thermal.height, sensitivity);
-      for (const ds of detected) {
-        storage.createSpot({
-          surveyId,
-          imageId: img.id,
-          spotNumber,
-          spotType: "Unknown",
-          temperature: ds.temperature,
-          severity: ds.severity,
-          pixelX: ds.x,
-          pixelY: ds.y,
-          areaSize: ds.areaSize,
-          isAutoDetected: 1,
-          isDeleted: 0,
+      try {
+        // Re-extract from original JPEG — overwrites cached .bin with fresh data
+        const { stats, thermalData } = await processImage(img.originalPath);
+
+        // Overwrite the .bin cache
+        if (img.thermalDataPath) {
+          saveThermalData(img.thermalDataPath, thermalData, stats.width, stats.height);
+        }
+
+        // Update image stats in DB
+        storage.updateImage(img.id, {
+          minTemp: stats.min,
+          maxTemp: stats.max,
+          meanTemp: stats.mean,
+          medianTemp: stats.median,
+          stdTemp: stats.std,
+          thermalWidth: stats.width,
+          thermalHeight: stats.height,
         });
-        spotNumber++;
+
+        const detected = detectHotspots(thermalData, stats.width, stats.height, sensitivity);
+        for (const ds of detected) {
+          storage.createSpot({
+            surveyId,
+            imageId: img.id,
+            spotNumber,
+            spotType: "Unknown",
+            temperature: ds.temperature,
+            severity: ds.severity,
+            pixelX: ds.x,
+            pixelY: ds.y,
+            areaSize: ds.areaSize,
+            isAutoDetected: 1,
+            isDeleted: 0,
+          });
+          spotNumber++;
+        }
+      } catch (e: any) {
+        console.error(`[reprocess] Failed to re-extract ${img.filename}:`, e.message);
+        // Fall back to cached .bin if original JPEG extraction fails
+        if (img.thermalDataPath) {
+          const thermal = loadThermalData(img.thermalDataPath);
+          if (thermal) {
+            const detected = detectHotspots(thermal.data, thermal.width, thermal.height, sensitivity);
+            for (const ds of detected) {
+              storage.createSpot({
+                surveyId,
+                imageId: img.id,
+                spotNumber,
+                spotType: "Unknown",
+                temperature: ds.temperature,
+                severity: ds.severity,
+                pixelX: ds.x,
+                pixelY: ds.y,
+                areaSize: ds.areaSize,
+                isAutoDetected: 1,
+                isDeleted: 0,
+              });
+              spotNumber++;
+            }
+          }
+        }
       }
     }
 
@@ -357,9 +407,6 @@ export function registerRoutes(server: Server, app: Express) {
 
   // Check Drive connection status
   app.get("/api/drive/status", (_req, res) => {
-    // Drive is connected through the external connector on the platform side.
-    // We expose a simple status endpoint; the frontend will show connection status.
-    // For now, report as available if settings have folder IDs.
     const settings = loadSettings();
     res.json({
       connected: !!(settings.driveSourceFolderId || settings.driveOutputFolderId),
@@ -392,7 +439,7 @@ export function registerRoutes(server: Server, app: Express) {
     }
   });
 
-    // List JPEG files in any given Drive folder
+  // List JPEG files in any given Drive folder
   app.get("/api/drive/folder-files", async (req, res) => {
     const folderId = req.query.folderId as string;
     if (!folderId) return res.status(400).json({ error: "folderId required" });
@@ -450,7 +497,6 @@ export function registerRoutes(server: Server, app: Express) {
 
   // ── Drive Manifest Integration ─────────────────────────────────
 
-  // GET /api/drive/property-folders — read manifest and return properties with thermal counts
   app.get("/api/drive/property-folders", (_req, res) => {
     const manifestPath = path.join(process.cwd(), "drive-manifest.json");
     try {
@@ -479,7 +525,6 @@ export function registerRoutes(server: Server, app: Express) {
     }
   });
 
-  // POST /api/drive/import-images — download images from URLs and process them
   app.post("/api/drive/import-images", async (req, res) => {
     const { propertyName, inspectorName, images } = req.body as {
       propertyName: string;
@@ -491,7 +536,6 @@ export function registerRoutes(server: Server, app: Express) {
       return res.status(400).json({ error: "propertyName and images are required" });
     }
 
-    // Create survey
     const survey = storage.createSurvey({
       propertyAddress: propertyName,
       inspectorName: inspectorName || "",
@@ -508,7 +552,6 @@ export function registerRoutes(server: Server, app: Express) {
 
     for (const img of images) {
       try {
-        // Download image from Google Drive by fileId
         const drive = getDriveClient();
         const fileIdMatch = img.url.match(/fileId=([^&]+)/);
         const fileId = fileIdMatch ? fileIdMatch[1] : null;
@@ -522,10 +565,8 @@ export function registerRoutes(server: Server, app: Express) {
         const permPath = path.join(permDir, img.name);
         fs.writeFileSync(permPath, buffer);
 
-        // Process thermal data
         const { stats, thermalData } = await processImage(permPath);
 
-        // Save thermal data
         const thermalDir = path.join(permDir, "thermal_data");
         if (!fs.existsSync(thermalDir)) fs.mkdirSync(thermalDir, { recursive: true });
         const thermalPath = path.join(thermalDir, `${path.parse(img.name).name}.bin`);
@@ -547,7 +588,6 @@ export function registerRoutes(server: Server, app: Express) {
           visualHeight: stats.height,
         });
 
-        // Detect hotspots
         const detectedSpots = detectHotspots(thermalData, stats.width, stats.height, survey.sensitivity);
 
         let spotNumber = storage.getNextSpotNumber(surveyId);
@@ -579,7 +619,6 @@ export function registerRoutes(server: Server, app: Express) {
       }
     }
 
-    // Regenerate labeled images
     await regenerateLabeledImages(surveyId);
 
     storage.updateSurvey(surveyId, { status: "reviewing" });
@@ -587,7 +626,6 @@ export function registerRoutes(server: Server, app: Express) {
     res.json({ ...updatedSurvey, results });
   });
 
-  // POST /api/drive/export-pdf — queue a generated report for Drive export
   app.post("/api/drive/export-pdf", (req, res) => {
     const { filename } = req.body;
     if (!filename) return res.status(400).json({ error: "No filename provided" });
@@ -595,7 +633,6 @@ export function registerRoutes(server: Server, app: Express) {
     const filePath = path.join(reportsDir, filename);
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Report file not found" });
 
-    // Write export queue entry so external process can pick it up
     const exportQueuePath = path.join(process.cwd(), "drive-export-queue.json");
     const queue = fs.existsSync(exportQueuePath)
       ? JSON.parse(fs.readFileSync(exportQueuePath, "utf-8"))
@@ -611,7 +648,6 @@ export function registerRoutes(server: Server, app: Express) {
     res.json({ success: true, message: "Report queued for Google Drive export", filePath: path.resolve(filePath) });
   });
 
-  // GET /api/drive/export-status — check if a report has been exported
   app.get("/api/drive/export-status/:filename", (req, res) => {
     const exportQueuePath = path.join(process.cwd(), "drive-export-queue.json");
     if (!fs.existsSync(exportQueuePath)) return res.json({ queued: false, exported: false });
@@ -621,7 +657,6 @@ export function registerRoutes(server: Server, app: Express) {
     res.json({ queued: true, exported: entry.exported });
   });
 
-  // POST /api/drive/refresh-manifest — write a full manifest JSON from external assistant
   app.post("/api/drive/refresh-manifest", (req, res) => {
     const manifestPath = path.join(process.cwd(), "drive-manifest.json");
     try {
@@ -643,7 +678,7 @@ async function regenerateLabeledImages(surveyId: number): Promise<void> {
   const allSpots = storage.getSpotsBySurvey(surveyId);
 
   for (const img of images) {
-    const imgSpots = allSpots.filter((s) => s.imageId === img.id);
+    const imgSpots = allSpots.filter((s) => s.imageId === img.id && !s.isDeleted);
     if (imgSpots.length === 0) continue;
 
     const labeledPath = img.originalPath.replace(/\.jpg$/i, "_labeled.jpg");
