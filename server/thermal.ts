@@ -6,9 +6,6 @@
  * This gives actual per-pixel °C values from the EXIF data — the FLIR
  * HUD (logo, temperature bar, crosshairs) is absent from the raw array,
  * so it cannot cause false-positive hotspot detections.
- *
- * The extracted data is normalised to 0-1 before being stored and used
- * by detectHotspots(), keeping the rest of the pipeline unchanged.
  */
 
 import { execFile } from "child_process";
@@ -37,7 +34,7 @@ export interface ThermalStats {
 export interface DetectedSpot {
   x: number;        // pixel col on visual image
   y: number;        // pixel row on visual image
-  temperature: number;  // normalised 0-1 relative value
+  temperature: number;  // degrees C (raw radiometric value)
   areaSize: number;
   severity: "low" | "medium" | "high" | "critical";
 }
@@ -50,7 +47,7 @@ export interface DetectedSpot {
  * Calls flir_extract.py which uses flirimageextractor + exiftool to read
  * the embedded Planck-equation thermal data directly from EXIF — the same
  * approach used by the Flask version of this app.  Returns a Float32Array
- * of normalised (0-1) thermal values, row-major, plus stats.
+ * of raw °C values, row-major, plus stats.
  *
  * Falls back to the legacy RGB-luminance method if the Python extractor
  * fails (e.g. non-FLIR JPEG uploaded for testing), with a console warning.
@@ -79,19 +76,26 @@ async function extractViaFlirTool(
     { maxBuffer: 64 * 1024 * 1024 }, // 64 MB — large images produce big base64 blobs
   );
 
+  // flirimageextractor prints "File paths successfully generated: ..." to
+  // stdout before our JSON.  Find the first '{' and parse from there.
+  // If stderr contains a JSON error object from our script, throw that.
   if (stderr && stderr.trim()) {
-    // stderr from the script always contains a JSON error object
     let msg = stderr.trim();
     try { msg = JSON.parse(msg).error ?? msg; } catch {}
     throw new Error(msg);
   }
 
-  const result = JSON.parse(stdout);
+  const jsonStart = stdout.indexOf('{');
+  if (jsonStart === -1) {
+    throw new Error(`No JSON found in flir_extract.py output: ${stdout.slice(0, 200)}`);
+  }
+
+  const result = JSON.parse(stdout.slice(jsonStart));
   if (result.error) throw new Error(result.error);
 
   const { width, height, min, max, mean, median, std, data: b64 } = result;
 
-  // Decode base64 float32 buffer
+  // Decode base64 float32 buffer (raw °C values — not normalised)
   const raw = Buffer.from(b64, "base64");
   const thermalData = new Float32Array(raw.buffer, raw.byteOffset, raw.byteLength / 4);
 
@@ -157,9 +161,11 @@ async function extractViaRgbFallback(
 // ── Hotspot detection ──────────────────────────────────────────────────
 
 /**
- * Detect hotspots using a statistical threshold on normalised thermal data.
+ * Detect hotspots using a statistical threshold on thermal data.
  *
- * sensitivity is the std-dev multiplier:
+ * Works on raw °C values from flirimageextractor. The sensitivity
+ * multiplier controls how many standard deviations above the mean
+ * triggers a detection:
  *   lower  = more sensitive (more spots detected)
  *   higher = less sensitive (only the very warmest regions)
  *
@@ -168,7 +174,7 @@ async function extractViaRgbFallback(
  *
  * Because the input is raw radiometric data (not a rendered image), there
  * is no need to mask a HUD region — the thermal array contains no overlaid
- * graphics.  The HUD masking is retained only for the RGB fallback path.
+ * graphics.
  */
 export function detectHotspots(
   thermalData: Float32Array,
@@ -179,8 +185,6 @@ export function detectHotspots(
 ): DetectedSpot[] {
   const pixelCount = width * height;
 
-  // Calculate mean and std across the full image
-  // (no HUD masking needed for real radiometric data)
   let sum = 0;
   for (let i = 0; i < pixelCount; i++) sum += thermalData[i];
   const mean = sum / pixelCount;
@@ -247,10 +251,10 @@ export function detectHotspots(
 
     const delta = maxVal - mean;
     let severity: DetectedSpot["severity"];
-    if (delta > 3 * std)        severity = "critical";
-    else if (delta > 2 * std)  severity = "high";
-    else if (delta > 1.5 * std) severity = "medium";
-    else                        severity = "low";
+    if (delta > 3 * std)         severity = "critical";
+    else if (delta > 2 * std)    severity = "high";
+    else if (delta > 1.5 * std)  severity = "medium";
+    else                         severity = "low";
 
     spots.push({
       x,
@@ -276,12 +280,19 @@ const SEVERITY_COLORS: Record<string, { r: number; g: number; b: number }> = {
 
 /**
  * Draw spot markers onto the original FLIR visual JPEG.
- * This always operates on the rendered image (sharp) regardless of how
- * the thermal data was extracted — the visual JPEG is the display image.
+ * Spot coordinates are in thermal-array space and are scaled up to the
+ * visual image dimensions before drawing.
  */
 export async function createLabeledImage(
   inputPath: string,
-  spotsData: Array<{ x: number; y: number; spotNumber: number; severity: string }>,
+  spotsData: Array<{
+    x: number;
+    y: number;
+    spotNumber: number;
+    severity: string;
+    thermalWidth?: number;
+    thermalHeight?: number;
+  }>,
   outputPath: string,
 ): Promise<void> {
   const { data: imgData, info } = await sharp(inputPath)
@@ -296,8 +307,12 @@ export async function createLabeledImage(
 
   for (const spot of spotsData) {
     const color = SEVERITY_COLORS[spot.severity] || SEVERITY_COLORS.medium;
-    const cx = Math.min(Math.max(spot.x, 12), width - 12);
-    const cy = Math.min(Math.max(spot.y, 12), height - 12);
+
+    // Scale thermal coordinates to visual image dimensions
+    const scaleX = spot.thermalWidth  ? width  / spot.thermalWidth  : 1;
+    const scaleY = spot.thermalHeight ? height / spot.thermalHeight : 1;
+    const cx = Math.min(Math.max(Math.round(spot.x * scaleX), 12), width - 12);
+    const cy = Math.min(Math.max(Math.round(spot.y * scaleY), 12), height - 12);
 
     for (let dx = -8; dx <= 8; dx++) {
       setPixel(pixels, width, channels, cx + dx, cy, color);
