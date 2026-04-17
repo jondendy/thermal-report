@@ -3,6 +3,7 @@ import type { Server } from "http";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import sharp from "sharp";
 import { storage } from "./storage";
 import { processImage, detectHotspots, createLabeledImage, saveThermalData, loadThermalData } from "./thermal";
 import { generatePdfReport } from "./pdf-report";
@@ -27,6 +28,12 @@ const upload = multer({
 // Directory for generated reports
 const reportsDir = path.join(process.cwd(), "reports");
 if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
+
+/** Read the actual pixel dimensions of a JPEG via sharp */
+async function getVisualDimensions(imagePath: string): Promise<{ width: number; height: number }> {
+  const meta = await sharp(imagePath).metadata();
+  return { width: meta.width ?? 640, height: meta.height ?? 480 };
+}
 
 export function registerRoutes(server: Server, app: Express) {
   // ── Survey CRUD ────────────────────────────────────────────────
@@ -78,17 +85,15 @@ export function registerRoutes(server: Server, app: Express) {
 
     const results = [];
     for (const file of files) {
-      // Move uploaded file to a permanent location with original name
       const permDir = path.join(uploadDir, String(surveyId));
       if (!fs.existsSync(permDir)) fs.mkdirSync(permDir, { recursive: true });
       const permPath = path.join(permDir, file.originalname);
       fs.renameSync(file.path, permPath);
 
-      // Process thermal data
       try {
         const { stats, thermalData } = await processImage(permPath);
+        const visual = await getVisualDimensions(permPath);
 
-        // Save thermal data for later re-processing
         const thermalDir = path.join(permDir, "thermal_data");
         if (!fs.existsSync(thermalDir)) fs.mkdirSync(thermalDir, { recursive: true });
         const thermalPath = path.join(thermalDir, `${path.parse(file.originalname).name}.bin`);
@@ -106,14 +111,12 @@ export function registerRoutes(server: Server, app: Express) {
           stdTemp: stats.std,
           thermalWidth: stats.width,
           thermalHeight: stats.height,
-          visualWidth: stats.width,
-          visualHeight: stats.height,
+          visualWidth: visual.width,
+          visualHeight: visual.height,
         });
 
-        // Detect hotspots with current sensitivity
         const detectedSpots = detectHotspots(thermalData, stats.width, stats.height, survey.sensitivity);
 
-        // Create spots in DB
         let spotNumber = storage.getNextSpotNumber(surveyId);
         for (const ds of detectedSpots) {
           storage.createSpot({
@@ -139,16 +142,11 @@ export function registerRoutes(server: Server, app: Express) {
           spotsDetected: detectedSpots.length,
         });
       } catch (e: any) {
-        results.push({
-          filename: file.originalname,
-          error: e.message,
-        });
+        results.push({ filename: file.originalname, error: e.message });
       }
     }
 
-    // Update labeled images after all spots are created
     await regenerateLabeledImages(surveyId);
-
     storage.updateSurvey(surveyId, { status: "reviewing" });
     res.json({ results });
   });
@@ -214,13 +212,6 @@ export function registerRoutes(server: Server, app: Express) {
   });
 
   // ── Re-process with new sensitivity ────────────────────────────
-  //
-  // Always re-extracts raw thermal data from the original JPEG via
-  // processImage() (which calls flir_extract.py) rather than loading
-  // the cached .bin file.  This means:
-  //   - Old surveys imported before flir_extract.py was working get
-  //     fixed automatically on the next Reprocess click.
-  //   - The .bin cache is overwritten with fresh radiometric data.
 
   app.post("/api/surveys/:id/reprocess", async (req, res) => {
     const surveyId = Number(req.params.id);
@@ -233,9 +224,7 @@ export function registerRoutes(server: Server, app: Express) {
     // Delete existing auto-detected spots
     const existingSpots = storage.getSpotsBySurvey(surveyId);
     for (const spot of existingSpots) {
-      if (spot.isAutoDetected) {
-        storage.updateSpot(spot.id, { isDeleted: 1 });
-      }
+      if (spot.isAutoDetected) storage.updateSpot(spot.id, { isDeleted: 1 });
     }
 
     const images = storage.getImagesBySurvey(surveyId);
@@ -245,15 +234,13 @@ export function registerRoutes(server: Server, app: Express) {
       if (!img.originalPath || !fs.existsSync(img.originalPath)) continue;
 
       try {
-        // Re-extract from original JPEG — overwrites cached .bin with fresh data
         const { stats, thermalData } = await processImage(img.originalPath);
+        const visual = await getVisualDimensions(img.originalPath);
 
-        // Overwrite the .bin cache
         if (img.thermalDataPath) {
           saveThermalData(img.thermalDataPath, thermalData, stats.width, stats.height);
         }
 
-        // Update image stats in DB
         storage.updateImage(img.id, {
           minTemp: stats.min,
           maxTemp: stats.max,
@@ -262,6 +249,8 @@ export function registerRoutes(server: Server, app: Express) {
           stdTemp: stats.std,
           thermalWidth: stats.width,
           thermalHeight: stats.height,
+          visualWidth: visual.width,
+          visualHeight: visual.height,
         });
 
         const detected = detectHotspots(thermalData, stats.width, stats.height, sensitivity);
@@ -283,7 +272,6 @@ export function registerRoutes(server: Server, app: Express) {
         }
       } catch (e: any) {
         console.error(`[reprocess] Failed to re-extract ${img.filename}:`, e.message);
-        // Fall back to cached .bin if original JPEG extraction fails
         if (img.thermalDataPath) {
           const thermal = loadThermalData(img.thermalDataPath);
           if (thermal) {
@@ -310,7 +298,6 @@ export function registerRoutes(server: Server, app: Express) {
     }
 
     await regenerateLabeledImages(surveyId);
-
     const newSpots = storage.getSpotsBySurvey(surveyId);
     res.json({ spots: newSpots, sensitivity });
   });
@@ -350,7 +337,6 @@ export function registerRoutes(server: Server, app: Express) {
     const spots = storage.getSpotsBySurvey(surveyId);
     const notes = storage.getNotesBySurvey(surveyId);
 
-    // Build a sanitized filename from the property address
     const sanitizedAddress = (survey.propertyAddress || `survey-${surveyId}`)
       .replace(/[^a-zA-Z0-9\s_-]/g, "")
       .trim()
@@ -405,7 +391,6 @@ export function registerRoutes(server: Server, app: Express) {
 
   // ── Google Drive Integration ──────────────────────────────────
 
-  // Check Drive connection status
   app.get("/api/drive/status", (_req, res) => {
     const settings = loadSettings();
     res.json({
@@ -414,7 +399,6 @@ export function registerRoutes(server: Server, app: Express) {
     });
   });
 
-  // List folders in Drive (used by folder picker)
   app.get("/api/drive/folders", async (req, res) => {
     const parentId = (req.query.parent as string) || "root";
     try {
@@ -425,7 +409,6 @@ export function registerRoutes(server: Server, app: Express) {
     }
   });
 
-  // List FLIR images from source Drive folder
   app.get("/api/drive/source-files", async (_req, res) => {
     const settings = loadSettings();
     if (!settings.driveSourceFolderId) {
@@ -439,7 +422,6 @@ export function registerRoutes(server: Server, app: Express) {
     }
   });
 
-  // List JPEG files in any given Drive folder
   app.get("/api/drive/folder-files", async (req, res) => {
     const folderId = req.query.folderId as string;
     if (!folderId) return res.status(400).json({ error: "folderId required" });
@@ -451,7 +433,6 @@ export function registerRoutes(server: Server, app: Express) {
     }
   });
 
-  // Download a file from Drive by fileId
   app.get("/api/drive/download-file", async (req, res) => {
     const fileId = req.query.fileId as string;
     if (!fileId) return res.status(400).json({ error: "fileId required" });
@@ -470,23 +451,15 @@ export function registerRoutes(server: Server, app: Express) {
     }
   });
 
-  // Upload PDF to Drive output folder
   app.post("/api/drive/upload-report", async (req, res) => {
     const settings = loadSettings();
     if (!settings.driveOutputFolderId) {
       return res.status(400).json({ error: "No output folder configured" });
     }
-
     const { filename } = req.body;
-    if (!filename) {
-      return res.status(400).json({ error: "No filename provided" });
-    }
-
+    if (!filename) return res.status(400).json({ error: "No filename provided" });
     const filePath = path.join(reportsDir, filename);
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: "Report file not found" });
-    }
-
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Report file not found" });
     try {
       const result = await uploadFile(settings.driveOutputFolderId, filePath, filename);
       res.json({ success: true, fileId: result.id, fileName: result.name });
@@ -508,10 +481,7 @@ export function registerRoutes(server: Server, app: Express) {
         const thermalImages = (prop.images || []).filter(
           (img: any) => img.isThermal || img.size > 40 * 1024
         );
-        return {
-          ...prop,
-          thermalCount: thermalImages.length,
-        };
+        return { ...prop, thermalCount: thermalImages.length };
       });
 
       res.json({
@@ -556,16 +526,17 @@ export function registerRoutes(server: Server, app: Express) {
         const fileIdMatch = img.url.match(/fileId=([^&]+)/);
         const fileId = fileIdMatch ? fileIdMatch[1] : null;
         if (!fileId) throw new Error(`No fileId found in URL for ${img.name}`);
+
         const driveRes = await drive.files.get(
           { fileId, alt: "media" },
           { responseType: "arraybuffer" }
         );
         const buffer = Buffer.from(driveRes.data as ArrayBuffer);
-
         const permPath = path.join(permDir, img.name);
         fs.writeFileSync(permPath, buffer);
 
         const { stats, thermalData } = await processImage(permPath);
+        const visual = await getVisualDimensions(permPath);
 
         const thermalDir = path.join(permDir, "thermal_data");
         if (!fs.existsSync(thermalDir)) fs.mkdirSync(thermalDir, { recursive: true });
@@ -584,8 +555,8 @@ export function registerRoutes(server: Server, app: Express) {
           stdTemp: stats.std,
           thermalWidth: stats.width,
           thermalHeight: stats.height,
-          visualWidth: stats.width,
-          visualHeight: stats.height,
+          visualWidth: visual.width,
+          visualHeight: visual.height,
         });
 
         const detectedSpots = detectHotspots(thermalData, stats.width, stats.height, survey.sensitivity);
@@ -620,7 +591,6 @@ export function registerRoutes(server: Server, app: Express) {
     }
 
     await regenerateLabeledImages(surveyId);
-
     storage.updateSurvey(surveyId, { status: "reviewing" });
     const updatedSurvey = storage.getSurvey(surveyId);
     res.json({ ...updatedSurvey, results });
@@ -629,10 +599,8 @@ export function registerRoutes(server: Server, app: Express) {
   app.post("/api/drive/export-pdf", (req, res) => {
     const { filename } = req.body;
     if (!filename) return res.status(400).json({ error: "No filename provided" });
-
     const filePath = path.join(reportsDir, filename);
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Report file not found" });
-
     const exportQueuePath = path.join(process.cwd(), "drive-export-queue.json");
     const queue = fs.existsSync(exportQueuePath)
       ? JSON.parse(fs.readFileSync(exportQueuePath, "utf-8"))
@@ -644,7 +612,6 @@ export function registerRoutes(server: Server, app: Express) {
       exported: false,
     });
     fs.writeFileSync(exportQueuePath, JSON.stringify(queue, null, 2), "utf-8");
-
     res.json({ success: true, message: "Report queued for Google Drive export", filePath: path.resolve(filePath) });
   });
 
@@ -672,7 +639,10 @@ export function registerRoutes(server: Server, app: Express) {
   });
 }
 
-// Helper: regenerate all labeled images for a survey
+// Helper: regenerate all labeled images for a survey.
+// Passes thermalWidth/thermalHeight so createLabeledImage() can scale
+// spot coordinates from thermal space (e.g. 160x120) up to the actual
+// visual JPEG dimensions (e.g. 640x480) before drawing markers.
 async function regenerateLabeledImages(surveyId: number): Promise<void> {
   const images = storage.getImagesBySurvey(surveyId);
   const allSpots = storage.getSpotsBySurvey(surveyId);
@@ -690,6 +660,8 @@ async function regenerateLabeledImages(surveyId: number): Promise<void> {
           y: s.pixelY,
           spotNumber: s.spotNumber,
           severity: s.severity,
+          thermalWidth:  img.thermalWidth  ?? undefined,
+          thermalHeight: img.thermalHeight ?? undefined,
         })),
         labeledPath,
       );
